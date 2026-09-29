@@ -1426,6 +1426,84 @@ def test_torch_pins_follow_the_host(monkeypatch, family, platform, suffix, index
         assert "--extra-index-url" not in pip
 
 
+# ── ROCm hosts take a ROCm torch, not the upstream's CUDA build (#2371) ────
+
+
+def _capture_rocm_install(monkeypatch, family, variant=None):
+    """Run indextts2's dependency step and return its `uv pip install` argv."""
+    from core.torch_indexes import PYTORCH_ROCM_INDEX_URL
+
+    if variant is None:
+        monkeypatch.delenv("OMNIVOICE_TORCH_VARIANT", raising=False)
+    else:
+        monkeypatch.setenv("OMNIVOICE_TORCH_VARIANT", variant)
+    monkeypatch.setattr(si.sys, "platform", "linux")
+    argvs = _capture_install_argvs(monkeypatch, family=family)
+    spec = si.get_spec("indextts2")
+    si._step_install_deps(spec, si._new_job("indextts2"))
+    pip = next(a for a in argvs if a[1:3] == ["pip", "install"])
+    return pip, PYTORCH_ROCM_INDEX_URL
+
+
+def test_rocm_host_installs_rocm_torch_for_indextts2(monkeypatch):
+    """Fail-before/pass-after for #2371: the step used to run a bare
+    `uv pip install -e <checkout>`, so upstream's `[tool.uv.sources]` routed
+    torch to the cu128 index — a wheel that cannot see an AMD GPU, leaving
+    the whole sidecar on CPU (~17x slower on the reporter's RX 6800 XT)."""
+    from core.torch_indexes import PYTORCH_CU128_INDEX_URL
+
+    pip, rocm_index = _capture_rocm_install(monkeypatch, family="rocm")
+    # Upstream's cu128 tool.uv.sources must be ignored for torch to resolve.
+    assert "--no-sources" in pip
+    assert "torch==2.8.0+rocm6.4" in pip
+    assert "torchaudio==2.8.0+rocm6.4" in pip
+    i = pip.index("--extra-index-url")
+    assert pip[i + 1] == rocm_index
+    assert PYTORCH_CU128_INDEX_URL not in pip
+
+
+def test_rocm_variant_env_opts_in_before_the_family_probe_reports_rocm(monkeypatch):
+    """`OMNIVOICE_TORCH_VARIANT=rocm` is the documented opt-in; it can be set
+    while the main venv swap has not landed yet (family still cpu)."""
+    pip, _ = _capture_rocm_install(monkeypatch, family="cpu", variant=" ROCm ")
+    assert "--no-sources" in pip
+    assert "torch==2.8.0+rocm6.4" in pip
+
+
+def test_rocm_torch_never_leaks_to_other_hosts(monkeypatch):
+    """A CUDA host still resolves torch through upstream's own cu128 sources,
+    and a CPU host keeps its existing install — ROCm args are ROCm-only."""
+    from core.torch_indexes import PYTORCH_ROCM_INDEX_URL
+
+    for family in ("cuda", "cpu"):
+        pip, _ = _capture_rocm_install(monkeypatch, family=family)
+        assert "--no-sources" not in pip
+        assert PYTORCH_ROCM_INDEX_URL not in pip
+        assert not any(a.startswith("torch==2.8.0+") for a in pip)
+
+
+def test_rocm_args_never_reach_engines_that_did_not_opt_in(monkeypatch):
+    """voxcpm2 pins its own torch pair and follows the host (+cpu on ROCm,
+    per test_torch_pins_follow_the_host); opting indextts2 in must not
+    change any other spec's install."""
+    from core.torch_indexes import PYTORCH_ROCM_INDEX_URL
+
+    monkeypatch.delenv("OMNIVOICE_TORCH_VARIANT", raising=False)
+    monkeypatch.setattr(si.sys, "platform", "linux")
+    argvs = _capture_install_argvs(monkeypatch, family="rocm")
+    for engine_id in _ALL_SPEC_IDS:
+        if engine_id == "indextts2":
+            continue
+        spec = si.get_spec(engine_id)
+        if spec.uses_rocm_index:
+            continue
+        argvs.clear()
+        si._step_install_deps(spec, si._new_job(engine_id))
+        pip = next(a for a in argvs if a[1:3] == ["pip", "install"])
+        assert "--no-sources" not in pip, engine_id
+        assert PYTORCH_ROCM_INDEX_URL not in pip, engine_id
+
+
 # ── Submodule trees, partial weights, and optional post-install data ──────
 
 
