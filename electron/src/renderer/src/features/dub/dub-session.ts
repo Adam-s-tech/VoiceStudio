@@ -1904,18 +1904,17 @@ export async function importDubSubtitles(file: File) {
   });
 }
 
-/** `run` falls back to editing on failure; a read-only action on a finished
- * dub must leave it finished, since its tracks are still valid. */
-function keepFinishedPhase(jobId: string, returnPhase: DubSession['phase']) {
+/** `run` falls back to editing on failure; an action that edits segments
+ * in place must leave the session in the phase it started from. */
+function restoreActionPhase(jobId: string, phase: DubSession['phase']) {
   const current = dubSession.state;
-  if (current.jobId === jobId && current.phase === 'editing' && returnPhase === 'done')
-    patch({ phase: 'done' });
+  if (current.jobId === jobId && current.phase !== phase) patch({ phase });
 }
 
 export async function cleanupDubSegments(): Promise<number | null> {
   const snapshot = dubSession.state;
   if (!snapshot.jobId || !snapshot.segments.length || !editingAllowed()) return null;
-  const returnPhase: DubSession['phase'] = snapshot.tracks.length ? 'done' : 'editing';
+  const returnPhase = snapshot.phase;
   const cleaned: { segments?: DubSegment[]; removed?: number } = {};
   const completed = await run('cleaning', async (signal) => {
     const result = await apiJson<{
@@ -1924,7 +1923,9 @@ export async function cleanupDubSegments(): Promise<number | null> {
       after: number;
     }>('/dub/cleanup-segments/' + encodeURIComponent(snapshot.jobId!), {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       signal,
+      body: JSON.stringify({ segments: snapshot.segments }),
     });
     patch({ phase: returnPhase });
     if (signal.aborted || dubSession.state.jobId !== snapshot.jobId) return;
@@ -1938,7 +1939,7 @@ export async function cleanupDubSegments(): Promise<number | null> {
   });
   // Committed after `run` releases its controller: edits are refused while
   // any action owns the session.
-  if (!completed) keepFinishedPhase(snapshot.jobId, returnPhase);
+  if (!completed) restoreActionPhase(snapshot.jobId, returnPhase);
   if (!completed || !cleaned.segments || dubSession.state.jobId !== snapshot.jobId) return null;
   commitSegmentEdit(cleaned.segments);
   return cleaned.removed ?? 0;
@@ -1962,7 +1963,7 @@ export interface ProsodyMirrorOutcome {
 export async function mirrorDubSourceDelivery(): Promise<ProsodyMirrorOutcome | null> {
   const snapshot = dubSession.state;
   if (!snapshot.jobId || !snapshot.segments.length || !editingAllowed()) return null;
-  const returnPhase: DubSession['phase'] = snapshot.tracks.length ? 'done' : 'editing';
+  const returnPhase = snapshot.phase;
   const response: { value?: ProsodyMirrorResponse } = {};
   const completed = await run('mirroring', async (signal) => {
     response.value = await apiJson<ProsodyMirrorResponse>(
@@ -1983,7 +1984,7 @@ export async function mirrorDubSourceDelivery(): Promise<ProsodyMirrorOutcome | 
     );
     patch({ phase: returnPhase });
   });
-  if (!completed) keepFinishedPhase(snapshot.jobId, returnPhase);
+  if (!completed) restoreActionPhase(snapshot.jobId, returnPhase);
   const result = response.value;
   if (!completed || !result || dubSession.state.jobId !== snapshot.jobId) return null;
   const suggested = new Map(

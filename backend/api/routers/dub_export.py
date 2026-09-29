@@ -24,7 +24,7 @@ from services.ffmpeg_utils import (
     run_ffmpeg,
 )
 from services.karaoke_ass import build_ass, scale_words
-from services.prosody_mirror import SegmentSpan, mirror_file
+from services.prosody_mirror import AnalysisBudgetExceeded, SegmentSpan, mirror_file
 from services.video_retime import (
     DRIFT_TOLERANCE_S,
     RetimeError,
@@ -1520,6 +1520,12 @@ async def dub_prosody_mirror(job_id: str, req: ProsodyMirrorRequest):
     ]
     try:
         results = await asyncio.to_thread(mirror_file, src_path, spans)
+    except AnalysisBudgetExceeded as e:
+        raise HTTPException(
+            status_code=413,
+            detail="These segments overlap far more than the source audio allows. "
+            "Remove duplicated or overlapping segments and try again.",
+        ) from e
     except (OSError, RuntimeError, ValueError) as e:
         logger.warning("prosody mirror failed for %s: %s", log_safe(job_id), log_safe(e))
         raise HTTPException(

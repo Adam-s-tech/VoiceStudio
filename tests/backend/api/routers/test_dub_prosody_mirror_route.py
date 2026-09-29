@@ -97,3 +97,22 @@ def test_request_rejects_duplicate_ids_and_bad_times():
         ProsodyMirrorRequest(segments=[{"id": "a", "start": float("nan"), "end": 1}])
     with pytest.raises(ValidationError):
         ProsodyMirrorRequest(segments=[])
+    for start, end in ((1.0, 1.0), (2.0, 1.0)):
+        with pytest.raises(ValidationError):
+            ProsodyMirrorRequest(segments=[{"id": "a", "start": start, "end": end}])
+
+
+def test_route_refuses_overlapping_work_beyond_the_track(job_env):
+    """20k unique ids over the same minute must not buy hours of analysis."""
+    from fastapi import HTTPException
+    from schemas.requests import ProsodyMirrorRequest
+
+    vocals = job_env["job_dir"] / "vocals.wav"
+    sf.write(str(vocals), np.concatenate([_line()] * 5), SR)
+    job_env["job"]["vocals_path"] = str(vocals)
+    req = ProsodyMirrorRequest(
+        segments=[{"id": str(i), "start": 0.0, "end": 10.0} for i in range(20)]
+    )
+    with pytest.raises(HTTPException) as exc:
+        _call(job_env, req=req)
+    assert exc.value.status_code == 413

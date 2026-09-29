@@ -61,6 +61,15 @@ BLOCK_FRAMES = 2048
 # A delivery is a line-level property; an unsegmented stretch longer than
 # this is measured from its opening, which bounds read size and memory.
 MAX_LINE_S = 60.0
+# Total seconds one request may analyse, as a multiple of the track length:
+# real timelines overlap only where speakers talk over each other, so this
+# admits every genuine edit while refusing requests that re-read the same
+# audio over and over.
+MAX_TRACK_PASSES = 2.0
+
+
+class AnalysisBudgetExceeded(ValueError):
+    """The requested spans add up to far more audio than the track holds."""
 
 _MAD_TO_SIGMA = 1.4826
 _FEATURE_FLOORS = {
@@ -353,6 +362,15 @@ def mirror_file(path: str, spans: Sequence[SegmentSpan]) -> list[MirrorResult]:
     with sf.SoundFile(path) as track:
         sr = track.samplerate
         total = track.frames
+        track_s = total / sr
+        requested_s = sum(
+            max(0.0, min(span.end, span.start + MAX_LINE_S, track_s) - span.start)
+            for span in spans
+        )
+        if requested_s > MAX_TRACK_PASSES * track_s + MAX_LINE_S:
+            raise AnalysisBudgetExceeded(
+                f"{requested_s:.0f} s requested from a {track_s:.0f} s track"
+            )
         for span in spans:
             speakers[span.id] = span.speaker_id
             first = min(total, max(0, int(span.start * sr)))

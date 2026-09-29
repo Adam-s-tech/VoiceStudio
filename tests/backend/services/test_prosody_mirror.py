@@ -191,6 +191,18 @@ def test_mirror_file_reads_at_most_max_line_per_span(tmp_path, monkeypatch):
     assert seen == [pytest.approx(pm.MAX_LINE_S)]
 
 
+def test_mirror_file_budget_admits_real_overlap_and_refuses_repeats(tmp_path, monkeypatch):
+    path = tmp_path / "vocals.wav"
+    sf.write(str(path), np.tile(_line(sr=16000), 5), 16000)
+    monkeypatch.setattr(pm, "extract_features", lambda audio, sr: None)
+    talk_over = [pm.SegmentSpan(id=f"{who}{i}", start=2.0 * i, end=2.0 * i + 2.0)
+                 for who in "ab" for i in range(5)]
+    assert len(pm.mirror_file(str(path), talk_over)) == 10
+    repeats = [pm.SegmentSpan(id=str(i), start=0.0, end=10.0) for i in range(20)]
+    with pytest.raises(pm.AnalysisBudgetExceeded):
+        pm.mirror_file(str(path), repeats)
+
+
 def test_speaker_with_few_lines_uses_pooled_baseline_without_pitch():
     lines = {f"a{i}": ("A", _line(f0=100.0)) for i in range(3)}
     lines["b0"] = ("B", _line(f0=250.0))

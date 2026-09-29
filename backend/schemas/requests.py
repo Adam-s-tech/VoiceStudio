@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import List, Literal, Optional
 
 from services.audio_dsp import EFFECT_PRESETS
@@ -208,6 +208,19 @@ class ProsodyMirrorSegment(BaseModel):
     start: float = Field(ge=0, allow_inf_nan=False)
     end: float = Field(ge=0, allow_inf_nan=False)
     speaker_id: Optional[str] = Field(default=None, max_length=128)
+
+    @model_validator(mode="after")
+    def validate_span(self) -> "ProsodyMirrorSegment":
+        if self.end <= self.start:
+            raise ValueError("Segment end must be after its start")
+        return self
+
+
+class CleanupSegmentsRequest(BaseModel):
+    """The editor's current segments; without them the job's stored copy is
+    cleaned, which misses every edit made since transcription."""
+
+    segments: List[dict] = Field(max_length=20000)
 
 
 class ProsodyMirrorRequest(BaseModel):

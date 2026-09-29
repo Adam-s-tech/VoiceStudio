@@ -19,7 +19,7 @@ from core.config import PREVIEW_DIR
 from core.tasks import task_manager
 from core.logging_utils import log_safe
 from core import event_bus
-from schemas.requests import DubIngestUrlRequest, ParseSubtitleTextRequest
+from schemas.requests import CleanupSegmentsRequest, DubIngestUrlRequest, ParseSubtitleTextRequest
 from services.srt_parser import CUE_SOURCE_FIELDS, CUE_SOURCE_ID
 from services.model_manager import get_model, _gpu_pool, _cpu_pool, get_diarization_pipeline, offload_tts_for_asr, restore_tts_after_asr, should_preload_tts_asr, release_device_cache
 from services.asr_backend import (
@@ -507,12 +507,16 @@ def dub_use_downloaded_captions(job_id: str):
 
 
 @router.post("/dub/cleanup-segments/{job_id}")
-def dub_cleanup_segments(job_id: str):
-    """Re-run merge/stitch passes on a job's existing segments to drop fragments."""
+def dub_cleanup_segments(job_id: str, req: Optional[CleanupSegmentsRequest] = None):
+    """Re-run merge/stitch passes to drop fragments.
+
+    Cleans the editor's segments when sent, so unsaved text, timing and
+    direction edits survive; otherwise the job's stored segments.
+    """
     job = _get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    segments = job.get("segments") or []
+    segments = req.segments if req is not None else job.get("segments") or []
     cleaned = clean_up_segments(segments)
     job["segments"] = cleaned
     _save_job(job_id, job)

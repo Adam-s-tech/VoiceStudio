@@ -99,6 +99,21 @@ it('keeps a finished dub finished when analysis fails', async () => {
   expect(dubSession.state.phase).toBe('done');
 });
 
+it('leaves an edited dub in editing even though earlier tracks exist', async () => {
+  editing([segment('a', 0), segment('b', 1), segment('c', 2)]);
+  dubSession.setState((current) => ({ ...current, tracks: ['es'] }));
+  vi.mocked(apiJson).mockResolvedValueOnce({
+    source: 'vocals',
+    segments: [{ id: 'a', direction: 'calm', measured: true }],
+  });
+  await mirrorDubSourceDelivery();
+  expect(dubSession.state.phase).toBe('editing');
+
+  vi.mocked(apiJson).mockRejectedValueOnce(new Error('No audio track available'));
+  await mirrorDubSourceDelivery();
+  expect(dubSession.state.phase).toBe('editing');
+});
+
 it('does nothing without a job', async () => {
   editing([segment('a', 0)]);
   dubSession.setState((current) => ({ ...current, jobId: null }));
@@ -115,6 +130,11 @@ it('applies the cleaned segments that Clean Up reports', async () => {
   });
 
   await expect(cleanupDubSegments()).resolves.toBe(1);
+  const [, init] = vi.mocked(apiJson).mock.calls[0];
+  expect(JSON.parse(String(init?.body)).segments.map((row: DubSegment) => row.id)).toEqual([
+    'a',
+    'b',
+  ]);
   expect(dubSession.state.segments).toEqual([
     { id: 'a', start: 0, end: 2, text: 'a b', text_original: 'a b' },
   ]);
