@@ -81,7 +81,12 @@
     "onDemand": "Lädt bei Nutzung",
     "checkSetup": "Einrichtung prüfen",
     "wait": "Warte, bis die laufende Arbeit abgeschlossen ist, bevor du dies änderst.",
-    "speedHelp": "Höhere Qualität kann länger dauern. Beginne mit Ausgewogen."
+    "speedHelp": "Höhere Qualität kann länger dauern. Beginne mit Ausgewogen.",
+    "engineLabel": "Engine",
+    "modelLabel": "Modell",
+    "runsOn": "Läuft auf",
+    "copyModel": "Modell-ID kopieren",
+    "copied": "Kopiert"
   },
   "homeUi": {
     "subtitle": "Deine quelloffene, vollständig lokale Alternative zu ElevenLabs — Stimmen klonen und gestalten, Videos synchronisieren, diktieren, transkribieren und Hörbücher in 646 Sprachen erstellen.",
@@ -306,7 +311,16 @@
     "choose_voice": "Wählen Sie eine Stimme",
     "change_voice": "Stimme ändern",
     "voice_sample": "Stimmprobe",
-    "prompt_named": "Was soll {{name}} sagen?"
+    "prompt_named": "Was soll {{name}} sagen?",
+    "choose_hint": "Wähle eine gespeicherte Stimme oder füge aus einem kurzen Clip eine neue hinzu.",
+    "add_voice": "Neue Stimme hinzufügen",
+    "sort_label": "Stimmen sortieren",
+    "sort_recent": "Neueste",
+    "sort_name": "A–Z",
+    "change_photo": "Foto ändern",
+    "remove_photo": "Foto entfernen",
+    "photo_hint": "Klicke oder ziehe ein Bild hierher. PNG, JPG oder WebP bis 5 MB.",
+    "current": "Aktuelle Stimme"
   },
   "profileIdentity": {
     "save_hint": "Speichere diese Stimme, um sie mit einem Klick erneut zu verwenden.",
@@ -524,6 +538,7 @@
     "describe_hint": "Beschreibe die Stimme oder wähle einen Ausgangspunkt. Beides füllt die Details unten aus.",
     "describe_unmatched": "Nicht zuordenbar: {{items}}",
     "describe_no_match": "Noch keine Stimmmerkmale erkannt — versuche Wörter wie deep, elderly oder British.",
+    "describe_freeform": "Diese Engine liest deine Beschreibung wörtlich. Die Details unten sind optionale Zusatzhinweise.",
     "define_by_design": "Per Design",
     "define_from_audio": "Aus Audio",
     "define_voice": "Stimme definieren",
@@ -2070,6 +2085,7 @@
     "installing": "Abhängigkeiten…",
     "setup_space": "Gib mindestens 9 GiB auf dem Laufwerk der App frei und versuche es erneut.",
     "setup_access": "Erlaube Schreibzugriff auf den Datenordner der App und versuche es erneut.",
+    "setup_unsupported_platform": "Dieser Intel-Mac kann das lokale KI-Backend nicht ausführen — PyTorch bietet keine macOS-Intel-Wheels. Verbinde stattdessen unten ein Remote-Backend; keine lokale Installation nötig.",
     "ready": "Engine bereit",
     "show_log": "Protokoll anzeigen",
     "hide_log": "Protokoll ausblenden",
@@ -2119,7 +2135,9 @@
     "mode_label": "Diktiermodus",
     "mode_sub": "Umschalten: Einmal drücken, um zu starten, erneut drücken, um zu stoppen. Halten: Diktieren, während die Taste gedrückt gehalten wird.",
     "mode_toggle": "Umschalten",
-    "mode_hold": "Halt"
+    "mode_hold": "Halt",
+    "prompt_label": "Vokabelhinweis",
+    "prompt_sub": "Beim Diktieren erwartete Namen, Fachbegriffe und Schreibweisen. Wird von Faster Whisper, MLX Whisper und OpenAI-kompatiblen Engines genutzt (zusammen mit dem Audio an diesen Server gesendet); andere Engines ignorieren ihn."
   },
   "trimmer": {
     "title": "Referenzaudio zuschneiden",
@@ -3158,7 +3176,14 @@
     "step_audio": "Quellclip",
     "step_transcribe": "Transkribieren",
     "step_translate": "Übersetzen",
-    "step_convert": "Konvertieren"
+    "step_convert": "Konvertieren",
+    "condition_phrase": "Gesuchter Text",
+    "condition_match": "Vergleich",
+    "condition_hint": "Der Ja-Zweig läuft, wenn der Text passt, sonst der Nein-Zweig. Groß- und Kleinschreibung wird ignoriert.",
+    "match_contains": "Enthält",
+    "match_equals": "Ist genau",
+    "match_starts": "Beginnt mit",
+    "match_ends": "Endet mit"
   },
   "proPage": {
     "title": "VoiceStudio Pro",
@@ -3278,8 +3303,8 @@
     "progress": "{{done}} / {{total}} Clips bereit",
     "changed": "Einstellungen geändert. Erneutes Ausführen erzeugt neue Ausgaben.",
     "incomplete": "Sprache unvollständig. Vor dem Export erneut versuchen.",
-    "invalid_graph": "Alle Schritte ohne Verzweigungen oder Schleifen von Start bis Ende verbinden.",
-    "invalid_unsupported": "Unvereinbare Schritte: Text mit Übersetzung oder Sprache verbinden, Audio mit Transkription oder Konvertierung und erzeugte Sprache mit Normalisierung.",
+    "invalid_graph": "Verbinde jeden Schritt von Start bis Ende. Nur Bedingungsschritte dürfen verzweigen, und kein Pfad darf eine Schleife bilden.",
+    "invalid_unsupported": "Unvereinbare Schritte: Text mit Übersetzung oder Sprache verbinden, Audio mit Transkription oder Konvertierung und erzeugte Sprache mit Normalisierung. Wieder zusammenlaufende Zweige müssen denselben Wertetyp führen.",
     "invalid_voice": "Für jeden Sprach- oder Konvertierungsschritt eine gespeicherte Stimme auswählen.",
     "invalid_scripts": "1–50 nicht leere Skripte mit jeweils höchstens 20.000 Zeichen hinzufügen.",
     "peak": "Spitzenpegel (dBFS)",
@@ -3292,7 +3317,8 @@
     "transcription_recipe": "Audio in Text",
     "conversion_recipe": "Stimme ändern",
     "localization_recipe": "Übersetzen und vertonen",
-    "invalid_language": "Ausgangs- und Zielsprache auswählen."
+    "invalid_language": "Ausgangs- und Zielsprache auswählen.",
+    "invalid_condition": "Gib den Text ein, nach dem die Bedingung suchen soll."
   },
   "voiceSelector": {
     "designed": "Gestaltete Stimmen",

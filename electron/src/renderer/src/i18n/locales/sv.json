@@ -81,7 +81,12 @@
     "onDemand": "Laddas vid användning",
     "checkSetup": "Kontrollera inställningar",
     "wait": "Vänta tills det pågående arbetet är klart innan du ändrar detta.",
-    "speedHelp": "Högre kvalitet kan ta längre tid. Börja med Balanserad."
+    "speedHelp": "Högre kvalitet kan ta längre tid. Börja med Balanserad.",
+    "engineLabel": "Motor",
+    "modelLabel": "Modell",
+    "runsOn": "Körs på",
+    "copyModel": "Kopiera modell-ID",
+    "copied": "Kopierat"
   },
   "homeUi": {
     "subtitle": "Ditt alternativ till ElevenLabs med öppen källkod, helt lokalt — klona och skapa röster, dubba videor, diktera, transkribera och skapa ljudböcker på 646 språk.",
@@ -306,7 +311,16 @@
     "choose_voice": "Välj en röst",
     "change_voice": "Byt röst",
     "voice_sample": "Röstprov",
-    "prompt_named": "Vad ska {{name}} säga?"
+    "prompt_named": "Vad ska {{name}} säga?",
+    "choose_hint": "Välj en sparad röst eller lägg till en ny från ett kort klipp.",
+    "add_voice": "Lägg till en ny röst",
+    "sort_label": "Sortera röster",
+    "sort_recent": "Nyaste",
+    "sort_name": "A–Ö",
+    "change_photo": "Byt foto",
+    "remove_photo": "Ta bort foto",
+    "photo_hint": "Klicka eller släpp en bild. PNG, JPG eller WebP upp till 5 MB.",
+    "current": "Aktuell röst"
   },
   "profileIdentity": {
     "save_hint": "Spara den här rösten för att använda den igen med ett klick.",
@@ -524,6 +538,7 @@
     "describe_hint": "Beskriv rösten, eller välj en utgångspunkt. Endera fyller i detaljerna nedan.",
     "describe_unmatched": "Kunde inte mappa: {{items}}",
     "describe_no_match": "Inga röstdrag har känts igen ännu — prova ord som deep, elderly eller British.",
+    "describe_freeform": "Den här motorn läser din beskrivning som den är skriven. Detaljerna nedan är valfria extra ledtrådar.",
     "define_by_design": "Via design",
     "define_from_audio": "Från ljud",
     "define_voice": "Definiera röst",
@@ -2070,6 +2085,7 @@
     "installing": "Installerar…",
     "setup_space": "Frigör minst 9 GiB på appens disk och försök igen.",
     "setup_access": "Tillåt skrivåtkomst till appens datamapp och försök igen.",
+    "setup_unsupported_platform": "Den här Intel-Macen kan inte köra den lokala AI-backendservern — PyTorch saknar macOS Intel-hjul. Anslut en fjärrbackend nedan istället; ingen lokal installation behövs.",
     "retry": "Försök igen",
     "ready": "Motorn är redo",
     "show_log": "Visa logg",
@@ -2119,7 +2135,9 @@
     "mode_label": "Dikteringsläge",
     "mode_sub": "Växla: tryck en gång för att starta, igen för att stoppa. Håll: diktera medan tangenten hålls nedtryckt.",
     "mode_toggle": "Växla",
-    "mode_hold": "Vänta"
+    "mode_hold": "Vänta",
+    "prompt_label": "Ordförrådstips",
+    "prompt_sub": "Förväntade namn, fackord och stavningar vid diktering. Används av Faster Whisper, MLX Whisper och OpenAI-kompatibla motorer (skickas till den servern tillsammans med ljudet); andra motorer ignorerar det."
   },
   "trimmer": {
     "title": "Trimma referensljud",
@@ -3158,7 +3176,14 @@
     "step_audio": "Källklipp",
     "step_transcribe": "Transkribera",
     "step_translate": "Översätt",
-    "step_convert": "Konvertera"
+    "step_convert": "Konvertera",
+    "condition_phrase": "Text att leta efter",
+    "condition_match": "Matchning",
+    "condition_hint": "Ja-grenen körs när texten matchar, annars nej-grenen. Versaler ignoreras.",
+    "match_contains": "Innehåller",
+    "match_equals": "Är exakt",
+    "match_starts": "Börjar med",
+    "match_ends": "Slutar med"
   },
   "proPage": {
     "title": "VoiceStudio Pro",
@@ -3278,8 +3303,8 @@
     "progress": "{{done}} / {{total}} klipp klara",
     "changed": "Inställningar ändrade. Körning skapar nya resultat.",
     "incomplete": "Talet är ofullständigt. Försök igen före export.",
-    "invalid_graph": "Koppla alla steg från Start till Slut utan grenar eller slingor.",
-    "invalid_unsupported": "Oförenliga steg: text till översättning eller tal, ljud till transkription eller konvertering och genererat tal till normalisering.",
+    "invalid_graph": "Koppla ihop varje steg från Start till Slut. Bara villkorssteg får förgrena sig, och ingen väg får bilda en slinga.",
+    "invalid_unsupported": "Oförenliga steg: text till översättning eller tal, ljud till transkription eller konvertering och genererat tal till normalisering. Grenar som återförenas måste bära samma typ av värde.",
     "invalid_voice": "Välj en sparad röst för varje tal- eller konverteringssteg.",
     "invalid_scripts": "Lägg till 1–50 icke-tomma manus med högst 20 000 tecken vardera.",
     "peak": "Toppnivå (dBFS)",
@@ -3292,7 +3317,8 @@
     "transcription_recipe": "Ljud till text",
     "conversion_recipe": "Byt röst",
     "localization_recipe": "Översätt och berätta",
-    "invalid_language": "Välj käll- och målspråk."
+    "invalid_language": "Välj käll- och målspråk.",
+    "invalid_condition": "Ange texten som villkoret ska leta efter."
   },
   "voiceSelector": {
     "designed": "Designade röster",

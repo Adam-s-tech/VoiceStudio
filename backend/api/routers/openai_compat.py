@@ -32,7 +32,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import inspect
 import io
 import json
 import logging
@@ -555,12 +554,7 @@ def _engine_instructions(backend, instructions: Optional[str]) -> Optional[str]:
     """
     if not instructions:
         return None
-    from services.tts_backend import OmniVoiceBackend
-    if (
-        isinstance(backend, OmniVoiceBackend)
-        or getattr(backend, "supports_native_omnivoice_controls", False)
-        or str(getattr(backend, "id", "")).startswith("omnivoice")
-    ):
+    if getattr(backend, "instruct_vocabulary", "freeform") == "tags":
         from omnivoice.utils.voice_design import sanitize_instruct
         return sanitize_instruct(instructions) or None
     return instructions
@@ -834,17 +828,9 @@ def _is_asr_engine_id(model: Optional[str]) -> bool:
 
 def _backend_request_kwargs(backend, options: dict) -> dict:
     """The subset of OpenAI-derived decode options this backend's
-    ``transcribe()`` declares. An engine that can't honour one (e.g. a
-    CTC model has no prompt) is simply not handed it."""
-    from services.asr_backend import TRANSCRIBE_REQUEST_OPTIONS
-    try:
-        params = inspect.signature(backend.transcribe).parameters
-    except (TypeError, ValueError):
-        return {}
-    return {
-        k: v for k, v in options.items()
-        if k in TRANSCRIBE_REQUEST_OPTIONS and k in params and v is not None
-    }
+    ``transcribe()`` declares (shared with dictation's vocabulary prompt)."""
+    from services.asr_backend import transcribe_request_kwargs
+    return transcribe_request_kwargs(backend, options)
 
 
 def _reported_language(result: dict, requested: Optional[str], task: str) -> str:

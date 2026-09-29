@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGenerateClone } from '@/hooks/use-generate';
 import { router } from '@/router';
-import { writeDraft } from '@/features/design/design-draft';
+import { readDraft, replaceRecipe, writeDraft } from '@/features/design/design-draft';
 import defaults from '@shared/utils/firstSound.json';
 import {
   instructToVdStates,
@@ -29,12 +29,14 @@ export function FirstSoundHandoff() {
       running.current = true;
       const text = t('demo.clone_prompt');
       const seed = pickDesignSeed(false, null);
-      writeDraft({
-        text,
-        attrs: mergeDescribedAttrs(instructToVdStates(defaults.instruct)),
-        seed,
-        profileId: null,
-      });
+      writeDraft(
+        replaceRecipe(readDraft(), {
+          text,
+          attrs: mergeDescribedAttrs(instructToVdStates(defaults.instruct)),
+          seed,
+          profileId: null,
+        }),
+      );
       await router.navigate({ to: '/design' });
       try {
         await generateDesign({
