@@ -80,11 +80,11 @@ class VoxCPM2SubprocessBackend(SubprocessBackend):
         # A cold load downloads several GB of weights; the sidecar heartbeats
         # progress frames meanwhile, and each one re-arms this deadline.
         try:
-            v = float(os.environ.get("OMNIVOICE_VOXCPM2_RECV_TIMEOUT_S", "900"))
+            v = float(os.environ.get("OMNIVOICE_VOXCPM2_RECV_TIMEOUT_S", "180"))
         except (TypeError, ValueError):
-            return 900.0
+            return 180.0
         if not math.isfinite(v):  # reject inf/nan so the deadline can't be disabled
-            return 900.0
+            return 180.0
         return max(30.0, v)
 
     @property
