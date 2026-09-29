@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -286,12 +287,46 @@ def _rocm_pin_args() -> list[str]:
     name falls back to the bare pin and lets the extra index win by PEP 440
     ordering (a tagged build sorts above the bare version).
     """
-    from core.torch_indexes import ROCM_TORCH_PINS, UV_PIP_ROCM_ARGS
+    from core.torch_indexes import (
+        PYTORCH_ROCM_INDEX_URL,
+        ROCM_TORCH_PINS,
+        UV_PIP_ROCM_ARGS,
+    )
 
     index = _rocm_index_url() or ""
     tail = index.rstrip("/").rsplit("/", 1)[-1]
     tag = f"+{tail}" if tail.startswith("rocm") else ""
-    return ["--no-sources", *(f"{pin}{tag}" for pin in ROCM_TORCH_PINS), *UV_PIP_ROCM_ARGS]
+    # uv must resolve against the SAME index the pins were derived from:
+    # the tag above already comes from OMNIVOICE_TORCH_INDEX, so appending
+    # the hard-coded public index would look a mirror's pins up on someone
+    # else's server (and bypass the mirror entirely).
+    idx_args = [
+        (index or PYTORCH_ROCM_INDEX_URL)
+        if arg == PYTORCH_ROCM_INDEX_URL
+        else arg
+        for arg in UV_PIP_ROCM_ARGS
+    ]
+    return ["--no-sources", *(f"{pin}{tag}" for pin in ROCM_TORCH_PINS), *idx_args]
+
+
+def _venv_torch_is_rocm(venv_dir: Path) -> bool:
+    """True when the venv's installed torch is a ROCm build.
+
+    Reads the wheel's generated ``version.py`` — ``hip`` set, or a ``+rocm``
+    local version — instead of importing torch: this runs inside ``_healthy``
+    on every engine-list refresh, where an import probe would cost the
+    seconds the completion marker exists to avoid (see
+    ``_install_marker_valid``). Missing file = no torch = not ROCm, so a
+    broken deps step is offered the repair too."""
+    matches = sorted((venv_dir / "lib").glob("python*/site-packages/torch/version.py"))
+    if not matches:
+        return False
+    try:
+        text = matches[0].read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    hip_set = re.search(r"^hip(?:\s*:[^=]*)?\s*=\s*['\"][^'\"]+['\"]", text, re.M)
+    return bool(hip_set) or "+rocm" in text
 
 
 def _moss_host() -> tuple[bool, str]:
@@ -1077,6 +1112,15 @@ def _healthy(spec: SidecarSpec) -> bool:
     # predates the marker and keeps its weights check, so no existing install
     # is asked to reinstall.
     if not spec.requires_install_marker:
+        # #2371 recipe change: on a host where the installer WOULD place a
+        # ROCm torch, a managed venv provisioned before it still carries
+        # CUDA wheels that see no AMD GPU — the engine would run on CPU
+        # while routing reports acceleration. Offer the repair exactly
+        # where it applies (the deps step is idempotent: venv and weights
+        # stay, torch is swapped). User-managed clones keep their own
+        # layout; every other host keeps "installed means installed".
+        if spec.uses_rocm_index and _rocm_index_url() is not None:
+            return _venv_torch_is_rocm(checkout / ".venv")
         return True
     return _install_marker_valid(spec, checkout)
 

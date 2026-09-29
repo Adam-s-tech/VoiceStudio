@@ -1504,6 +1504,107 @@ def test_rocm_args_never_reach_engines_that_did_not_opt_in(monkeypatch):
         assert PYTORCH_ROCM_INDEX_URL not in pip, engine_id
 
 
+def test_rocm_index_env_is_the_index_uv_resolves_against(monkeypatch):
+    """Fail-before/pass-after: `OMNIVOICE_TORCH_INDEX` derived the pin tag
+    but the index appended to uv stayed the hard-coded public one — a
+    mirror's pins looked up on someone else's server, bypassing the mirror
+    a restricted network depends on."""
+    mirror = "https://mirror.example.com/pytorch/rocm6.4"
+    monkeypatch.setenv("OMNIVOICE_TORCH_INDEX", mirror)
+    pip, public = _capture_rocm_install(monkeypatch, family="rocm")
+    assert "--no-sources" in pip
+    assert "torch==2.8.0+rocm6.4" in pip  # tag still from the mirror's tail
+    assert mirror in pip
+    assert public not in pip
+
+
+# ── A pre-#2371 managed install is offered the repair on a ROCm host ───────
+
+_CUDA_TORCH_VERSION_PY = (
+    "from typing import Optional\n"
+    "__version__ = '2.8.0+cu128'\n"
+    "cuda: Optional[str] = '12.8'\n"
+    "hip: Optional[str] = None\n"
+)
+_ROCM_TORCH_VERSION_PY = (
+    "from typing import Optional\n"
+    "__version__ = '2.8.0+rocm6.4'\n"
+    "cuda: Optional[str] = None\n"
+    "hip: Optional[str] = '6.4.43482'\n"
+)
+
+
+def _mk_complete_indextts2_install(monkeypatch, torch_version_py: str):
+    """A COMPLETE managed indextts2 install whose venv's torch `version.py`
+    says which build it carries."""
+    monkeypatch.delenv("OMNIVOICE_INDEXTTS_DIR", raising=False)
+    monkeypatch.delenv("OMNIVOICE_TORCH_VARIANT", raising=False)
+    spec = si.get_spec("indextts2")
+    checkout = si.managed_checkout(spec)
+    (checkout / "indextts").mkdir(parents=True, exist_ok=True)
+    (checkout / "pyproject.toml").write_text("[project]\nname='index-tts'\n")
+    (checkout / spec.source_required_path).write_text("# fake infer\n")
+    si._write_source_marker(spec, checkout)
+    py = si._venv_python(checkout / ".venv")
+    py.parent.mkdir(parents=True)
+    py.write_text("#!fake\n")
+    _write_weights(
+        checkout / spec.weights_subdir,
+        complete=True,
+        repo_id=spec.weights_repo_id,
+        revision=spec.weights_revision,
+        config_name=spec.weights_config_names[0],
+    )
+    torch_dir = checkout / ".venv" / "lib" / "python3.11" / "site-packages" / "torch"
+    torch_dir.mkdir(parents=True)
+    (torch_dir / "version.py").write_text(torch_version_py)
+    return spec
+
+
+def test_rocm_host_offers_the_repair_when_the_venv_still_has_cuda_torch(monkeypatch):
+    """Fail-before/pass-after for the existing-install half of #2371: by the
+    marker rules this install is COMPLETE, so inventory reported installed
+    and start_install short-circuited with already_installed — the user
+    updates the app and the sidecar still runs on CPU while routing reports
+    acceleration."""
+    spec = _mk_complete_indextts2_install(monkeypatch, _CUDA_TORCH_VERSION_PY)
+    monkeypatch.setattr(si.sys, "platform", "linux")
+    monkeypatch.setattr(si, "_host_family", lambda: "rocm")
+    assert si._rocm_index_url() is not None  # the gate's condition is live
+    assert si._healthy(spec) is False        # fail-before: True (marker-less)
+
+
+def test_rocm_host_keeps_a_rocm_torch_install_healthy(monkeypatch):
+    """The repair offer must not loop: once the deps step has swapped in the
+    ROCm build, the same install reads healthy again."""
+    spec = _mk_complete_indextts2_install(monkeypatch, _ROCM_TORCH_VERSION_PY)
+    monkeypatch.setattr(si.sys, "platform", "linux")
+    monkeypatch.setattr(si, "_host_family", lambda: "rocm")
+    assert si._healthy(spec) is True
+
+
+def test_non_rocm_hosts_keep_installed_means_installed(monkeypatch):
+    """The gate changes nothing where the recipe did not change: CUDA and
+    CPU hosts (and the rocm opt-in turned off) keep the old verdict."""
+    spec = _mk_complete_indextts2_install(monkeypatch, _CUDA_TORCH_VERSION_PY)
+    monkeypatch.setattr(si.sys, "platform", "linux")
+    for family in ("cuda", "cpu"):
+        monkeypatch.setattr(si, "_host_family", lambda f=family: f)
+        assert si._healthy(spec) is True
+    # A rocm-family host with the opt-in machinery unable to select rocm
+    # (probe failure degrades _host_family to "cpu" upstream) is covered by
+    # the "cpu" case above; non-Linux never takes the rocm index at all.
+    monkeypatch.setattr(si.sys, "platform", "win32")
+    # Windows-layout interpreter now that _venv_python asks for one:
+    checkout = si.managed_checkout(spec)
+    win_py = si._venv_python(checkout / ".venv")
+    win_py.parent.mkdir(parents=True, exist_ok=True)
+    win_py.write_text("#!fake\n")
+    monkeypatch.setattr(si, "_host_family", lambda: "rocm")
+    assert si._rocm_index_url() is None
+    assert si._healthy(spec) is True
+
+
 # ── Submodule trees, partial weights, and optional post-install data ──────
 
 
