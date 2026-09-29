@@ -308,6 +308,7 @@
     "attaching": "Connecting to the running engine…",
     "ready": "Engine ready",
     "crashed": "The local engine stopped unexpectedly.",
+    "unresponsive": "The local engine is busy and not answering right now — it recovers on its own.",
     "port_in_use": "Port {{port}} is already in use by another program. Close it, or set OMNIVOICE_PORT to a free port, then retry.",
     "failed": "The local engine could not start.",
     "retry": "Retry",

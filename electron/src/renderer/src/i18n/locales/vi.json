@@ -2093,6 +2093,7 @@
     "starting": "Đang khởi động bộ máy cục bộ…",
     "attaching": "Đang kết nối với bộ máy đang chạy…",
     "crashed": "Bộ máy cục bộ đã dừng đột ngột.",
+    "unresponsive": "Động cơ cục bộ đang bận và tạm thời không phản hồi — nó sẽ tự phục hồi.",
     "failed": "Không thể khởi động bộ máy cục bộ.",
     "idle": "Đang chờ bộ máy cục bộ…",
     "log_label": "Nhật ký bộ máy",

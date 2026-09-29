@@ -83,6 +83,12 @@ export async function backendLifecycleStage(): Promise<BackendLifecycle> {
     if (['setup_required', 'installing', 'attaching', 'starting'].includes(status.stage)) {
       return { stage: 'starting', message: null };
     }
+    // #2430: a live-but-busy backend is mid-job, not down. Treating it as
+    // `unknown` dead-ended every request the moment the health probe slipped
+    // past its deadline; the shell already knows the process is alive, so hold
+    // the request open the same way a start/restart does and let it land once
+    // the current job finishes.
+    if (status.stage === 'unresponsive') return { stage: 'starting', message: null };
     return { stage: 'unknown', message: null };
   } catch {
     return { stage: 'unknown', message: null };

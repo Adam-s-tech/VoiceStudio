@@ -2093,6 +2093,7 @@
     "starting": "Memulai mesin lokal…",
     "attaching": "Menghubungkan ke mesin yang sedang berjalan…",
     "crashed": "Mesin lokal berhenti secara tak terduga.",
+    "unresponsive": "Mesin lokal sedang sibuk dan belum merespons — akan pulih sendiri.",
     "failed": "Mesin lokal tidak dapat dimulai.",
     "idle": "Menunggu mesin lokal…",
     "log_label": "Log mesin",

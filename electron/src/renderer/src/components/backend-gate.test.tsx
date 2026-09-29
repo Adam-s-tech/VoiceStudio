@@ -115,6 +115,48 @@ it('shows package installation after the last large download instead of a stale 
   expect(screen.queryByText('Downloaded scipy')).not.toBeInTheDocument();
 });
 
+// #2430 — a live-but-busy backend is not a failure.
+//
+// A heavy job blocks the Python event loop past the health-probe deadline. The
+// supervisor had already proven the process was alive, yet it published the
+// terminal `failed` stage, so the gate replaced the workspace with an error
+// screen mid-generation. `unresponsive` must instead stay on the pass-through
+// path — the same path `ready` takes.
+const renderGate = (stage: BackendStatus['stage']) => {
+  backendStatus.stage = stage;
+  return render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <BackendGate>
+        <div>workspace</div>
+      </BackendGate>
+    </QueryClientProvider>,
+  );
+};
+
+it('keeps the workspace mounted while a live backend is only busy (#2430)', () => {
+  backendStatus.managed = true;
+  backendStatus.message = 'Backend is running but busy on port 3900.';
+
+  renderGate('unresponsive');
+
+  expect(screen.queryByTestId('backend-gate-scroll')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: i18n.t('backend.retry') })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /report this bug/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /view crash details/i })).not.toBeInTheDocument();
+});
+
+it('still takes over the workspace for a real failure', () => {
+  // The contrast that makes the assertion above meaningful.
+  backendStatus.message = 'The Python environment is missing or incomplete.';
+
+  renderGate('failed');
+
+  expect(screen.getByTestId('backend-gate-scroll')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: i18n.t('backend.retry') })).toBeInTheDocument();
+});
+
 it('keeps agent repair available when the backend is down', () => {
   backendStatus.stage = 'failed';
 

@@ -115,6 +115,11 @@ export function BackendGate({ children, repairDock }: BackendGateProps) {
     progress?.transferUpdatedAt !== undefined && Date.now() - progress.transferUpdatedAt < 15_000;
 
   const recovering = reachedReady && status.stage === 'failed' && status.managed;
+  // A live-but-busy backend (#2430) is not a gate. The process is running the
+  // user's own job, so the workspace stays mounted and usable and the status
+  // bar carries the only signal this needs. Tearing the app down behind an
+  // error screen mid-generation is the bug this stage exists to prevent.
+  const busy = status.stage === 'unresponsive';
 
   useEffect(() => {
     setRestarting(false);
@@ -123,7 +128,7 @@ export function BackendGate({ children, repairDock }: BackendGateProps) {
     if (status.stage === 'ready') setReachedReady(true);
   }, [status.stage]);
 
-  if (status.stage === 'ready')
+  if (status.stage === 'ready' || busy)
     return (
       <div className="contents">
         <SetupGate>{children}</SetupGate>

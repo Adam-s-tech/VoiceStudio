@@ -144,6 +144,9 @@ const DOT: Record<BackendStage, string> = {
   attaching: 'bg-warning animate-pulse motion-reduce:animate-none',
   starting: 'bg-warning animate-pulse motion-reduce:animate-none',
   ready: 'bg-success',
+  // Alive but busy (#2430): transient and self-recovering, so it pulses as a
+  // warning rather than sitting on the app as a destructive red failure.
+  unresponsive: 'bg-warning animate-pulse motion-reduce:animate-none',
   crashed: 'bg-destructive',
   port_in_use: 'bg-destructive',
   failed: 'bg-destructive',
