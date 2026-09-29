@@ -141,6 +141,11 @@ class _TextExtractor(HTMLParser):
         self._skip_depth = 0
         self._pagebreak_stack: list[str] = []
         self._in_title = False
+        #: The element whose text is the title, and that text as it arrives: a
+        #: heading such as ``<h1>Chapter <em>One</em></h1>`` reaches
+        #: ``handle_data`` in several pieces.
+        self._title_tag = ""
+        self._title_parts: list[str] = []
         self.title = ""
         self._elements: list[tuple[str, dict[str, str]]] = []
         #: ``epub:type`` tokens seen on the document's structural elements
@@ -187,10 +192,17 @@ class _TextExtractor(HTMLParser):
             if tag not in self._VOID:
                 self._pagebreak_stack.append(tag)
             return
-        if tag in ("h1", "h2", "title") and not self.title:
+        if tag in ("h1", "h2", "title") and not self.title and not self._in_title:
             self._in_title = True
+            self._title_tag = tag
+            self._title_parts = []
         if tag in self._BREAK:
-            self._parts.append("\n")
+            # A <br> inside the title separates its words ("CHAPTER I<br/>THE BOY
+            # WHO LIVED"); anywhere else a block break is a new body line.
+            if self._in_title and tag != self._title_tag:
+                self._title_parts.append(" ")
+            else:
+                self._parts.append("\n")
 
     def handle_endtag(self, tag):
         for index in range(len(self._elements) - 1, -1, -1):
@@ -205,18 +217,19 @@ class _TextExtractor(HTMLParser):
                     del self._pagebreak_stack[index:]
                     break
             return
-        if tag in ("h1", "h2", "title"):
+        if self._in_title and tag == self._title_tag:
             self._in_title = False
+            self.title = " ".join("".join(self._title_parts).split())
 
     def handle_data(self, data):
         if self._skip_depth or self._pagebreak_stack:
             return
         if self._in_title:
             # The first heading becomes the chapter's `# Title` (metadata, not
-            # narrated) — capture it but keep it out of the body. Later headings
-            # (title already set) fall through and are narrated as subheadings.
-            if not self.title:
-                self.title = data.strip()
+            # narrated) — capture all of its text, nested inline elements
+            # included, but keep it out of the body. Later headings (title
+            # already set) fall through and are narrated as subheadings.
+            self._title_parts.append(data)
             return
         self._parts.append(data)
 

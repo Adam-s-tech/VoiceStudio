@@ -81,7 +81,12 @@
     "onDemand": "Laadt bij gebruik",
     "checkSetup": "Instellingen nakijken",
     "wait": "Wacht tot het huidige werk klaar is voordat je dit wijzigt.",
-    "speedHelp": "Hogere kwaliteit kan langer duren. Begin met Gebalanceerd."
+    "speedHelp": "Hogere kwaliteit kan langer duren. Begin met Gebalanceerd.",
+    "engineLabel": "Engine",
+    "modelLabel": "Model",
+    "runsOn": "Draait op",
+    "copyModel": "Model-ID kopiëren",
+    "copied": "Gekopieerd"
   },
   "homeUi": {
     "subtitle": "Jouw open-source, volledig lokale alternatief voor ElevenLabs — kloon en ontwerp stemmen, dub video’s, dicteer, transcribeer en maak luisterboeken in 646 talen.",
@@ -306,7 +311,16 @@
     "choose_voice": "Kies een stem",
     "change_voice": "Stem wijzigen",
     "voice_sample": "Stemvoorbeeld",
-    "prompt_named": "Wat moet {{name}} zeggen?"
+    "prompt_named": "Wat moet {{name}} zeggen?",
+    "choose_hint": "Kies een opgeslagen stem of voeg een nieuwe toe vanuit een korte clip.",
+    "add_voice": "Nieuwe stem toevoegen",
+    "sort_label": "Stemmen sorteren",
+    "sort_recent": "Nieuwste",
+    "sort_name": "A–Z",
+    "change_photo": "Foto wijzigen",
+    "remove_photo": "Foto verwijderen",
+    "photo_hint": "Klik of sleep een afbeelding hierheen. PNG, JPG of WebP tot 5 MB.",
+    "current": "Huidige stem"
   },
   "profileIdentity": {
     "save_hint": "Bewaar deze stem om hem met één klik opnieuw te gebruiken.",
@@ -524,6 +538,7 @@
     "describe_hint": "Beschrijf de stem, of kies een startpunt. Beide vullen de details hieronder in.",
     "describe_unmatched": "Kon niet toewijzen: {{items}}",
     "describe_no_match": "Nog geen stemkenmerken herkend — probeer woorden als deep, elderly of British.",
+    "describe_freeform": "Deze engine leest je beschrijving letterlijk. De details hieronder zijn optionele extra aanwijzingen.",
     "define_by_design": "Via ontwerp",
     "define_from_audio": "Vanuit audio",
     "define_voice": "Stem definiëren",
@@ -2070,6 +2085,7 @@
     "installing": "Afhankelijkheden…",
     "setup_space": "Maak minstens 9 GiB vrij op de schijf van de app en probeer het opnieuw.",
     "setup_access": "Sta schrijftoegang toe tot de gegevensmap van de app en probeer het opnieuw.",
+    "setup_unsupported_platform": "Deze Intel-Mac kan de lokale AI-backend niet uitvoeren — PyTorch levert geen macOS-Intel-wheels. Verbind hieronder een externe backend; geen lokale installatie nodig.",
     "ready": "Engine gereed",
     "show_log": "Logboek tonen",
     "hide_log": "Logboek verbergen",
@@ -2119,7 +2135,9 @@
     "mode_label": "Dicteermodus",
     "mode_sub": "Schakelen: druk één keer om te starten, nogmaals om te stoppen. Vasthouden: dicteren terwijl de toets ingedrukt wordt gehouden.",
     "mode_toggle": "Schakel",
-    "mode_hold": "Houd vast"
+    "mode_hold": "Houd vast",
+    "prompt_label": "Woordenschathint",
+    "prompt_sub": "Verwachte namen, vaktermen en spellingen tijdens het dicteren. Gebruikt door Faster Whisper, MLX Whisper en OpenAI-compatibele engines (samen met de audio naar die server verzonden); andere engines negeren het."
   },
   "trimmer": {
     "title": "Referentie-audio trimmen",
@@ -3158,7 +3176,14 @@
     "step_audio": "Bronclip",
     "step_transcribe": "Transcriberen",
     "step_translate": "Vertalen",
-    "step_convert": "Converteren"
+    "step_convert": "Converteren",
+    "condition_phrase": "Te zoeken tekst",
+    "condition_match": "Overeenkomst",
+    "condition_hint": "De ja-tak loopt als de tekst overeenkomt, anders de nee-tak. Hoofdletters worden genegeerd.",
+    "match_contains": "Bevat",
+    "match_equals": "Is precies",
+    "match_starts": "Begint met",
+    "match_ends": "Eindigt met"
   },
   "proPage": {
     "title": "VoiceStudio Pro",
@@ -3278,8 +3303,8 @@
     "progress": "{{done}} / {{total}} clips gereed",
     "changed": "Instellingen gewijzigd. Uitvoeren maakt nieuwe uitvoer.",
     "incomplete": "Spraak onvolledig. Probeer opnieuw vóór export.",
-    "invalid_graph": "Verbind alle stappen van Start tot Einde zonder vertakkingen of lussen.",
-    "invalid_unsupported": "Onverenigbare stappen: tekst naar vertaling of spraak, audio naar transcriptie of conversie en gegenereerde spraak naar normalisatie.",
+    "invalid_graph": "Verbind elke stap van Start tot Einde. Alleen een voorwaarde mag vertakken en geen route mag een lus vormen.",
+    "invalid_unsupported": "Onverenigbare stappen: tekst naar vertaling of spraak, audio naar transcriptie of conversie en gegenereerde spraak naar normalisatie. Takken die weer samenkomen moeten hetzelfde soort waarde dragen.",
     "invalid_voice": "Kies een opgeslagen stem voor elke spraak- of conversiestap.",
     "invalid_scripts": "Voeg 1–50 niet-lege scripts van maximaal 20.000 tekens toe.",
     "peak": "Piek (dBFS)",
@@ -3292,7 +3317,8 @@
     "transcription_recipe": "Audio naar tekst",
     "conversion_recipe": "Stem wijzigen",
     "localization_recipe": "Vertalen en vertellen",
-    "invalid_language": "Kies bron- en doeltaal."
+    "invalid_language": "Kies bron- en doeltaal.",
+    "invalid_condition": "Voer de tekst in waarnaar de voorwaarde moet zoeken."
   },
   "voiceSelector": {
     "designed": "Ontworpen stemmen",

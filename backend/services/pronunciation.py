@@ -31,11 +31,24 @@ import re
 from pathlib import Path
 from typing import Optional
 
+from services.dub_qc import _NO_SPACE_SCRIPT
+
 # A "word" character for boundary purposes. We treat the standard regex word
 # class (``\w`` = ``[A-Za-z0-9_]`` plus Unicode letters under ``re.UNICODE``,
 # the default for ``str`` patterns). A key only gets ``\b`` boundaries on a side
 # that actually abuts a word char, so a key like ``Dr.`` (ends in a non-word
 # char) still matches when followed by a space.
+#
+# Scripts written without spaces between words (kanji, kana, Thai, Lao, Myanmar,
+# Khmer; the same set dub_qc scores per character) are the exception: a key for
+# a Japanese or Chinese place name sits between more word characters in any
+# sentence that uses it, where ``\b`` never matches, so an edge in one of these
+# scripts gets no boundary.
+_NO_SPACE_CHAR = re.compile(f"[{_NO_SPACE_SCRIPT}]")
+
+
+def _needs_boundary(ch: str) -> bool:
+    return (ch.isalnum() or ch == "_") and not _NO_SPACE_CHAR.match(ch)
 
 
 def normalize_lexicon(lexicon: Optional[dict]) -> dict[str, str]:
@@ -60,13 +73,14 @@ def normalize_lexicon(lexicon: Optional[dict]) -> dict[str, str]:
 
 def _boundary_prefix(key: str) -> str:
     """``\\b`` only if the key starts with a word char (else the boundary would
-    never match — e.g. a key opening with punctuation)."""
-    return r"\b" if key[:1].isalnum() or key[:1] == "_" else ""
+    never match — e.g. a key opening with punctuation), and not one of a script
+    written without spaces."""
+    return r"\b" if _needs_boundary(key[:1]) else ""
 
 
 def _boundary_suffix(key: str) -> str:
-    """``\\b`` only if the key ends with a word char."""
-    return r"\b" if key[-1:].isalnum() or key[-1:] == "_" else ""
+    """``\\b`` only if the key ends with a word char of a spaced script."""
+    return r"\b" if _needs_boundary(key[-1:]) else ""
 
 
 def _compile(lexicon: dict[str, str]) -> tuple[Optional[re.Pattern], dict[str, str]]:
