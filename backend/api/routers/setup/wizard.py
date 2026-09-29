@@ -60,7 +60,7 @@ def setup_status():
 
 # ── Pre-flight System Check ───────────────────────────────────────────────
 
-_MIN_NVIDIA_DRIVER = 555
+_MIN_NVIDIA_DRIVER = 525
 _RAM_FAIL_GB = 8
 _RAM_WARN_GB = 12
 # Installed DIMMs never fully reach the OS: firmware, integrated graphics and
