@@ -195,7 +195,11 @@ _THINK_OPEN_RE = re.compile(r"^\s*<(think|thinking|reasoning)>", re.IGNORECASE)
 _THINK_CLOSE_RE = re.compile(r"</(?:think|thinking|reasoning)>", re.IGNORECASE)
 # A line-start SAY: later in an undecided body marks where prefilled
 # thinking ends, for a model that streams no closing tag either (#2428).
-_SAY_LINE_RE = re.compile(r"(?m)^[ \t]*SAY\s*:")
+# Case-insensitive like _SAY_RE: a lowercase boundary must not leave the
+# reasoning to finish()'s plain path. Only consulted at finish — a draft
+# "SAY:" line *inside* reasoning must not switch to tagged while a
+# closing tag may still arrive.
+_SAY_LINE_RE = re.compile(r"(?m)^[ \t]*SAY\s*:", re.IGNORECASE)
 _TAG_RE = re.compile(r"(?:^|\s)(ACTION|OUTCOME)\s*:", re.IGNORECASE)
 _SAY_RE = re.compile(r"^\s*SAY\s*:\s*", re.IGNORECASE)
 _ACTION_VALUE_RE = re.compile(r"ACTION\s*:\s*([A-Za-z_\- ]+)", re.IGNORECASE)
@@ -232,7 +236,7 @@ class ReplyParser:
         self.action = "none"
         self.outcome: str | None = None
 
-    def _body(self) -> str | None:
+    def _body(self, final: bool = False) -> str | None:
         text = self.raw
         match = _THINK_OPEN_RE.match(text)
         if match:
@@ -247,13 +251,13 @@ class ReplyParser:
             close = _THINK_CLOSE_RE.search(text)
             if close:
                 text = text[close.end():]
-        # A later line-start SAY: marks where thinking ends — the model
-        # that never sent a closing tag either (#2428). Safe to re-run on
-        # every feed: raw only grows, so the first match can only appear,
-        # never move, and for a reply that starts with SAY: it matches at
-        # the start and strips nothing — ``_emitted`` stays aligned with
-        # whatever this returns.
-        say = _SAY_LINE_RE.search(text)
+        # A line-start SAY: marks where thinking ends for the model that
+        # never sent a closing tag either (#2428) — but only at finish: a
+        # draft "SAY:" line inside still-streaming reasoning must not flip
+        # the parser to tagged before a closing tag can establish the real
+        # boundary. While streaming, everything without a format marker is
+        # held anyway, so nothing is lost by waiting.
+        say = _SAY_LINE_RE.search(text) if final else None
         if say:
             text = text[say.start():]
         return text.lstrip()
@@ -298,7 +302,7 @@ class ReplyParser:
 
     def feed(self, delta: str) -> str:
         self.raw += delta or ""
-        body = self._body()
+        body = self._body(final=False)
         if body is None:
             return ""
         self._decide_mode(body, final=False)
@@ -307,7 +311,7 @@ class ReplyParser:
         return self._take(self._say(body, final=False))
 
     def finish(self) -> str:
-        body = self._body()
+        body = self._body(final=True)
         if body is None:  # never left the reasoning block
             body = ""
         self._decide_mode(body, final=True)

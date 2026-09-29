@@ -347,6 +347,37 @@ def test_reply_parser_speaks_an_unformatted_reply_only_at_finish():
     assert p.action == "none"
 
 
+def test_reply_parser_drops_prefilled_thinking_at_a_lowercase_boundary():
+    """The line-start boundary is case-insensitive like SAY itself: a
+    lowercase `say:` must end prefilled thinking too, or finish() would
+    speak the reasoning as plain (#2428 review)."""
+    p = M_agent().ReplyParser()
+    out = ""
+    for d in ["I should confirm the booking.\n", "say: It's under Palash.\nACTION: none"]:
+        out += p.feed(d)
+    out += p.finish()
+    assert out.strip() == "It's under Palash."
+    assert "booking" not in out
+    assert p.action == "none"
+
+
+def test_a_draft_say_line_inside_reasoning_is_not_spoken():
+    """Unclosed reasoning may draft a `SAY:` line; only the closing tag —
+    or finish, if none ever comes — may establish the boundary, so a draft
+    must never reach the caller mid-stream (#2428 review)."""
+    close = "<" + "/think>"
+    p = M_agent().ReplyParser()
+    out = ""
+    for d in ["I'll reply now.\nSAY: draft, do not speak\n",
+              close + "\n\nSAY: It's under Palash.\nACTION: none"]:
+        out += p.feed(d)
+        assert "draft" not in out  # never spoken, at any point in the stream
+    out += p.finish()
+    assert out.strip() == "It's under Palash."
+    assert "reply now" not in out and "draft" not in out
+    assert p.action == "none"
+
+
 def test_guard_blocks_card_and_unknown_id_numbers_but_allows_brief_numbers():
     agent = M_agent()
     brief = "Callback number 415 555 0123 4."
