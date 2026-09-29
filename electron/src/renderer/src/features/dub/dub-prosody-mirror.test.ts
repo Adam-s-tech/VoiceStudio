@@ -90,6 +90,15 @@ it('reports failure and leaves segments untouched when analysis fails', async ()
   expect(dubSession.state.error).toBe('No audio track available');
 });
 
+it('keeps a finished dub finished when analysis fails', async () => {
+  editing([segment('a', 0)]);
+  dubSession.setState((current) => ({ ...current, phase: 'done', tracks: ['es'] }));
+  vi.mocked(apiJson).mockRejectedValueOnce(new Error('No audio track available'));
+
+  await expect(mirrorDubSourceDelivery()).resolves.toBeNull();
+  expect(dubSession.state.phase).toBe('done');
+});
+
 it('does nothing without a job', async () => {
   editing([segment('a', 0)]);
   dubSession.setState((current) => ({ ...current, jobId: null }));

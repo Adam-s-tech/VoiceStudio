@@ -104,6 +104,8 @@ def test_pitch_ignored_when_not_comparable():
         ({"loudness_db": -1.5, "voiced_ratio": -3.0}, "whispered"),
         ({"loudness_db": 2.0, "rate_hz": -1.0}, "energetic, slow, announcing"),
         ({"loudness_db": 0.3, "rate_hz": -0.2, "pitch_st": 0.4, "pitch_spread_st": -0.3}, ""),
+        ({"loudness_db": 0.0, "rate_hz": 0.0, "pitch_st": 3.5, "pitch_spread_st": 0.5}, ""),
+        ({"loudness_db": 0.0, "rate_hz": 0.0, "pitch_st": -3.5, "pitch_spread_st": -0.5}, ""),
         ({}, ""),
     ],
 )
@@ -155,6 +157,38 @@ def test_directions_are_relative_to_each_speaker():
     lines.update({f"b{i}": ("B", _line(f0=220.0, amp=0.2)) for i in range(4)})
     out = _job(lines)
     assert all(result.direction == "" for result in out.values())
+
+
+def test_second_voice_under_one_label_is_not_energetic():
+    """Diarization off: every line is "Speaker 1", but two actors speak."""
+    lines = {f"low{i}": ("Speaker 1", _line(f0=115.0)) for i in range(8)}
+    lines.update({f"high{i}": ("Speaker 1", _line(f0=205.0)) for i in range(3)})
+    out = _job(lines)
+    assert all(result.direction == "" for result in out.values())
+    assert "pitch_st" not in out["high0"].z
+
+
+def test_lines_without_speaker_do_not_share_a_pitch_baseline():
+    lines = {f"low{i}": ("", _line(f0=115.0)) for i in range(4)}
+    lines.update({f"high{i}": ("", _line(f0=140.0)) for i in range(3)})
+    out = _job(lines)
+    assert all("pitch_st" not in result.z for result in out.values())
+    assert all(result.direction == "" for result in out.values())
+
+
+def test_long_line_is_measured_in_bounded_blocks():
+    feat = pm.extract_features(_line(dur_s=60.0, sr=16000), 16000)
+    assert feat.pitch_st == pytest.approx(12 * np.log2(1.2), abs=0.3)
+    assert feat.rate_hz == pytest.approx(4.0, abs=0.6)
+
+
+def test_mirror_file_reads_at_most_max_line_per_span(tmp_path, monkeypatch):
+    path = tmp_path / "vocals.wav"
+    sf.write(str(path), np.tile(_line(sr=16000), 45), 16000)
+    seen = []
+    monkeypatch.setattr(pm, "extract_features", lambda audio, sr: seen.append(len(audio) / sr))
+    pm.mirror_file(str(path), [pm.SegmentSpan(id="long", start=0.0, end=90.0)])
+    assert seen == [pytest.approx(pm.MAX_LINE_S)]
 
 
 def test_speaker_with_few_lines_uses_pooled_baseline_without_pitch():

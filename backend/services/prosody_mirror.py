@@ -13,9 +13,11 @@ Design constraints:
 
 * **Speaker-relative.** A deep voice is not "calm" and a shouted line from a
   habitually loud speaker is not "energetic" — every feature is a robust
-  z-score against the speaker's own median/MAD. Speakers with too few lines
-  borrow the pooled baseline, and then pitch is ignored, since pitch levels do
-  not transfer between voices.
+  z-score against the speaker's own median/MAD. Speakers with too few lines,
+  and lines without a speaker, borrow the pooled baseline, and then pitch is
+  ignored, since pitch levels do not transfer between voices. A pitch far
+  outside the speaker's range is treated as a second voice sharing the label,
+  and pitch never sets energy unless loudness agrees.
 * **Measurable dimensions only.** Energy, pace and intimacy follow from
   acoustics. Emotion does not reliably follow from four scalar features, so
   it is never guessed; the user or the LLM director owns it.
@@ -51,6 +53,14 @@ MIN_VOICED_FRAMES = 5
 NUCLEUS_PROMINENCE_DB = 3.0
 NUCLEUS_MIN_GAP_S = 0.08
 MIN_BASELINE_LINES = 3
+# Beyond this many sigmas a line's pitch is another voice under the same
+# label (diarization off or merged), not a delivery change.
+VOICE_OUTLIER_Z = 4.0
+# Frames analysed per block, bounding memory on arbitrarily long lines.
+BLOCK_FRAMES = 2048
+# A delivery is a line-level property; an unsegmented stretch longer than
+# this is measured from its opening, which bounds read size and memory.
+MAX_LINE_S = 60.0
 
 _MAD_TO_SIGMA = 1.4826
 _FEATURE_FLOORS = {
@@ -93,6 +103,9 @@ class Baseline:
             value = features.get(name)
             if value is not None:
                 scores[name] = (value - centre) / self.spread[name]
+        if abs(scores.get("pitch_st", 0.0)) > VOICE_OUTLIER_Z:
+            scores.pop("pitch_st")
+            scores.pop("pitch_spread_st", None)
         return scores
 
 
@@ -201,7 +214,10 @@ def extract_features(audio: np.ndarray, sr: int) -> Optional[ProsodyFeatures]:
         return None
 
     frames = sliding_window_view(signal, frame_len)[::hop]
-    rms = np.sqrt(np.mean(np.square(frames, dtype=np.float64), axis=1))
+    rms = np.concatenate([
+        np.sqrt(np.mean(np.square(frames[i : i + BLOCK_FRAMES], dtype=np.float64), axis=1))
+        for i in range(0, frames.shape[0], BLOCK_FRAMES)
+    ])
     level_db = 20.0 * np.log10(np.maximum(rms, 1e-10))
     floor = max(SILENCE_FLOOR_DBFS, float(level_db.max()) - ACTIVE_RANGE_DB)
     active = level_db > floor
@@ -209,7 +225,11 @@ def extract_features(audio: np.ndarray, sr: int) -> Optional[ProsodyFeatures]:
     if active_s < MIN_ACTIVE_S:
         return None
 
-    f0 = _frame_pitch(frames[active].astype(np.float64), ANALYSIS_SR)
+    active_index = np.flatnonzero(active)
+    f0 = np.concatenate([
+        _frame_pitch(frames[active_index[i : i + BLOCK_FRAMES]].astype(np.float64), ANALYSIS_SR)
+        for i in range(0, active_index.size, BLOCK_FRAMES)
+    ])
     voiced = f0[~np.isnan(f0)]
     pitch_st = spread_st = None
     if voiced.size >= MIN_VOICED_FRAMES:
@@ -265,11 +285,12 @@ def infer_direction(z: Mapping[str, float]) -> Direction:
 
     has_pitch = "pitch_st" in z
     arousal = (loud + pitch + movement) / 3.0 if has_pitch else loud
+    # Pitch sharpens energy but never decides it alone: loudness must agree.
     if loud >= 1.0 and rate >= 1.0 and (pitch >= 0.5 or not has_pitch):
         tokens["energy"] = ["urgent"]
-    elif arousal >= 1.0:
+    elif arousal >= 1.0 and loud >= 0.5:
         tokens["energy"] = ["energetic"]
-    elif arousal <= -1.0:
+    elif arousal <= -1.0 and loud <= -0.5:
         tokens["energy"] = ["calm"]
     if loud >= 1.5 and rate <= -0.5:
         tokens["intimacy"] = ["announcing"]
@@ -287,7 +308,7 @@ def mirror(
     """Turn measured lines into directions against speaker baselines.
 
     ``features`` maps segment id to its measurement (None when unmeasurable);
-    ``speakers`` maps segment id to speaker id.
+    ``speakers`` maps segment id to speaker id, where an empty id is unknown.
     """
     measured = {sid: f for sid, f in features.items() if f is not None}
     results = {sid: MirrorResult(id=sid) for sid in features}
@@ -297,7 +318,10 @@ def mirror(
     by_speaker: dict[str, list[ProsodyFeatures]] = defaultdict(list)
     for sid, feat in measured.items():
         by_speaker[speakers.get(sid, "")].append(feat)
-    pooled = build_baseline(measured.values(), pitch_comparable=len(by_speaker) == 1)
+    unknown = by_speaker.pop("", [])
+    pooled = build_baseline(
+        measured.values(), pitch_comparable=len(by_speaker) == 1 and not unknown
+    )
     baselines = {
         speaker: build_baseline(rows, pitch_comparable=True)
         for speaker, rows in by_speaker.items()
@@ -319,8 +343,9 @@ def mirror(
 
 
 def mirror_file(path: str, spans: Sequence[SegmentSpan]) -> list[MirrorResult]:
-    """Read each span from ``path`` (seeking, never loading the whole track)
-    and return one result per span in input order."""
+    """Read each span from ``path`` (seeking, never loading the whole track,
+    at most ``MAX_LINE_S`` per span) and return one result per span in
+    input order."""
     import soundfile as sf
 
     features: dict[str, Optional[ProsodyFeatures]] = {}
@@ -331,7 +356,8 @@ def mirror_file(path: str, spans: Sequence[SegmentSpan]) -> list[MirrorResult]:
         for span in spans:
             speakers[span.id] = span.speaker_id
             first = min(total, max(0, int(span.start * sr)))
-            last = min(total, max(first, int(math.ceil(span.end * sr))))
+            end = min(span.end, span.start + MAX_LINE_S)
+            last = min(total, max(first, int(math.ceil(end * sr))))
             if last <= first:
                 features[span.id] = None
                 continue

@@ -1904,6 +1904,14 @@ export async function importDubSubtitles(file: File) {
   });
 }
 
+/** `run` falls back to editing on failure; a read-only action on a finished
+ * dub must leave it finished, since its tracks are still valid. */
+function keepFinishedPhase(jobId: string, returnPhase: DubSession['phase']) {
+  const current = dubSession.state;
+  if (current.jobId === jobId && current.phase === 'editing' && returnPhase === 'done')
+    patch({ phase: 'done' });
+}
+
 export async function cleanupDubSegments(): Promise<number | null> {
   const snapshot = dubSession.state;
   if (!snapshot.jobId || !snapshot.segments.length || !editingAllowed()) return null;
@@ -1930,6 +1938,7 @@ export async function cleanupDubSegments(): Promise<number | null> {
   });
   // Committed after `run` releases its controller: edits are refused while
   // any action owns the session.
+  if (!completed) keepFinishedPhase(snapshot.jobId, returnPhase);
   if (!completed || !cleaned.segments || dubSession.state.jobId !== snapshot.jobId) return null;
   commitSegmentEdit(cleaned.segments);
   return cleaned.removed ?? 0;
@@ -1974,6 +1983,7 @@ export async function mirrorDubSourceDelivery(): Promise<ProsodyMirrorOutcome | 
     );
     patch({ phase: returnPhase });
   });
+  if (!completed) keepFinishedPhase(snapshot.jobId, returnPhase);
   const result = response.value;
   if (!completed || !result || dubSession.state.jobId !== snapshot.jobId) return null;
   const suggested = new Map(

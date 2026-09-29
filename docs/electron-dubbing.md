@@ -260,7 +260,7 @@ with or without an LLM. Emotion is not inferred from acoustics; add it yourself.
 A speaker needs three measurable lines for their own baseline; otherwise the video's
 pooled baseline is used without pitch, which does not transfer between voices.
 Analysis runs locally in pure NumPy and takes roughly ten seconds per hour of
-dialogue. The API is `POST /dub/prosody-mirror/{job_id}` with the editor's current
+dialogue; a line longer than a minute is measured from its first minute. The API is `POST /dub/prosody-mirror/{job_id}` with the editor's current
 segments; it only suggests directions and never changes the job.
 
 ### Preserve sound outside dialogue
