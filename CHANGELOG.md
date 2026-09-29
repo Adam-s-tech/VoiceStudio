@@ -75,6 +75,8 @@ metadata and the backend fallback mirror it.
 
 ### Fixed
 
+- Bug reports include CPU architecture and the active speech recognition engine when the backend answers, so native crash triage starts without a follow-up question (#2416)
+
 - Low-disk notifications open Storage settings directly (#2407)
 
 - Preserve float audio and requested seeds through OmniVoice/VoxCPM2 sidecars, and keep playback and saved WAV precision consistent (#2406)
