@@ -1,0 +1,113 @@
+import { beforeEach, expect, it, vi } from 'vitest';
+import { apiJson } from '@/lib/api/client';
+import {
+  cleanupDubSegments,
+  clearDubEditHistory,
+  dubSession,
+  mirrorDubSourceDelivery,
+  undoDubEdit,
+  type DubSegment,
+} from './dub-session';
+
+vi.mock('@/lib/api/client', () => ({ apiJson: vi.fn() }));
+
+const segment = (id: string, start: number, extra: Partial<DubSegment> = {}): DubSegment => ({
+  id,
+  start,
+  end: start + 1,
+  text: id,
+  text_original: id,
+  speaker_id: 'Speaker 1',
+  ...extra,
+});
+
+function editing(segments: DubSegment[]) {
+  dubSession.setState((current) => ({
+    ...current,
+    jobId: 'job',
+    phase: 'editing',
+    recovery: null,
+    error: null,
+    tracks: [],
+    segments,
+  }));
+}
+
+beforeEach(() => {
+  vi.mocked(apiJson).mockReset();
+  clearDubEditHistory();
+});
+
+it('fills empty directions from the source delivery without overwriting the user', async () => {
+  editing([
+    segment('a', 0),
+    segment('b', 1, { direction: 'whispered' }),
+    segment('c', 2, { sync_ratio: 1.1 }),
+  ]);
+  vi.mocked(apiJson).mockResolvedValueOnce({
+    source: 'vocals',
+    segments: [
+      { id: 'a', direction: '', measured: true },
+      { id: 'b', direction: 'urgent, quick', measured: true },
+      { id: 'c', direction: 'calm, slow', measured: true },
+    ],
+  });
+
+  await expect(mirrorDubSourceDelivery()).resolves.toEqual({
+    applied: 1,
+    measured: 3,
+    source: 'vocals',
+  });
+
+  const [path, init] = vi.mocked(apiJson).mock.calls[0];
+  expect(path).toBe('/dub/prosody-mirror/job');
+  expect(JSON.parse(String(init?.body))).toEqual({
+    segments: [
+      { id: 'a', start: 0, end: 1, speaker_id: 'Speaker 1' },
+      { id: 'b', start: 1, end: 2, speaker_id: 'Speaker 1' },
+      { id: 'c', start: 2, end: 3, speaker_id: 'Speaker 1' },
+    ],
+  });
+  const byId = new Map(dubSession.state.segments.map((row) => [row.id, row]));
+  expect(byId.get('a')?.direction).toBeUndefined();
+  expect(byId.get('b')?.direction).toBe('whispered');
+  expect(byId.get('c')?.direction).toBe('calm, slow');
+  expect(byId.get('c')?.sync_ratio).toBeUndefined();
+  expect(dubSession.state.phase).toBe('editing');
+
+  undoDubEdit();
+  expect(dubSession.state.segments.find((row) => row.id === 'c')?.direction).toBeUndefined();
+});
+
+it('reports failure and leaves segments untouched when analysis fails', async () => {
+  const before = [segment('a', 0)];
+  editing(before);
+  vi.mocked(apiJson).mockRejectedValueOnce(new Error('No audio track available'));
+
+  await expect(mirrorDubSourceDelivery()).resolves.toBeNull();
+  expect(dubSession.state.segments).toEqual(before);
+  expect(dubSession.state.phase).toBe('editing');
+  expect(dubSession.state.error).toBe('No audio track available');
+});
+
+it('does nothing without a job', async () => {
+  editing([segment('a', 0)]);
+  dubSession.setState((current) => ({ ...current, jobId: null }));
+  await expect(mirrorDubSourceDelivery()).resolves.toBeNull();
+  expect(apiJson).not.toHaveBeenCalled();
+});
+
+it('applies the cleaned segments that Clean Up reports', async () => {
+  editing([segment('a', 0), segment('b', 1)]);
+  vi.mocked(apiJson).mockResolvedValueOnce({
+    segments: [{ id: 'a', start: 0, end: 2, text: 'a b' }],
+    before: 2,
+    after: 1,
+  });
+
+  await expect(cleanupDubSegments()).resolves.toBe(1);
+  expect(dubSession.state.segments).toEqual([
+    { id: 'a', start: 0, end: 2, text: 'a b', text_original: 'a b' },
+  ]);
+  expect(dubSession.state.phase).toBe('editing');
+});

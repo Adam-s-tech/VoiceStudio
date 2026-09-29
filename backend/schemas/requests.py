@@ -203,6 +203,27 @@ class AgentFitRequest(BaseModel):
     segments: List[AgentFitSegment]
     target_lang: str
 
+class ProsodyMirrorSegment(BaseModel):
+    id: str = Field(min_length=1, max_length=128)
+    start: float = Field(ge=0, allow_inf_nan=False)
+    end: float = Field(ge=0, allow_inf_nan=False)
+    speaker_id: Optional[str] = Field(default=None, max_length=128)
+
+
+class ProsodyMirrorRequest(BaseModel):
+    """Segments as the editor currently holds them: splits, merges and timing
+    edits are client-side until generation, so the job's stored copy is stale."""
+
+    segments: List[ProsodyMirrorSegment] = Field(min_length=1, max_length=20000)
+
+    @field_validator("segments")
+    @classmethod
+    def validate_unique_ids(cls, v: List[ProsodyMirrorSegment]) -> List[ProsodyMirrorSegment]:
+        if len({segment.id for segment in v}) != len(v):
+            raise ValueError("Segment ids must be unique")
+        return v
+
+
 class ParseSubtitleTextRequest(BaseModel):
     """Raw pasted subtitle text (SRT/VTT-ish) to be parsed into timed cues.
 
