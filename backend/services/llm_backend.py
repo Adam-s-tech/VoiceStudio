@@ -45,14 +45,19 @@ _OPEN_THINK_RE = re.compile(r"^\s*<(think|thinking|reasoning)>.*\Z", re.DOTALL |
 #: Some chat templates open the block themselves (Spark-X2.5, Qwen3 thinking
 #: variants, DeepSeek-R1-0528 put ``<think>`` in the generation prompt), so a
 #: server without a reasoning parser returns only ``…reasoning</think>answer``.
-#: A closing tag with no opening tag before it marks the end of that block.
+#: A closing tag with no opening tag before it marks the end of that block,
+#: unless the prompt itself contains the tag (see _strip_reasoning).
 _PREFILLED_THINK_RE = re.compile(
-    r"^(?:(?!<(?:think|thinking|reasoning)>).)*?</(?:think|thinking|reasoning)>",
+    r"^(?:(?!<(?:think|thinking|reasoning)>).)*?</(think|thinking|reasoning)>",
     re.DOTALL | re.IGNORECASE,
 )
 
 
-def _strip_reasoning(raw: str) -> str:
+def _prompt_text(messages: list[dict]) -> str:
+    return "\n".join(m["content"] for m in messages if isinstance(m.get("content"), str))
+
+
+def _strip_reasoning(raw: str, prompt: str = "") -> str:
     """Return the answer with any reasoning block removed.
 
     Returns ``""`` when the response was *only* reasoning. That is deliberate:
@@ -60,8 +65,14 @@ def _strip_reasoning(raw: str) -> str:
     input (dictation keeps the raw transcript, translation keeps the source),
     whereas handing back the model's private monologue as if it were the answer
     would silently overwrite the user's words with it.
+
+    ``prompt`` is the text the reply answers. A bare closing tag only ends a
+    prefilled block when the prompt does not contain that tag: an answer that
+    translates or quotes input with a literal ``</think>`` must keep it.
     """
-    raw = _PREFILLED_THINK_RE.sub("", raw, count=1)
+    prefilled = _PREFILLED_THINK_RE.match(raw)
+    if prefilled and f"</{prefilled.group(1)}>".lower() not in prompt.lower():
+        raw = raw[prefilled.end():]
     while match := _THINK_TAG_RE.match(raw):
         raw = raw[match.end():]
     cleaned = _OPEN_THINK_RE.sub("", raw)
@@ -294,7 +305,8 @@ class OpenAICompatBackend(LLMBackend):
             kw.pop("reasoning_effort", None)
             res = _create(**kw)
 
-        return _strip_reasoning(res.choices[0].message.content or "")
+        return _strip_reasoning(res.choices[0].message.content or "",
+                                prompt=_prompt_text(messages))
 
     def chat_messages_stream(self, *, messages: list[dict], timeout: Optional[float] = None,
                              temperature: Optional[float] = None) -> Iterator[str]:

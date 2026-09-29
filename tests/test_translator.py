@@ -391,3 +391,12 @@ def test_chat_strips_prefilled_reasoning(monkeypatch):
         choices=[MagicMock(message=MagicMock(content="Keep it short.\n</think>\n\nHola, amigo."))])
     monkeypatch.setattr(tr, "_llm_model", lambda: "test-model")
     assert tr._chat(client, system="s", user="u") == "Hola, amigo."
+
+
+def test_chat_keeps_a_closing_tag_quoted_from_the_source(monkeypatch):
+    client = MagicMock()
+    client.chat.completions.create.return_value = MagicMock(
+        choices=[MagicMock(message=MagicMock(content="Usa </think> para cerrar el bloque."))])
+    monkeypatch.setattr(tr, "_llm_model", lambda: "test-model")
+    out = tr._chat(client, system="s", user="Use </think> to close the block.")
+    assert out == "Usa </think> para cerrar el bloque."

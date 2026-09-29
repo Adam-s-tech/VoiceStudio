@@ -706,7 +706,8 @@ async def dub_translate(req: TranslateRequest):
                             ],
                         )
                         from services.llm_backend import _strip_reasoning
-                        out_text = _strip_reasoning(res.choices[0].message.content or "")
+                        out_text = _strip_reasoning(res.choices[0].message.content or "",
+                                                    prompt=f"{sys_for_attempt}\n{seg.text}")
                         if not out_text:
                             last_err = "empty LLM response"
                             continue
