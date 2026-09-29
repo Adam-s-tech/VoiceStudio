@@ -477,8 +477,10 @@ _TIME_RE = re.compile(r"(?<![\d:.,])([01]?\d|2[0-3]):([0-5]\d)(?![\d:])")
 # EN-only ordinal, suffix verified in the callback ("2th" stays as-is).
 _ORDINAL_RE = re.compile(r"(?<![\w.,])(\d{1,4})(st|nd|rd|th)\b")
 
-# EN-only dollars: $N or $N.CC. "$1,000" is blocked by the lookahead.
-_CURRENCY_RE = re.compile(r"(?<!\w)\$(\d{1,6})(?:\.(\d{2}))?(?![\d.,])")
+# EN-only dollars: $N or $N.CC. "$1,000" and "$5.5" are blocked by the
+# lookahead; a period or comma that ends the sentence or clause is not, the
+# same guard the integer and decimal rules use ("It costs $5." is spoken).
+_CURRENCY_RE = re.compile(r"(?<!\w)\$(\d{1,6})(?:\.(\d{2}))?(?!\d)(?![.,]\d)")
 
 _PERCENT_RE = re.compile(r"(?<![\w.,])(\d{1,6}(?:\.\d{1,4})?)\s?%")
 

@@ -142,7 +142,7 @@ export function PerformanceModelPacks({ compact = false }: { compact?: boolean }
   const progressTotal = activeJobs.reduce((total, job) => total + (job.total_bytes ?? 0), 0);
   const progress = progressTotal > 0 ? Math.round((progressBytes / progressTotal) * 100) : null;
   const diskFree = catalogue.data?.disk_free_gb;
-  const lowDisk = diskFree != null && pack.downloadGb + 10 > diskFree;
+  const lowDisk = pack.missing.length > 0 && diskFree != null && pack.downloadGb + 10 > diskFree;
   const busy = starting || profile.isSaving || activeJobs.length > 0;
 
   const refresh = () =>

@@ -65,6 +65,8 @@ def test_voice_design_uses_native_control_prefix(monkeypatch):
         "prompt_text": None,
         "cfg_value": 2.0,
         "inference_timesteps": 10,
+        "retry_badcase": False,
+        "retry_badcase_max_times": 1,
     }
     audio = _frames(out)[-1]
     assert audio["op"] == "audio"
@@ -90,6 +92,8 @@ def test_style_clone_does_not_use_continuation_prompt(monkeypatch, tmp_path):
         "reference_wav_path": str(ref),
         "prompt_wav_path": None,
         "prompt_text": None,
+        "retry_badcase": False,
+        "retry_badcase_max_times": 1,
     }
 
 
@@ -108,7 +112,7 @@ def test_loads_the_configured_checkpoint_without_the_denoiser(monkeypatch):
     monkeypatch.setenv("OMNIVOICE_VOXCPM_MODEL", "local/ckpt")
     sidecar = _load_sidecar(monkeypatch, calls)
     sidecar._handle_synthesize({"text": "hi"}, io.BytesIO())
-    assert calls[0] == {"from_pretrained": "local/ckpt", "load_denoiser": False}
+    assert calls[0] == {"from_pretrained": "local/ckpt", "load_denoiser": False, "optimize": False}
 
 
 def test_rejects_a_url_reference(monkeypatch):
@@ -248,7 +252,10 @@ def test_both_adapters_follow_native_modes(monkeypatch, text, options, expected_
     # A strict signature catches unsupported API keywords, unlike **kwargs
     # fakes which previously accepted the nonexistent voice_description.
     def generate(text, cfg_value, inference_timesteps, reference_wav_path=None,
-                 prompt_wav_path=None, prompt_text=None):
+                 prompt_wav_path=None, prompt_text=None, retry_badcase=True,
+                 retry_badcase_max_times=3):
+        # Upstream voxcpm 2.0.3 only generates while attempts < max_times.
+        assert retry_badcase is False and retry_badcase_max_times >= 1
         calls.append(dict(text=text, cfg_value=cfg_value,
                           inference_timesteps=inference_timesteps,
                           reference_wav_path=reference_wav_path,

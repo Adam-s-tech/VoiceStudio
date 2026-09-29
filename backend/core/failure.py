@@ -146,7 +146,7 @@ _HINTS: dict[str, str] = {
     "PKG_RESOURCES_MISSING": "Run `uv pip install --reinstall 'setuptools>=75,<80'` in the backend venv (a plain install is skipped when setuptools' metadata is present but its pkg_resources files were removed by antivirus). Restart after.",
     "GATEKEEPER_QUARANTINE": "Clear the macOS quarantine flag (xattr -cr the app), then reopen.",
     "APPIMAGE_WEBKIT_WHITESCREEN": "Launch with WEBKIT_DISABLE_DMABUF_RENDERER=1 set.",
-    "HF_AUTH_FAILED": "Set a valid HF_TOKEN in Settings → Hugging Face and retry.",
+    "HF_AUTH_FAILED": "Set a valid HF_TOKEN in Settings → Hugging Face and retry. If the model is gated, open its Hugging Face page and accept its access terms first.",
     "DIARIZATION_MODEL_MISSING": "Install or repair the selected diarisation model in Settings > Models > Diarisation, then retry transcription.",
     "DIARIZATION_LOAD_FAILED": "Open Settings > Logs > Backend for the model load error, then retry transcription after correcting it.",
     "PYANNOTE_LICENSE_REQUIRED": "Accept the pyannote model licenses on Hugging Face, then retry.",
@@ -531,6 +531,8 @@ def classify(reason: str) -> str:
         or "share your contact" in low
         or "access agreement" in low
         or "access conditions" in low
+        # pocket-tts' own wording when the gated cloning weights are missing.
+        or "weights for the model with voice cloning" in low
     ) and ("pocket" in low or "kyutai" in low):
         return "POCKETTTS_GATED_WEIGHTS"
     diarisation = any(marker in low for marker in (
@@ -548,7 +550,15 @@ def classify(reason: str) -> str:
             return "DIARIZATION_MODEL_MISSING"
         if any(marker in low for marker in ("failed to load", "load failed", "runtime failed")):
             return "DIARIZATION_LOAD_FAILED"
-    if (diarisation and access_failure) or ("gated" in low and "model" in low) or "accept the" in low:
+    if diarisation and access_failure:
+        return "PYANNOTE_LICENSE_REQUIRED"
+    # Any other gated repo (Sesame CSM's prompts, Llama tokenizers, ...) is a
+    # token/access problem for THAT model. Sending it to the pyannote class
+    # told users to accept diarisation licenses for a TTS model; error_journal
+    # already files GatedRepoError under HF_AUTH_FAILED.
+    if "gatedrepoerror" in low or ("gated" in low and ("repo" in low or "model" in low)):
+        return "HF_AUTH_FAILED"
+    if "accept the" in low:
         return "PYANNOTE_LICENSE_REQUIRED"
     # ASR robustness (#551 / #549): name the class so the no-segments toast is
     # actionable. Place before the generic returns so a compute-type/transformers

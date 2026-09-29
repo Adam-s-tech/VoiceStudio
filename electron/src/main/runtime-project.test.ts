@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile, statfs } from 'node:fs/promise
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { downloadRuntimeInstaller } from './runtime-download';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import {
   installRuntime,
   promoteLegacyRuntimeCaches,
@@ -55,7 +55,12 @@ async function interpreter(project: string) {
   await writeFile(runtimePython(project), 'interpreter');
   await writeFile(join(project, '.venv', 'pyvenv.cfg'), 'home = managed');
 }
+beforeEach(() => {
+  // Installation fixtures exercise a supported host; the Intel case overrides it.
+  if (process.platform === 'darwin') vi.spyOn(process, 'arch', 'get').mockReturnValue('arm64');
+});
 afterEach(async () => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.mocked(statfs).mockClear();
@@ -63,6 +68,22 @@ afterEach(async () => {
 });
 
 describe('packaged runtime setup', () => {
+  it('rejects Intel Macs before creating files or downloading dependencies', async () => {
+    const { bundle, project } = await fixture();
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
+    const arch = vi.spyOn(process, 'arch', 'get').mockReturnValue('x64');
+    const run = vi.fn();
+    try {
+      await expect(installRuntime(bundle, project, null, run, new AbortController().signal))
+        .rejects.toMatchObject({ code: 'INTEL_MAC_UNSUPPORTED' });
+      expect(run).not.toHaveBeenCalled();
+      expect(statfs).not.toHaveBeenCalled();
+    } finally {
+      platform.mockRestore();
+      arch.mockRestore();
+    }
+  });
+
   it('downloads the first-run installer with the same proxy environment as uv', async () => {
     const { bundle, project } = await fixture();
     vi.stubEnv('HTTPS_PROXY', 'socks5h://127.0.0.1:1080');

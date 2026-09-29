@@ -81,7 +81,12 @@
     "onDemand": "사용 시 로드",
     "checkSetup": "설정 확인",
     "wait": "현재 작업이 끝난 후 변경하세요.",
-    "speedHelp": "품질을 높이면 시간이 더 걸릴 수 있습니다. 균형 모드로 시작하세요."
+    "speedHelp": "품질을 높이면 시간이 더 걸릴 수 있습니다. 균형 모드로 시작하세요.",
+    "engineLabel": "엔진",
+    "modelLabel": "모델",
+    "runsOn": "실행 위치",
+    "copyModel": "모델 ID 복사",
+    "copied": "복사됨"
   },
   "homeUi": {
     "subtitle": "오픈 소스로 완전히 로컬에서 실행되는 ElevenLabs의 대안 — 646개 언어로 목소리를 복제하고 디자인하며, 영상 더빙, 받아쓰기, 전사, 오디오북 제작까지.",
@@ -306,7 +311,16 @@
     "choose_voice": "음성을 선택하세요",
     "change_voice": "음성 변경",
     "voice_sample": "음성 샘플",
-    "prompt_named": "{{name}}이(가) 어떤 말을 하면 좋을까요?"
+    "prompt_named": "{{name}}이(가) 어떤 말을 하면 좋을까요?",
+    "choose_hint": "저장된 음성을 선택하거나 짧은 클립으로 새 음성을 추가하세요.",
+    "add_voice": "새 음성 추가",
+    "sort_label": "음성 정렬",
+    "sort_recent": "최신순",
+    "sort_name": "A–Z",
+    "change_photo": "사진 변경",
+    "remove_photo": "사진 제거",
+    "photo_hint": "클릭하거나 이미지를 끌어다 놓으세요. PNG, JPG, WebP, 최대 5MB.",
+    "current": "현재 음성"
   },
   "profileIdentity": {
     "save_hint": "이 음성을 저장하면 다음에 한 번의 클릭으로 사용할 수 있습니다.",
@@ -524,6 +538,7 @@
     "describe_hint": "목소리를 설명하거나 시작점을 선택하세요. 둘 중 무엇을 해도 아래 세부 정보가 채워집니다.",
     "describe_unmatched": "매핑할 수 없음: {{items}}",
     "describe_no_match": "아직 인식된 목소리 특징이 없습니다. deep, elderly, British 같은 단어를 사용해 보세요.",
+    "describe_freeform": "이 엔진은 설명을 작성한 그대로 읽습니다. 아래 세부 항목은 선택적인 추가 단서입니다.",
     "define_by_design": "디자인으로",
     "define_from_audio": "오디오에서",
     "define_voice": "음성 정의",
@@ -2070,6 +2085,7 @@
     "installing": "종속성…",
     "setup_space": "앱 드라이브에 최소 9 GiB의 여유 공간을 확보한 후 다시 시도하세요.",
     "setup_access": "앱 데이터 폴더에 쓰기 권한을 허용한 후 다시 시도하세요.",
+    "setup_unsupported_platform": "이 Intel Mac에서는 로컬 AI 백엔드를 실행할 수 없습니다 — PyTorch에 macOS Intel용 휠이 없습니다. 아래에서 원격 백엔드에 연결하세요. 로컬 설치는 필요하지 않습니다.",
     "ready": "엔진 준비 완료",
     "show_log": "로그 표시",
     "hide_log": "로그 숨기기",
@@ -2119,7 +2135,9 @@
     "mode_label": "받아쓰기 모드",
     "mode_sub": "토글: 한 번 누르면 시작되고 다시 누르면 중지됩니다. 길게 누르기: 키를 누르고 있는 동안 음성을 받아씁니다.",
     "mode_toggle": "토글",
-    "mode_hold": "길게 누르기"
+    "mode_hold": "길게 누르기",
+    "prompt_label": "어휘 힌트",
+    "prompt_sub": "받아쓰기 중 예상되는 이름, 전문 용어, 표기. Faster Whisper, MLX Whisper, OpenAI 호환 엔진만 사용하며(오디오와 함께 해당 서버로 전송됨), 다른 엔진은 무시합니다."
   },
   "trimmer": {
     "title": "참조 오디오 다듬기",
@@ -3158,7 +3176,14 @@
     "step_audio": "소스 클립",
     "step_transcribe": "전사",
     "step_translate": "번역",
-    "step_convert": "변환"
+    "step_convert": "변환",
+    "condition_phrase": "찾을 텍스트",
+    "condition_match": "일치 방식",
+    "condition_hint": "텍스트가 일치하면 예 분기가, 그렇지 않으면 아니요 분기가 실행됩니다. 대소문자는 구분하지 않습니다.",
+    "match_contains": "포함",
+    "match_equals": "정확히 일치",
+    "match_starts": "다음으로 시작",
+    "match_ends": "다음으로 끝남"
   },
   "proPage": {
     "title": "VoiceStudio Pro",
@@ -3278,8 +3303,8 @@
     "progress": "{{done}} / {{total}} 클립 준비됨",
     "changed": "설정이 변경되었습니다. 실행하면 새 출력이 생성됩니다.",
     "incomplete": "음성이 불완전합니다. 내보내기 전에 재시도하세요.",
-    "invalid_graph": "분기나 순환 없이 시작부터 끝까지 모든 단계를 연결하세요.",
-    "invalid_unsupported": "호환되지 않는 단계입니다. 텍스트는 번역이나 말하기에, 오디오는 받아쓰기나 변환에, 생성된 음성은 정규화에 연결하세요.",
+    "invalid_graph": "시작부터 종료까지 모든 단계를 연결하세요. 분기는 조건에서만 가능하며, 경로는 순환할 수 없습니다.",
+    "invalid_unsupported": "호환되지 않는 단계입니다. 텍스트는 번역이나 말하기에, 오디오는 받아쓰기나 변환에, 생성된 음성은 정규화에 연결하세요. 다시 합쳐지는 분기는 같은 종류의 값을 전달해야 합니다.",
     "invalid_voice": "각 말하기 또는 변환 단계에서 저장된 음성을 선택하세요.",
     "invalid_scripts": "비어 있지 않은 스크립트 1~50개를 각각 20,000자 이하로 추가하세요.",
     "peak": "피크 (dBFS)",
@@ -3292,7 +3317,8 @@
     "transcription_recipe": "오디오를 텍스트로",
     "conversion_recipe": "목소리 변경",
     "localization_recipe": "번역하고 읽기",
-    "invalid_language": "원본 및 대상 언어를 선택하세요."
+    "invalid_language": "원본 및 대상 언어를 선택하세요.",
+    "invalid_condition": "조건이 찾을 텍스트를 입력하세요."
   },
   "voiceSelector": {
     "designed": "디자인된 목소리",
