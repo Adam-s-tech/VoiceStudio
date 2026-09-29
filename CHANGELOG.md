@@ -75,6 +75,7 @@ metadata and the backend fallback mirror it.
 
 ### Fixed
 
+- Clone preview keeps an end-of-buffer loop inside the selected audio instead of playing the whole clip (#2429) — thanks @Nikhi00718!
 - Low-disk notifications open Storage settings directly (#2407)
 
 - Preserve float audio and requested seeds through OmniVoice/VoxCPM2 sidecars, and keep playback and saved WAV precision consistent (#2406)
