@@ -8,7 +8,8 @@
     <a href="#开始使用">开始使用</a> ·
     <a href="#文档">文档</a> ·
     <a href="https://discord.gg/bzQavDfVV9">Discord</a> ·
-    <a href="README.md">English</a>
+    <a href="README.md">English</a> ·
+    <a href="README_JA.md">日本語</a>
   </p>
 </div>
 
