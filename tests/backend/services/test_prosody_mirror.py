@@ -98,6 +98,8 @@ def test_pitch_ignored_when_not_comparable():
     [
         ({"loudness_db": 1.5, "rate_hz": 1.5, "pitch_st": 1.0, "pitch_spread_st": 1.0}, "urgent, quick"),
         ({"loudness_db": 1.2, "rate_hz": 0.0, "pitch_st": 1.2, "pitch_spread_st": 1.2}, "energetic"),
+        ({"loudness_db": 1.5, "rate_hz": 1.5, "pitch_st": 0.0, "pitch_spread_st": 0.0}, "quick"),
+        ({"loudness_db": 1.5, "rate_hz": 1.5}, "urgent, quick"),
         ({"loudness_db": -1.2, "rate_hz": -1.5, "pitch_st": -1.0, "pitch_spread_st": -1.0}, "calm, slow"),
         ({"loudness_db": -1.5, "voiced_ratio": -3.0}, "whispered"),
         ({"loudness_db": 2.0, "rate_hz": -1.0}, "energetic, slow, announcing"),

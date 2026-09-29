@@ -263,8 +263,9 @@ def infer_direction(z: Mapping[str, float]) -> Direction:
         tokens["intimacy"] = ["whispered"]
         return Direction(tokens=tokens, source="prosody-mirror", method="prosody")
 
-    arousal = (loud + pitch + movement) / 3.0 if "pitch_st" in z else loud
-    if loud >= 1.0 and rate >= 1.0 and pitch >= 0.5:
+    has_pitch = "pitch_st" in z
+    arousal = (loud + pitch + movement) / 3.0 if has_pitch else loud
+    if loud >= 1.0 and rate >= 1.0 and (pitch >= 0.5 or not has_pitch):
         tokens["energy"] = ["urgent"]
     elif arousal >= 1.0:
         tokens["energy"] = ["energetic"]
