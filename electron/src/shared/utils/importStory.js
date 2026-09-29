@@ -83,7 +83,11 @@ function captionBlocks(text, webvtt) {
     if (!lines.length) return false;
     const first = lines[0];
     if (/^WEBVTT(?:[ \t]|$)/.test(first)) return false;
-    return !isWebVttMetadata(first);
+    if (!isWebVttMetadata(first)) return true;
+    // WebVTT's block parser gives a timing line in position two precedence
+    // over the identifier, so `STYLE`/`REGION`/`NOTE` can name a real cue.
+    // https://www.w3.org/TR/webvtt1/#file-parsing — mirrors parse_srt.
+    return lines.length > 1 && isTimingLine(lines[1]);
   });
 }
 
