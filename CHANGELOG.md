@@ -75,6 +75,7 @@ metadata and the backend fallback mirror it.
 
 ### Fixed
 
+- ROCm hosts default MIOpen to its fast find mode, ending the ~18 s per-shape algorithm search that made IndexTTS chunks take 17–24 s (#2373)
 - Low-disk notifications open Storage settings directly (#2407)
 
 - Preserve float audio and requested seeds through OmniVoice/VoxCPM2 sidecars, and keep playback and saved WAV precision consistent (#2406)
