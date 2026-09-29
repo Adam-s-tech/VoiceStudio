@@ -81,7 +81,12 @@
     "onDemand": "Loads on use",
     "checkSetup": "Check setup",
     "wait": "Wait for current work to finish before changing this.",
-    "speedHelp": "Higher quality can take longer. Start with Balanced."
+    "speedHelp": "Higher quality can take longer. Start with Balanced.",
+    "engineLabel": "Engine",
+    "modelLabel": "Model",
+    "runsOn": "Runs on",
+    "copyModel": "Copy model ID",
+    "copied": "Copied"
   },
   "homeUi": {
     "subtitle": "Your open-source, fully local alternative to ElevenLabs — clone and design voices, dub videos, dictate, transcribe, and create audiobooks in 646 languages.",
@@ -318,6 +323,7 @@
     "installing": "Installing…",
     "setup_space": "Free at least 9 GiB on the app’s drive, then retry.",
     "setup_access": "Allow write access to the app’s data folder, then retry.",
+    "setup_unsupported_platform": "This Intel Mac can't run the local AI backend — PyTorch ships no macOS Intel wheels. Connect a remote backend below instead; no local install is needed.",
     "proxy_bypass_help": "Fully quit VoiceStudio, set HTTP_PROXY/HTTPS_PROXY to your proxy URL and NO_PROXY to excluded hosts in a terminal, then launch VoiceStudio from that terminal. Retrying in the current app cannot load new environment variables."
   },
   "engines": {
@@ -455,6 +461,7 @@
     "describe_hint": "Describe the voice, or pick a starting point. Either one fills in the details below.",
     "describe_unmatched": "Couldn't map: {{items}}",
     "describe_no_match": "No voice traits recognized yet — try words like deep, elderly, or British.",
+    "describe_freeform": "This engine reads your description as written. Details below are optional extra cues.",
     "auto_kicker": "· auto",
     "cat_Gender": "Gender",
     "cat_Age": "Age",
@@ -632,7 +639,16 @@
     "choose_voice": "Choose a voice",
     "change_voice": "Change voice",
     "voice_sample": "Voice sample",
-    "prompt_named": "What should {{name}} say?"
+    "prompt_named": "What should {{name}} say?",
+    "choose_hint": "Pick a saved voice, or add a new one from a short clip.",
+    "add_voice": "Add a new voice",
+    "sort_label": "Sort voices",
+    "sort_recent": "Newest",
+    "sort_name": "A–Z",
+    "change_photo": "Change photo",
+    "remove_photo": "Remove photo",
+    "photo_hint": "Click or drop an image. PNG, JPG or WebP up to 5 MB.",
+    "current": "Current voice"
   },
   "profileIdentity": {
     "save_hint": "Save this voice to use it again in one click.",
@@ -2193,7 +2209,9 @@
     "mode_label": "Dictation Mode",
     "mode_sub": "Toggle: press once to start, again to stop. Hold: dictate while the key is held.",
     "mode_toggle": "Toggle",
-    "mode_hold": "Hold"
+    "mode_hold": "Hold",
+    "prompt_label": "Vocabulary hint",
+    "prompt_sub": "Names, jargon and spellings to expect while dictating. Used by Faster Whisper, MLX Whisper and OpenAI-compatible engines (sent to that server with the audio); other engines ignore it."
   },
   "trimmer": {
     "title": "Trim reference audio",
@@ -3158,7 +3176,14 @@
     "step_audio": "Source clip",
     "step_transcribe": "Transcribe",
     "step_translate": "Translate",
-    "step_convert": "Convert"
+    "step_convert": "Convert",
+    "condition_phrase": "Text to look for",
+    "condition_match": "Match",
+    "condition_hint": "The yes branch runs when the text matches; otherwise the no branch runs. Capitals are ignored.",
+    "match_contains": "Contains",
+    "match_equals": "Is exactly",
+    "match_starts": "Starts with",
+    "match_ends": "Ends with"
   },
   "proPage": {
     "title": "VoiceStudio Pro",
@@ -3278,8 +3303,8 @@
     "progress": "{{done}} / {{total}} clips ready",
     "changed": "Settings changed. Running again creates new outputs.",
     "incomplete": "Incomplete speech. Retry before exporting.",
-    "invalid_graph": "Connect all steps from Start to End without branches or cycles.",
-    "invalid_unsupported": "Incompatible steps. Connect text to translation or speech, audio to transcription or conversion, and generated speech to normalization.",
+    "invalid_graph": "Connect every step from Start to End. Only a condition may branch, and no route may loop.",
+    "invalid_unsupported": "Incompatible steps. Connect text to translation or speech, audio to transcription or conversion, and generated speech to normalization. Branches that rejoin must carry the same kind of value.",
     "invalid_voice": "Choose a saved voice for each speech or conversion step.",
     "invalid_scripts": "Add 1–50 nonempty scripts, each at most 20,000 characters.",
     "peak": "Peak (dBFS)",
@@ -3292,7 +3317,8 @@
     "transcription_recipe": "Audio to transcript",
     "conversion_recipe": "Change the voice",
     "localization_recipe": "Translate and narrate",
-    "invalid_language": "Choose source and target languages."
+    "invalid_language": "Choose source and target languages.",
+    "invalid_condition": "Enter the text a condition should look for."
   },
   "voiceSelector": {
     "designed": "Designed voices",

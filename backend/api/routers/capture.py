@@ -52,6 +52,7 @@ async def transcribe_audio(
     model: Optional[str] = Form(None),
     mode: Optional[str] = Form(None),
     refine: Optional[str] = Form(None),
+    dictation: Optional[str] = Form(None),
 ):
     """Transcribe an audio file to text.
 
@@ -70,6 +71,11 @@ async def transcribe_audio(
               through when no LLM backend is configured. The raw ``text``
               is always returned; ``refined_text`` is added only when the
               LLM actually changed something.
+        dictation: Opt-in flag for hotkey-dictation callers: applies the
+              saved dictation vocabulary hint (``dictation.prompt``) to
+              engines that accept a prompt. Off by default so file
+              transcription and MCP/CLI callers are never biased by it;
+              ignored in 'reference' mode.
 
     Returns:
         {
@@ -120,6 +126,15 @@ async def transcribe_audio(
                 detail={**missing, "message": asr_model_missing_detail(missing)},
             )
 
+        from api.routers.dictation import dictation_transcribe_kwargs
+
+        def _prompt_kwargs(backend) -> dict:
+            # The dictation vocabulary prompt, only for callers that opt in;
+            # a voice-clone reference transcript must stay unbiased by it.
+            if requested_mode == "reference" or not _truthy(dictation):
+                return {}
+            return dictation_transcribe_kwargs(backend)
+
         def _run():
             if use_active_asr:
                 # Accurate mode: full WhisperX with forced alignment —
@@ -130,14 +145,18 @@ async def transcribe_audio(
                 # loader degrades to the next healthy engine (#1185).
                 from services.asr_backend import load_active_asr_backend
                 backend = load_active_asr_backend(require_installed=True) if requested_mode == "reference" else load_active_asr_backend()
-                result = backend.transcribe(tmp.name, word_timestamps=use_accurate)
+                result = backend.transcribe(
+                    tmp.name, word_timestamps=use_accurate, **_prompt_kwargs(backend),
+                )
             else:
                 # Fast mode (default): use the fastest available engine
                 # (MLX Turbo on Apple Silicon). Skip word_timestamps for
                 # ~30% latency reduction — dictation doesn't need them.
                 from services.asr_backend import get_capture_asr_backend
                 backend = get_capture_asr_backend()
-                result = backend.transcribe(tmp.name, word_timestamps=False)
+                result = backend.transcribe(
+                    tmp.name, word_timestamps=False, **_prompt_kwargs(backend),
+                )
             sherpa_model_id = getattr(getattr(backend, "spec", None), "id", None)
             return result, backend.id, sherpa_model_id
 
@@ -199,6 +218,9 @@ async def transcribe_audio(
                 def _run_fallback():
                     from services.asr_backend import get_capture_asr_backend
 
+                    # No vocabulary prompt here: this text is the evidence for
+                    # demoting the sherpa model, and Whisper can echo a prompt
+                    # on noise — it must come from the audio alone.
                     fallback = get_capture_asr_backend(skip_sherpa=True)
                     return (
                         fallback.transcribe(tmp.name, word_timestamps=False),

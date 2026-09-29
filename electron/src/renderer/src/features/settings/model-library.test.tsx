@@ -10,8 +10,9 @@ vi.mock('sonner', () => ({ toast: mock.toast }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
-import { ModelLibrary, SystemRecommendations } from './model-library';
+import { ModelLibrary, PerformanceModelPacks, SystemRecommendations } from './model-library';
 import { modelFamilies } from './model-family';
+import { performancePackRepos } from './performance-model-packs';
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -82,6 +83,112 @@ it('prioritizes required and curated models across families, with optional downl
       queryKey: ['performance-profile'],
     }),
   );
+});
+
+it('allows using an installed performance pack below the download reserve', async () => {
+  const profile = {
+    global: 'balanced',
+    overrides: {},
+    effective: {},
+    families: [],
+    implemented_families: [],
+    targets: { tts: {} },
+    selections: { tts: { engine: 'other', model: null } },
+  };
+  mock.api.mockImplementation((path: string) => {
+    if (path === '/models') {
+      return Promise.resolve({
+        disk_free_gb: 2.5,
+        models: performancePackRepos.balanced.map((repo_id) => ({
+          repo_id,
+          label: repo_id,
+          role: repo_id.includes('whisper') || repo_id.includes('sherpa') ? 'ASR' : 'TTS',
+          size_gb: 1,
+          installed: true,
+          supported: true,
+        })),
+      });
+    }
+    if (path === '/api/settings/performance-profile') return Promise.resolve(profile);
+    if (path === '/models/install/status') return Promise.resolve({ jobs: [] });
+    if (path === '/setup/recommendations') {
+      return Promise.resolve({
+        device: { label: 'Windows x64' },
+        models: [],
+        download_gb_remaining: 0,
+        total_gb: 0,
+        all_installed: true,
+      });
+    }
+    if (path.startsWith('/batch/jobs')) return Promise.resolve([]);
+    return Promise.resolve({});
+  });
+
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <PerformanceModelPacks />
+    </QueryClientProvider>,
+  );
+
+  const usePack = await screen.findByRole('button', { name: 'models.pack_use' });
+  expect(usePack).toBeEnabled();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  fireEvent.click(usePack);
+
+  await waitFor(() =>
+    expect(mock.api).toHaveBeenCalledWith(
+      '/api/settings/performance-profile',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ tier: 'balanced', family: null }),
+      }),
+    ),
+  );
+  expect(mock.api.mock.calls.every(([path]) => path !== '/models/install')).toBe(true);
+});
+
+it('keeps the disk reserve guard when a performance pack still needs downloads', async () => {
+  mock.api.mockImplementation((path: string) => {
+    if (path === '/models') {
+      return Promise.resolve({
+        disk_free_gb: 2.5,
+        models: performancePackRepos.balanced.map((repo_id, index) => ({
+          repo_id,
+          label: repo_id,
+          role: repo_id.includes('whisper') || repo_id.includes('sherpa') ? 'ASR' : 'TTS',
+          size_gb: index === 0 ? 1 : 0,
+          installed: index !== 0,
+          supported: true,
+        })),
+      });
+    }
+    if (path === '/api/settings/performance-profile')
+      return Promise.resolve({ global: 'balanced', targets: {}, selections: {} });
+    if (path === '/models/install/status') return Promise.resolve({ jobs: [] });
+    if (path === '/setup/recommendations') {
+      return Promise.resolve({
+        device: { label: 'Windows x64' },
+        models: [],
+        download_gb_remaining: 0,
+        total_gb: 0,
+        all_installed: true,
+      });
+    }
+    if (path.startsWith('/batch/jobs')) return Promise.resolve([]);
+    return Promise.resolve({});
+  });
+
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <PerformanceModelPacks />
+    </QueryClientProvider>,
+  );
+
+  const installPack = await screen.findByRole('button', { name: 'models.pack_install' });
+  expect(installPack).toBeDisabled();
+  expect(screen.getByRole('alert')).toHaveTextContent('models.reco_low_disk');
+  fireEvent.click(installPack);
+  expect(mock.api.mock.calls.every(([path]) => path !== '/models/install')).toBe(true);
 });
 
 it('unloads a resident model before deleting its slash-separated repository', async () => {

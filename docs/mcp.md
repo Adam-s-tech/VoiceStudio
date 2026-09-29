@@ -10,8 +10,10 @@ start once VoiceStudio is open.
 
 | Tool | What it does |
 |---|---|
-| `generate_speech` | text → WAV by default. Uses the agent's bound voice unless a `profile_id` is passed. In `files`/`both` mode, pass `format="opus"` or `format="ogg"` for Ogg/Opus audio at both `audio_url` and `output_path`; requires an installed ffmpeg. |
+| `generate_speech` | text → WAV by default. Uses the agent's bound voice unless a `profile_id` is passed. Omit `language` to use the voice's saved language; an explicit `Auto` overrides it. In `files`/`both` mode, pass `format="opus"` or `format="ogg"` for Ogg/Opus audio at both `audio_url` and `output_path`; requires an installed ffmpeg. |
 | `clone_voice` | reference audio (base64, or a `ref_audio_path` under the base path) → new voice profile. Returns a `profile_id` for use with `generate_speech`. |
+| `describe_voice` | free-text voice description → the voice-design attributes it maps to (gender, age, pitch, style, accent), plus the words it couldn't map. Saves nothing. |
+| `design_voice` | voice description → new **design** voice profile with a stable identity: its fixed-seed sample renders at save time, or on first use if the voice engine isn't ready yet. Returns a `profile_id` for use with `generate_speech`. Refuses a description that maps to no attribute. |
 | `transcribe` | audio (base64, or an `audio_path` under the base path) → text (646 languages). |
 | `list_voices` / `list_personalities` / `list_languages` | enumerate what's available. |
 | `check_health` | backend status + active GPU device. |

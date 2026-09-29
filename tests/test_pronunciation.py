@@ -86,6 +86,21 @@ def test_unicode_word_boundary():
     assert apply_lexicon("cafés plural", lex) == "cafés plural"
 
 
+def test_no_space_scripts_match_inside_a_sentence():
+    # Japanese, Chinese and Thai write words without spaces, so a key sits between
+    # more word characters and a \b boundary never matched it mid-sentence: the
+    # entry only ever applied to a line that was the key alone.
+    assert apply_lexicon("東京に行きます", {"東京": "とうきょう"}) == "とうきょうに行きます"
+    assert apply_lexicon("我在北京工作", {"北京": "Beijing"}) == "我在Beijing工作"
+    assert apply_lexicon("ฉันไปกรุงเทพวันนี้", {"กรุงเทพ": "Krung Thep"}) == \
+        "ฉันไปKrung Thepวันนี้"
+    # The ideographic iteration mark repeats the kanji before it and is part of
+    # the word: a key ending in it matches inside a sentence too.
+    assert apply_lexicon("色々試す", {"色々": "いろいろ"}) == "いろいろ試す"
+    # Spaced scripts keep their boundaries.
+    assert apply_lexicon("category of cat", {"cat": "kat"}) == "category of kat"
+
+
 def test_value_may_be_empty_to_delete_word():
     assert apply_lexicon("the [marker] gone", {"[marker]": ""}) == "the  gone"
 

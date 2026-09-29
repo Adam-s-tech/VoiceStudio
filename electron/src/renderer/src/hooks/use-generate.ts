@@ -19,7 +19,7 @@ import { throttle } from '@tanstack/react-pacer';
 import { toast } from 'sonner';
 import { ApiError, apiJson, describeError, isAbortError } from '@/lib/api/client';
 import { generateClone, sanitizeInstruct } from '@/lib/api/generate';
-import type { EnginesResponse, GenerateResult } from '@/lib/api/types';
+import type { DesignRecipe, EnginesResponse, GenerateResult, InstructVocabulary } from '@/lib/api/types';
 import { effectiveSamplingSteps } from '@/lib/audio/quality';
 import { cachedTtsLanguagesSupported } from '@/lib/language-options';
 import { tr } from '@/lib/i18n-text';
@@ -29,6 +29,7 @@ import { setLatestOutput } from '@/lib/store/output';
 import { referenceStore } from '@/lib/store/reference';
 import { beginAppActivity } from '@/lib/app-activity';
 import { useTtsReadiness } from './use-tts-readiness';
+import { useEngines } from './use-engines';
 import { recordActionBreadcrumb } from '@/lib/report-breadcrumb';
 
 const TIMER_TICK_MS = 100;
@@ -51,6 +52,8 @@ export interface DesignGenerateInput {
   seed: number;
   language?: string;
   profileId?: string | null;
+  /** Stored with the take so reopening it rebuilds the same draft (#2389). */
+  recipe?: DesignRecipe;
 }
 
 export interface UseGenerateClone {
@@ -71,6 +74,8 @@ export interface UseGenerateClone {
   canGenerateDesign: boolean;
   designBlocker: 'engine' | 'loading' | null;
   cloneBlocker: CloneBlocker;
+  /** How the active engine reads `instruct`: OmniVoice tags or as written (#2389). */
+  instructVocabulary: InstructVocabulary;
 }
 
 function isModelNotDownloaded(err: unknown): boolean {
@@ -129,6 +134,7 @@ function useGenerateController(): UseGenerateClone {
   const designBlocker = useTtsReadiness();
   const cloneEngineBlocker = useTtsReadiness('clone');
   const blocker = cloneEngineBlocker ?? inputBlocker;
+  const instructVocabulary = useEngines().activeTts?.instruct_vocabulary ?? 'tags';
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -267,7 +273,13 @@ function useGenerateController(): UseGenerateClone {
       abortRef.current = controller;
       try {
         const free = design?.instruct ?? settings.instruct;
-        const instruct = free.trim() ? announceInstructWarnings(free) : '';
+        // Only OmniVoice's closed tag set needs reducing; other engines read
+        // the description natively and would lose whatever the sanitizer drops.
+        const instruct = !free.trim()
+          ? ''
+          : instructVocabulary === 'freeform'
+            ? free.trim()
+            : announceInstructWarnings(free);
         const input = {
           text: design?.text ?? settings.text,
           seed: design?.seed,
@@ -276,6 +288,8 @@ function useGenerateController(): UseGenerateClone {
           refAudio: design || settings.selectedProfileId ? null : reference.file,
           refText: design ? undefined : settings.refText,
           instruct,
+          instructVocabulary,
+          designRecipe: design?.recipe,
           steps: effectiveSamplingSteps(
             settings.steps,
             queryClient.getQueryData<EnginesResponse>(queryKeys.engines)?.tts?.active,
@@ -336,7 +350,7 @@ function useGenerateController(): UseGenerateClone {
           .catch(() => {});
       }
     },
-    [queryClient, onProgress, blocker, designBlocker],
+    [queryClient, onProgress, blocker, designBlocker, instructVocabulary],
   );
 
   const cancel = useCallback(() => {
@@ -363,6 +377,7 @@ function useGenerateController(): UseGenerateClone {
     canGenerateDesign: designBlocker === null && !isGenerating,
     designBlocker,
     cloneBlocker: blocker,
+    instructVocabulary,
   };
 }
 

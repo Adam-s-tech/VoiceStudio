@@ -23,6 +23,10 @@ vi.mock('sonner', () => ({
 }));
 vi.mock('./use-clone-readiness', () => ({ useCloneInputsReadiness: () => null }));
 vi.mock('./use-tts-readiness', () => ({ useTtsReadiness: () => null }));
+const engine = vi.hoisted(() => ({ vocabulary: undefined as 'tags' | 'freeform' | undefined }));
+vi.mock('./use-engines', () => ({
+  useEngines: () => ({ activeTts: { instruct_vocabulary: engine.vocabulary } }),
+}));
 vi.mock('@/lib/api/generate', () => ({
   generateClone: vi.fn(),
   sanitizeInstruct: () => ({ instruct: '', unsupported: [], duplicates: [], conflicts: [] }),
@@ -241,3 +245,44 @@ it('attributes generation to an explicitly selected designed voice', async () =>
     expect.anything(),
   );
 });
+
+it.each([
+  ['freeform', 'raspy old female, scottish accent', 'freeform'],
+  [undefined, '', 'tags'],
+] as const)(
+  'forwards design prose only to free-form engines (#2389, %s)',
+  async (vocabulary, sent, expectedVocabulary) => {
+    engine.vocabulary = vocabulary;
+    vi.mocked(generateClone).mockReset().mockRejectedValueOnce(new Error('stop'));
+    function DesignConsumer() {
+      const state = useGenerateClone();
+      return (
+        <button
+          onClick={() =>
+            void state.generateDesign({
+              text: 'Hi',
+              instruct: 'raspy old female, scottish accent',
+              seed: 1,
+            })
+          }
+        >
+          design {state.instructVocabulary}
+        </button>
+      );
+    }
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <GenerationProvider>
+          <DesignConsumer />
+        </GenerationProvider>
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByText('design ' + expectedVocabulary));
+    await waitFor(() => expect(generateClone).toHaveBeenCalled());
+    expect(generateClone).toHaveBeenCalledWith(
+      expect.objectContaining({ instruct: sent, instructVocabulary: expectedVocabulary }),
+      expect.anything(),
+    );
+    engine.vocabulary = undefined;
+  },
+);
