@@ -75,6 +75,7 @@ metadata and the backend fallback mirror it.
 
 ### Fixed
 
+- Imported subtitles keep the intended timing when millisecond fields use one or two digits (#2422) — thanks @Vaishnavi220506!
 - Low-disk notifications open Storage settings directly (#2407)
 
 - Preserve float audio and requested seeds through OmniVoice/VoxCPM2 sidecars, and keep playback and saved WAV precision consistent (#2406)
