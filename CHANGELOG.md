@@ -36,7 +36,7 @@ metadata and the backend fallback mirror it.
 
 ### Added
 
-- Mirror source delivery gives each dub line a direction measured from the original actor's pitch, loudness, pace and voicing, relative to that speaker — thanks @JoshuaWIls!
+- Mirror source delivery gives each dub line a direction measured from the original actor's pitch, loudness, pace and voicing, relative to that speaker (#2410) — thanks @JoshuaWIls!
 - Choose 16/24/32-bit WAV precision, sampling effort and mastering in Clone and Design, with file sizes and optional audio checks (#2406)
 - Language selection adds searchable flags, native names and codes in a responsive virtual grid, with supported model languages first and accessible keyboard navigation (#2408)
 - Run local narration, transcription, translation and voice-conversion recipes with resumable steps and WAV/TXT exports (#2333)
@@ -76,7 +76,7 @@ metadata and the backend fallback mirror it.
 
 ### Fixed
 
-- Dubbing Clean Up now applies the merged segments it reports instead of leaving the transcript unchanged — thanks @JoshuaWIls!
+- Dubbing Clean Up now applies the merged segments it reports instead of leaving the transcript unchanged (#2410) — thanks @JoshuaWIls!
 - Low-disk notifications open Storage settings directly (#2407)
 
 - Preserve float audio and requested seeds through OmniVoice/VoxCPM2 sidecars, and keep playback and saved WAV precision consistent (#2406)
