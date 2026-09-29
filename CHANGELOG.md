@@ -75,7 +75,7 @@ metadata and the backend fallback mirror it.
 
 ### Fixed
 
-- IndexTTS 2.5 verifies its bfloat16 claim with a test matmul before enabling bf16, so ROCm GPUs whose rocBLAS crashes on bf16 fall back to fp32 instead of killing the sidecar (#2372)
+- IndexTTS 2.5 verifies its bfloat16 claim with a test matmul before enabling bf16, so ROCm GPUs whose rocBLAS crashes on bf16 fall back to fp32 instead of killing the sidecar (#2372) — thanks @swadhinbiswas!
 - Low-disk notifications open Storage settings directly (#2407)
 
 - Preserve float audio and requested seeds through OmniVoice/VoxCPM2 sidecars, and keep playback and saved WAV precision consistent (#2406)

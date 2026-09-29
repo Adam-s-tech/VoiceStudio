@@ -137,6 +137,58 @@ def test_the_probe_runs_the_sidecars_own_interpreter_and_is_bounded(sidecar, mon
     assert 0 < seen["timeout"] <= sidecar._BF16_PROBE_TIMEOUT_S
 
 
+def _probe_timeout(sidecar, monkeypatch, value=None) -> float:
+    """The timeout _bf16_probe passes to subprocess.run for an env value."""
+    if value is None:
+        monkeypatch.delenv("OMNIVOICE_INDEXTTS_RECV_TIMEOUT_S", raising=False)
+    else:
+        monkeypatch.setenv("OMNIVOICE_INDEXTTS_RECV_TIMEOUT_S", value)
+    seen = {}
+
+    def _run(argv, **kwargs):
+        seen["timeout"] = kwargs.get("timeout")
+
+        class _Proc:
+            returncode = 0
+        return _Proc()
+
+    monkeypatch.setattr(sidecar.subprocess, "run", _run)
+    sidecar._bf16_probe()
+    return seen["timeout"]
+
+
+@pytest.mark.parametrize("env", [None, "45.5", "30", "abc", "inf", "-5"])
+def test_the_probe_budget_never_outlasts_the_parents_silence_deadline(sidecar, monkeypatch, env):
+    """Fail-before/pass-after for the #2424 review: the fixed 120 s budget
+    ignored OMNIVOICE_INDEXTTS_RECV_TIMEOUT_S, so a tuned-down deadline
+    (floor 30 s) could have the parent's watchdog kill the sidecar mid-probe
+    — before _heartbeat starts and re-arms it."""
+    timeout = _probe_timeout(sidecar, monkeypatch, env)
+    deadline = sidecar._parent_recv_deadline_s()
+    # The heartbeat waits a full period before its first frame, so the probe
+    # must finish one margin inside the deadline, not merely under it.
+    assert timeout == min(
+        sidecar._BF16_PROBE_TIMEOUT_S,
+        deadline - sidecar._PROBE_DEADLINE_MARGIN_S,
+    )
+    assert 0 < timeout < deadline
+
+
+def test_the_sidecar_and_the_parent_read_the_same_recv_deadline(sidecar, monkeypatch):
+    """The sidecar runs in its own venv and cannot import the parent's
+    engine module, so the deadline parsing is duplicated — this pins the
+    two to the same env contract (default 900, floor 30, garbage → 900)."""
+    from engines.indextts import IndexTTS2Backend
+
+    parent_deadline = IndexTTS2Backend.recv_timeout_s.fget
+    for value in (None, "45.5", "30", "abc", "inf", "-5", "1e9"):
+        if value is None:
+            monkeypatch.delenv("OMNIVOICE_INDEXTTS_RECV_TIMEOUT_S", raising=False)
+        else:
+            monkeypatch.setenv("OMNIVOICE_INDEXTTS_RECV_TIMEOUT_S", value)
+        assert sidecar._parent_recv_deadline_s() == parent_deadline(None), value
+
+
 # ── the wiring ─────────────────────────────────────────────────────────────
 
 def test_the_verdict_reaches_the_model_constructor(sidecar, monkeypatch, tmp_path):
