@@ -41,9 +41,8 @@ _TIMING_RE = re.compile(rf"^{_H}{_TS}{_H}-->{_H}{_TS}.*$", re.MULTILINE)
 
 
 def _ts_to_seconds(h: str, m: str, s: str, ms: str) -> float:
-    # Pad ms to 3 digits so "5" -> 0.005, "50" -> 0.050.
-    ms_padded = (ms + "000")[:3]
-    return int(h or 0) * 3600 + int(m) * 60 + int(s) + int(ms_padded) / 1000.0
+    # The final field is a millisecond count: "5" -> 0.005, "50" -> 0.050.
+    return int(h or 0) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000.0
 
 
 def _is_index_line(line: str) -> bool:
