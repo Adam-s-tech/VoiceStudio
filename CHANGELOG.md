@@ -75,6 +75,7 @@ metadata and the backend fallback mirror it.
 
 ### Fixed
 
+- Dub translation, the reflect pass, Cinematic refine and glossary auto-extract drop a local reasoning model's thinking, including templates that prefill `<think>` such as Spark-X2.5 (#2420) — thanks @FenjuFu!
 - Low-disk notifications open Storage settings directly (#2407)
 
 - Preserve float audio and requested seeds through OmniVoice/VoxCPM2 sidecars, and keep playback and saved WAV precision consistent (#2406)

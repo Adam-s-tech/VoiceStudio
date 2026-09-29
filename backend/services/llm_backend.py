@@ -42,6 +42,14 @@ _THINK_TAG_RE = re.compile(r"^\s*<(think|thinking|reasoning)>.*?</\1>", re.DOTAL
 #: Output truncated mid-thought (token cap, or a stop that never came) leaves
 #: the block unclosed. Still not an answer: drop from the tag to the end.
 _OPEN_THINK_RE = re.compile(r"^\s*<(think|thinking|reasoning)>.*\Z", re.DOTALL | re.IGNORECASE)
+#: Some chat templates open the block themselves (Spark-X2.5, Qwen3 thinking
+#: variants, DeepSeek-R1-0528 put ``<think>`` in the generation prompt), so a
+#: server without a reasoning parser returns only ``…reasoning</think>answer``.
+#: A closing tag with no opening tag before it marks the end of that block.
+_PREFILLED_THINK_RE = re.compile(
+    r"^(?:(?!<(?:think|thinking|reasoning)>).)*?</(?:think|thinking|reasoning)>",
+    re.DOTALL | re.IGNORECASE,
+)
 
 
 def _strip_reasoning(raw: str) -> str:
@@ -53,6 +61,7 @@ def _strip_reasoning(raw: str) -> str:
     whereas handing back the model's private monologue as if it were the answer
     would silently overwrite the user's words with it.
     """
+    raw = _PREFILLED_THINK_RE.sub("", raw, count=1)
     while match := _THINK_TAG_RE.match(raw):
         raw = raw[match.end():]
     cleaned = _OPEN_THINK_RE.sub("", raw)

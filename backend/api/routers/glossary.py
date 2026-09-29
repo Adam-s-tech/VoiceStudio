@@ -234,7 +234,8 @@ def auto_extract(project_id: str, req: AutoExtractRequest):
                 {"role": "user", "content": user},
             ],
         )
-        body = (res.choices[0].message.content or "").strip()
+        from services.llm_backend import _strip_reasoning
+        body = _strip_reasoning(res.choices[0].message.content or "")
     except Exception as e:
         logger.warning("auto-extract LLM call failed: %s", e)
         # Scrub the provider error — some OpenAI-compatible providers echo the

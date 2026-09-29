@@ -381,3 +381,13 @@ def test_chat_non_429_does_not_retry(monkeypatch):
         tr._chat(client, system="s", user="u")
     assert client.chat.completions.create.call_count == 1
     assert not slept
+
+
+def test_chat_strips_prefilled_reasoning(monkeypatch):
+    """A local reasoning model served without a reasoning parser must not leak
+    its monologue into the Cinematic output."""
+    client = MagicMock()
+    client.chat.completions.create.return_value = MagicMock(
+        choices=[MagicMock(message=MagicMock(content="Keep it short.\n</think>\n\nHola, amigo."))])
+    monkeypatch.setattr(tr, "_llm_model", lambda: "test-model")
+    assert tr._chat(client, system="s", user="u") == "Hola, amigo."
