@@ -190,6 +190,12 @@ def guard_sensitive(sentence: str, brief: str) -> str:
 # ── Structured LLM reply ────────────────────────────────────────────────────
 
 _THINK_OPEN_RE = re.compile(r"^\s*<(think|thinking|reasoning)>", re.IGNORECASE)
+# A chat template that prefills the opening tag into the prompt leaves only
+# the closing one on the wire (#2428) — there is no opening tag to match.
+_THINK_CLOSE_RE = re.compile(r"</(?:think|thinking|reasoning)>", re.IGNORECASE)
+# A line-start SAY: later in an undecided body marks where prefilled
+# thinking ends, for a model that streams no closing tag either (#2428).
+_SAY_LINE_RE = re.compile(r"(?m)^[ \t]*SAY\s*:")
 _TAG_RE = re.compile(r"(?:^|\s)(ACTION|OUTCOME)\s*:", re.IGNORECASE)
 _SAY_RE = re.compile(r"^\s*SAY\s*:\s*", re.IGNORECASE)
 _ACTION_VALUE_RE = re.compile(r"ACTION\s*:\s*([A-Za-z_\- ]+)", re.IGNORECASE)
@@ -234,6 +240,22 @@ class ReplyParser:
             if not close:
                 return None
             text = text[close.end():]
+        else:
+            # No opening tag: either there is no reasoning at all, or the
+            # chat template prefilled the opening tag into the prompt and
+            # the model streams only …SAY: (#2428).
+            close = _THINK_CLOSE_RE.search(text)
+            if close:
+                text = text[close.end():]
+        # A later line-start SAY: marks where thinking ends — the model
+        # that never sent a closing tag either (#2428). Safe to re-run on
+        # every feed: raw only grows, so the first match can only appear,
+        # never move, and for a reply that starts with SAY: it matches at
+        # the start and strips nothing — ``_emitted`` stays aligned with
+        # whatever this returns.
+        say = _SAY_LINE_RE.search(text)
+        if say:
+            text = text[say.start():]
         return text.lstrip()
 
     def _decide_mode(self, body: str, final: bool) -> None:
@@ -243,8 +265,15 @@ class ReplyParser:
             self.mode = "json"
         elif _SAY_RE.match(body):
             self.mode = "tagged"
-        elif final or len(body) >= 4 or not "say:".startswith(body[:4].lower()):
+        elif final:
             self.mode = "plain"
+        # Not final and neither format marker: hold. The system prompt
+        # requires replies to start with SAY: or {, so anything else may be
+        # prefilled thinking (#2428) — the first spoken sentence cannot be
+        # taken back, and this text reaches a third party on the phone.
+        # ``_body`` reveals the format when the closing tag or a later
+        # line-start SAY: arrives; ``finish`` settles a reply with neither
+        # as plain, as it always did.
 
     def _say(self, body: str, final: bool) -> str:
         if self.mode == "json":
