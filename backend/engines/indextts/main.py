@@ -68,6 +68,7 @@ import json
 import ntpath
 import os
 import struct
+import subprocess
 import sys
 import tempfile
 import threading
@@ -200,13 +201,57 @@ _model = None
 _model_version = None
 
 
+#: Child-process bf16 probe budget: one torch import plus one GEMM. The
+#: fault this guards against is instant; the timeout only has to outlast a
+#: cold first import on a heavily loaded host.
+_BF16_PROBE_TIMEOUT_S = 120
+
+#: A minimal bfloat16 GEMM — exactly the operation rocBLAS/Tensile dies on
+#: when it loads its bf16 kernel library (gfx1030, #2372). Runs as
+#: ``python -c`` inside this same venv, so it sees the same torch and GPU.
+_BF16_PROBE_CODE = (
+    "import torch\n"
+    "x = torch.randn(64, 64, device='cuda', dtype=torch.bfloat16)\n"
+    # .sum().item() synchronizes, so a deferred fault still lands in the child.
+    "torch.matmul(x, x).sum().item()\n"
+)
+
+
+def _bf16_probe() -> bool:
+    """True when one tiny bf16 GEMM survives in a child process.
+
+    ``torch.cuda.is_bf16_supported()`` claims True on ROCm parts whose
+    rocBLAS then segfaults on the first bfloat16 GEMM (gfx1030 / RDNA2,
+    #2372) — below Python, so the whole sidecar died with ``closed pipe
+    mid-generate`` on every synthesis. Running the probe in a child converts
+    that crash into a non-zero exit we can fall back from.
+    """
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c", _BF16_PROBE_CODE],
+            capture_output=True,
+            timeout=_BF16_PROBE_TIMEOUT_S,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return proc.returncode == 0
+
+
 def _torch_bf16_supported() -> bool:
     """Return whether this sidecar can safely enable IndexTTS 2.5 BF16."""
     try:
         import torch
 
         supported = getattr(torch.cuda, "is_bf16_supported", None)
-        return bool(torch.cuda.is_available() and supported and supported())
+        if not (torch.cuda.is_available() and supported and supported()):
+            return False
+        if getattr(torch.version, "hip", None):
+            # ROCm: the claim is necessary but not sufficient — verify it in
+            # a child so a Tensile segfault fails only the probe (#2372) and
+            # the model falls back to fp32 (the verified workaround was
+            # OMNIVOICE_INDEXTTS_FP16=0).
+            return _bf16_probe()
+        return True
     except Exception:
         return False
 
