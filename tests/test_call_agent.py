@@ -361,6 +361,17 @@ def test_reply_parser_drops_prefilled_thinking_at_a_lowercase_boundary():
     assert p.action == "none"
 
 
+def test_a_json_reply_is_not_resliced_by_a_trailing_say_line():
+    """The line-start boundary applies only while no mode is chosen: a
+    body already streaming as json must not be re-sliced at finish() by a
+    stray SAY: line, or the say is dropped (#2431 review)."""
+    p = M_agent().ReplyParser()
+    body = '{"say": "Sure thing.", "action": "none"}\nSAY: stray line'
+    assert p.feed(body) == ""
+    assert p.finish() == "Sure thing."
+    assert p.action == "none"
+
+
 def test_a_draft_say_line_inside_reasoning_is_not_spoken():
     """Unclosed reasoning may draft a `SAY:` line; only the closing tag —
     or finish, if none ever comes — may establish the boundary, so a draft

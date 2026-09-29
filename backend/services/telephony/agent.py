@@ -252,12 +252,15 @@ class ReplyParser:
             if close:
                 text = text[close.end():]
         # A line-start SAY: marks where thinking ends for the model that
-        # never sent a closing tag either (#2428) — but only at finish: a
-        # draft "SAY:" line inside still-streaming reasoning must not flip
-        # the parser to tagged before a closing tag can establish the real
-        # boundary. While streaming, everything without a format marker is
-        # held anyway, so nothing is lost by waiting.
-        say = _SAY_LINE_RE.search(text) if final else None
+        # never sent a closing tag either (#2428) — but only at finish, and
+        # only while no mode has been chosen (#2431 review): a draft "SAY:"
+        # line inside still-streaming reasoning must not flip the parser to
+        # tagged before a closing tag establishes the real boundary, and a
+        # body already streaming as tagged/json must never be re-sliced
+        # here, or finish() would discard text ``_emitted`` already counts
+        # (or, for json, drop a say that parses). While streaming everything
+        # without a format marker is held anyway, so waiting costs nothing.
+        say = _SAY_LINE_RE.search(text) if final and self.mode in (None, "plain") else None
         if say:
             text = text[say.start():]
         return text.lstrip()
