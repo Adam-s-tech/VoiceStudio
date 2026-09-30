@@ -25,9 +25,17 @@ vi.mock('./runtime-project', async (importOriginal) => ({
   runtimeDependenciesReady: vi.fn(async () => state.ready),
 }));
 vi.mock('./legacy-storage', () => ({
-  legacyStorageEnv: () => ({ OMNIVOICE_DATA_DIR: '/legacy/data', OMNIVOICE_CACHE_DIR: '/legacy/models' }),
+  legacyStorageEnv: () => ({
+    OMNIVOICE_DATA_DIR: '/legacy/data',
+    OMNIVOICE_CACHE_DIR: '/legacy/models',
+  }),
 }));
-import { resolveSpawnPlan, managedBackendSpawnOptions } from './backend';
+import {
+  resolveSpawnPlan,
+  managedBackendSpawnOptions,
+  spawnFailureMessage,
+  startupTimeoutMessage,
+} from './backend';
 afterEach(() => {
   state.installed = true;
   state.ready = true;
@@ -106,15 +114,43 @@ it('passes legacy storage to packaged backends while preserving explicit overrid
   vi.stubEnv('OMNIVOICE_DATA_DIR', undefined);
   vi.stubEnv('OMNIVOICE_CACHE_DIR', undefined);
   expect(managedBackendSpawnOptions(3900).env).toMatchObject({
-    OMNIVOICE_DATA_DIR: '/legacy/data', OMNIVOICE_CACHE_DIR: '/legacy/models',
+    OMNIVOICE_DATA_DIR: '/legacy/data',
+    OMNIVOICE_CACHE_DIR: '/legacy/models',
   });
   vi.stubEnv('OMNIVOICE_DATA_DIR', '/chosen/data');
   vi.stubEnv('OMNIVOICE_CACHE_DIR', '/chosen/models');
   expect(managedBackendSpawnOptions(3900).env).toMatchObject({
-    OMNIVOICE_DATA_DIR: '/chosen/data', OMNIVOICE_CACHE_DIR: '/chosen/models',
+    OMNIVOICE_DATA_DIR: '/chosen/data',
+    OMNIVOICE_CACHE_DIR: '/chosen/models',
   });
   state.packaged = false;
   vi.stubEnv('OMNIVOICE_DATA_DIR', undefined);
   vi.stubEnv('OMNIVOICE_CACHE_DIR', undefined);
   expect(managedBackendSpawnOptions(3900).env.OMNIVOICE_DATA_DIR).toBeUndefined();
+});
+
+it('names the program and runtime repair when the OS rejects a spawn', () => {
+  const python = String.raw`C:\Users\u\VoiceStudio\.venv\Scripts\python.exe`;
+  const message = spawnFailureMessage(
+    python,
+    Object.assign(new Error('spawn UNKNOWN'), { code: 'UNKNOWN' }),
+  );
+  expect(message).toContain(python);
+  expect(message).toContain('spawn UNKNOWN');
+  expect(message).toContain('repair the local runtime');
+});
+
+it('keeps a plain spawn failure message free of install advice', () => {
+  expect(spawnFailureMessage('uv', new Error('Runtime setup exited with code 1'))).toBe(
+    'Could not start uv: Runtime setup exited with code 1',
+  );
+});
+
+it('includes the backend last output in a startup-budget failure', () => {
+  expect(startupTimeoutMessage(3900, 300_000)).toBe(
+    'Backend did not answer on port 3900 within 300 s (OMNIVOICE_STARTUP_BUDGET_S). Check the log above.',
+  );
+  expect(startupTimeoutMessage(3900, 300_000, 'INFO: loading model')).toBe(
+    'Backend did not answer on port 3900 within 300 s (OMNIVOICE_STARTUP_BUDGET_S). Last output: INFO: loading model',
+  );
 });
