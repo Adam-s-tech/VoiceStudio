@@ -81,7 +81,12 @@
     "onDemand": "Kullanırken yüklenir",
     "checkSetup": "Kurulumu kontrol et",
     "wait": "Bunu değiştirmeden önce mevcut işin bitmesini bekleyin.",
-    "speedHelp": "Daha yüksek kalite daha uzun sürebilir. Dengeli ile başlayın."
+    "speedHelp": "Daha yüksek kalite daha uzun sürebilir. Dengeli ile başlayın.",
+    "engineLabel": "Motor",
+    "modelLabel": "Model",
+    "runsOn": "Çalıştığı yer",
+    "copyModel": "Model kimliğini kopyala",
+    "copied": "Kopyalandı"
   },
   "homeUi": {
     "subtitle": "ElevenLabs’a açık kaynaklı, tamamen yerel alternatifiniz — 646 dilde ses klonlayıp tasarlayın, videolara dublaj yapın, dikte edin, yazıya dökün ve sesli kitaplar oluşturun.",
@@ -306,7 +311,16 @@
     "choose_voice": "Bir ses seçin",
     "change_voice": "Sesi değiştir",
     "voice_sample": "Ses örneği",
-    "prompt_named": "{{name}} ne söylesin?"
+    "prompt_named": "{{name}} ne söylesin?",
+    "choose_hint": "Kayıtlı bir ses seçin veya kısa bir klipten yeni bir ses ekleyin.",
+    "add_voice": "Yeni ses ekle",
+    "sort_label": "Sesleri sırala",
+    "sort_recent": "En yeni",
+    "sort_name": "A–Z",
+    "change_photo": "Fotoğrafı değiştir",
+    "remove_photo": "Fotoğrafı kaldır",
+    "photo_hint": "Tıklayın veya bir görsel bırakın. 5 MB'a kadar PNG, JPG veya WebP.",
+    "current": "Geçerli ses"
   },
   "profileIdentity": {
     "save_hint": "Tek tıklamayla tekrar kullanmak için bu sesi kaydedin.",
@@ -524,6 +538,7 @@
     "describe_hint": "Sesi tanımlayın veya bir başlangıç noktası seçin. Her ikisi de aşağıdaki ayrıntıları doldurur.",
     "describe_unmatched": "Eşlenemedi: {{items}}",
     "describe_no_match": "Henüz ses özelliği tanınmadı — deep, elderly veya British gibi kelimeler deneyin.",
+    "describe_freeform": "Bu motor açıklamanızı yazdığınız gibi okur. Aşağıdaki ayrıntılar isteğe bağlı ek ipuçlarıdır.",
     "define_by_design": "Tasarımla",
     "define_from_audio": "Sesten",
     "define_voice": "Sesi tanımla",
@@ -2076,6 +2091,7 @@
     "installing": "Bağımlılıklar…",
     "setup_space": "Uygulamanın sürücüsünde en az 9 GiB alan açıp yeniden deneyin.",
     "setup_access": "Uygulamanın veri klasörüne yazma izni verip yeniden deneyin.",
+    "setup_unsupported_platform": "Bu Intel Mac, yerel yapay zekâ arka ucunu çalıştıramaz — PyTorch'ta macOS Intel wheel'leri yok. Bunun yerine aşağıdan bir uzak arka uca bağlanın; yerel kurulum gerekmez.",
     "ready": "Motor hazır",
     "show_log": "Günlüğü göster",
     "hide_log": "Günlüğü gizle",
@@ -2125,7 +2141,9 @@
     "mode_label": "Dikte Modu",
     "mode_sub": "Geçiş: Başlatmak için bir kez, durdurmak için tekrar basın. Basılı tutun: tuş basılı tutulduğunda dikte edin.",
     "mode_toggle": "Değiştir",
-    "mode_hold": "Basılı tutun"
+    "mode_hold": "Basılı tutun",
+    "prompt_label": "Kelime ipucu",
+    "prompt_sub": "Dikte sırasında beklenen adlar, terimler ve yazımlar. Faster Whisper, MLX Whisper ve OpenAI uyumlu motorlar kullanır (sesle birlikte o sunucuya gönderilir); diğer motorlar yok sayar."
   },
   "trimmer": {
     "title": "Referans sesini kırp",
@@ -3164,7 +3182,14 @@
     "step_audio": "Kaynak klip",
     "step_transcribe": "Metne dönüştür",
     "step_translate": "Çevir",
-    "step_convert": "Dönüştür"
+    "step_convert": "Dönüştür",
+    "condition_phrase": "Aranacak metin",
+    "condition_match": "Eşleşme",
+    "condition_hint": "Metin eşleşirse evet dalı, eşleşmezse hayır dalı çalışır. Büyük küçük harf ayrımı yapılmaz.",
+    "match_contains": "İçerir",
+    "match_equals": "Tam olarak eşittir",
+    "match_starts": "Şununla başlar",
+    "match_ends": "Şununla biter"
   },
   "proPage": {
     "title": "VoiceStudio Pro",
@@ -3284,8 +3309,8 @@
     "progress": "{{done}} / {{total}} klip hazır",
     "changed": "Ayarlar değişti. Çalıştırmak yeni çıktılar oluşturur.",
     "incomplete": "Konuşma eksik. Dışa aktarmadan önce yeniden deneyin.",
-    "invalid_graph": "Tüm adımları dallanma veya döngü olmadan Başlangıçtan Sona bağlayın.",
-    "invalid_unsupported": "Uyumsuz adımlar: metni çeviri veya konuşmaya, sesi yazıya dökme veya dönüştürmeye, üretilen konuşmayı normalleştirmeye bağlayın.",
+    "invalid_graph": "Her adımı Başlangıçtan Sona bağlayın. Yalnızca koşul adımları dallanabilir ve hiçbir yol döngü oluşturamaz.",
+    "invalid_unsupported": "Uyumsuz adımlar: metni çeviri veya konuşmaya, sesi yazıya dökme veya dönüştürmeye, üretilen konuşmayı normalleştirmeye bağlayın. Yeniden birleşen dallar aynı tür değeri taşımalıdır.",
     "invalid_voice": "Her konuşma veya dönüştürme adımı için kayıtlı bir ses seçin.",
     "invalid_scripts": "Her biri en fazla 20.000 karakterlik 1–50 boş olmayan metin ekleyin.",
     "peak": "Tepe (dBFS)",
@@ -3298,7 +3323,8 @@
     "transcription_recipe": "Sesten metne",
     "conversion_recipe": "Sesi değiştir",
     "localization_recipe": "Çevir ve seslendir",
-    "invalid_language": "Kaynak ve hedef dilleri seçin."
+    "invalid_language": "Kaynak ve hedef dilleri seçin.",
+    "invalid_condition": "Koşulun arayacağı metni girin."
   },
   "voiceSelector": {
     "designed": "Tasarlanmış sesler",

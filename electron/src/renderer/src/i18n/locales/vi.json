@@ -81,7 +81,12 @@
     "onDemand": "Tải khi sử dụng",
     "checkSetup": "Kiểm tra thiết lập",
     "wait": "Đợi công việc hiện tại hoàn tất trước khi thay đổi.",
-    "speedHelp": "Chất lượng cao hơn có thể mất nhiều thời gian hơn. Hãy bắt đầu với Cân bằng."
+    "speedHelp": "Chất lượng cao hơn có thể mất nhiều thời gian hơn. Hãy bắt đầu với Cân bằng.",
+    "engineLabel": "Công cụ",
+    "modelLabel": "Mô hình",
+    "runsOn": "Chạy trên",
+    "copyModel": "Sao chép ID mô hình",
+    "copied": "Đã sao chép"
   },
   "homeUi": {
     "subtitle": "Giải pháp thay thế ElevenLabs mã nguồn mở, chạy hoàn toàn trên máy — nhân bản và thiết kế giọng nói, lồng tiếng video, nhập liệu bằng giọng nói, phiên âm và tạo sách nói bằng 646 ngôn ngữ.",
@@ -306,7 +311,16 @@
     "choose_voice": "Chọn một giọng nói",
     "change_voice": "Thay đổi giọng nói",
     "voice_sample": "Mẫu giọng nói",
-    "prompt_named": "Bạn muốn {{name}} nói gì?"
+    "prompt_named": "Bạn muốn {{name}} nói gì?",
+    "choose_hint": "Chọn một giọng đã lưu hoặc thêm giọng mới từ một đoạn ngắn.",
+    "add_voice": "Thêm giọng mới",
+    "sort_label": "Sắp xếp giọng",
+    "sort_recent": "Mới nhất",
+    "sort_name": "A–Z",
+    "change_photo": "Đổi ảnh",
+    "remove_photo": "Xóa ảnh",
+    "photo_hint": "Nhấp hoặc thả ảnh vào. PNG, JPG hoặc WebP tối đa 5 MB.",
+    "current": "Giọng hiện tại"
   },
   "profileIdentity": {
     "save_hint": "Lưu giọng nói này để sử dụng lại chỉ bằng một cú nhấp chuột.",
@@ -524,6 +538,7 @@
     "describe_hint": "Mô tả giọng nói, hoặc chọn một điểm khởi đầu. Cả hai cách đều tự điền chi tiết bên dưới.",
     "describe_unmatched": "Không thể ánh xạ: {{items}}",
     "describe_no_match": "Chưa nhận ra đặc điểm giọng nói nào — hãy thử các từ như deep, elderly hoặc British.",
+    "describe_freeform": "Công cụ này đọc mô tả của bạn đúng như bạn viết. Các chi tiết bên dưới là gợi ý bổ sung tùy chọn.",
     "define_by_design": "Theo thiết kế",
     "define_from_audio": "Từ âm thanh",
     "define_voice": "Xác định giọng nói",
@@ -2076,6 +2091,7 @@
     "installing": "Đang…",
     "setup_space": "Giải phóng ít nhất 9 GiB trên ổ đĩa của ứng dụng rồi thử lại.",
     "setup_access": "Cho phép ghi vào thư mục dữ liệu của ứng dụng rồi thử lại.",
+    "setup_unsupported_platform": "Máy Mac Intel này không thể chạy backend AI cục bộ — PyTorch không có wheel cho macOS Intel. Hãy kết nối backend từ xa bên dưới; không cần cài đặt cục bộ.",
     "retry": "Thử lại",
     "ready": "Bộ máy sẵn sàng",
     "show_log": "Hiện nhật ký",
@@ -2125,7 +2141,9 @@
     "mode_label": "Chế độ đọc chính tả",
     "mode_sub": "Chuyển đổi: nhấn một lần để bắt đầu, một lần nữa để dừng. Giữ: ra lệnh trong khi phím được giữ.",
     "mode_toggle": "Chuyển đổi",
-    "mode_hold": "Giữ"
+    "mode_hold": "Giữ",
+    "prompt_label": "Gợi ý từ vựng",
+    "prompt_sub": "Tên riêng, thuật ngữ và cách viết dự kiến khi đọc chính tả. Faster Whisper, MLX Whisper và các công cụ tương thích OpenAI sẽ dùng (gửi đến máy chủ đó cùng âm thanh); các công cụ khác bỏ qua."
   },
   "trimmer": {
     "title": "Cắt âm thanh tham chiếu",
@@ -3164,7 +3182,14 @@
     "step_audio": "Clip nguồn",
     "step_transcribe": "Phiên âm",
     "step_translate": "Dịch",
-    "step_convert": "Chuyển đổi"
+    "step_convert": "Chuyển đổi",
+    "condition_phrase": "Văn bản cần tìm",
+    "condition_match": "Khớp",
+    "condition_hint": "Nhánh có chạy khi văn bản khớp; nếu không, nhánh không sẽ chạy. Không phân biệt hoa thường.",
+    "match_contains": "Chứa",
+    "match_equals": "Đúng bằng",
+    "match_starts": "Bắt đầu bằng",
+    "match_ends": "Kết thúc bằng"
   },
   "proPage": {
     "title": "VoiceStudio Pro",
@@ -3284,8 +3309,8 @@
     "progress": "{{done}} / {{total}} đoạn đã sẵn sàng",
     "changed": "Cài đặt đã thay đổi. Chạy lại sẽ tạo đầu ra mới.",
     "incomplete": "Giọng nói chưa đầy đủ. Thử lại trước khi xuất.",
-    "invalid_graph": "Nối mọi bước từ Bắt đầu đến Kết thúc, không phân nhánh hoặc tạo vòng lặp.",
-    "invalid_unsupported": "Các bước không tương thích: văn bản sang dịch hoặc đọc, âm thanh sang chép lời hoặc chuyển đổi, giọng tổng hợp sang chuẩn hóa.",
+    "invalid_graph": "Kết nối mọi bước từ Bắt đầu đến Kết thúc. Chỉ điều kiện mới được rẽ nhánh và không lộ trình nào được lặp vòng.",
+    "invalid_unsupported": "Các bước không tương thích: văn bản sang dịch hoặc đọc, âm thanh sang chép lời hoặc chuyển đổi, giọng tổng hợp sang chuẩn hóa. Các nhánh nhập lại phải mang cùng một loại giá trị.",
     "invalid_voice": "Chọn giọng đã lưu cho mỗi bước đọc hoặc chuyển đổi.",
     "invalid_scripts": "Thêm 1–50 kịch bản không trống, tối đa 20.000 ký tự mỗi kịch bản.",
     "peak": "Đỉnh (dBFS)",
@@ -3298,7 +3323,8 @@
     "transcription_recipe": "Âm thanh thành văn bản",
     "conversion_recipe": "Đổi giọng nói",
     "localization_recipe": "Dịch và thuyết minh",
-    "invalid_language": "Chọn ngôn ngữ nguồn và đích."
+    "invalid_language": "Chọn ngôn ngữ nguồn và đích.",
+    "invalid_condition": "Nhập văn bản mà điều kiện cần tìm."
   },
   "voiceSelector": {
     "designed": "Giọng nói được thiết kế",

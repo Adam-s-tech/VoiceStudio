@@ -81,7 +81,12 @@
     "onDemand": "Dimuat saat dipakai",
     "checkSetup": "Periksa pengaturan",
     "wait": "Tunggu pekerjaan saat ini selesai sebelum mengubah ini.",
-    "speedHelp": "Kualitas lebih tinggi bisa memakan waktu lebih lama. Mulai dengan Seimbang."
+    "speedHelp": "Kualitas lebih tinggi bisa memakan waktu lebih lama. Mulai dengan Seimbang.",
+    "engineLabel": "Mesin",
+    "modelLabel": "Model",
+    "runsOn": "Berjalan di",
+    "copyModel": "Salin ID model",
+    "copied": "Disalin"
   },
   "homeUi": {
     "subtitle": "Alternatif ElevenLabs Anda yang sumber terbuka dan sepenuhnya lokal — kloning dan rancang suara, sulihsuarakan video, dikte, transkripsikan, dan buat buku audio dalam 646 bahasa.",
@@ -306,7 +311,16 @@
     "choose_voice": "Pilih suara",
     "change_voice": "Ganti suara",
     "voice_sample": "Sampel suara",
-    "prompt_named": "Apa yang harus diucapkan {{name}}?"
+    "prompt_named": "Apa yang harus diucapkan {{name}}?",
+    "choose_hint": "Pilih suara tersimpan, atau tambahkan suara baru dari klip pendek.",
+    "add_voice": "Tambah suara baru",
+    "sort_label": "Urutkan suara",
+    "sort_recent": "Terbaru",
+    "sort_name": "A–Z",
+    "change_photo": "Ganti foto",
+    "remove_photo": "Hapus foto",
+    "photo_hint": "Klik atau letakkan gambar. PNG, JPG, atau WebP hingga 5 MB.",
+    "current": "Suara saat ini"
   },
   "profileIdentity": {
     "save_hint": "Simpan suara ini untuk digunakan lagi dengan sekali klik.",
@@ -524,6 +538,7 @@
     "describe_hint": "Deskripsikan suaranya, atau pilih titik awal. Keduanya akan mengisi detail di bawah.",
     "describe_unmatched": "Tidak dapat dipetakan: {{items}}",
     "describe_no_match": "Belum ada ciri suara yang dikenali — coba kata seperti deep, elderly, atau British.",
+    "describe_freeform": "Mesin ini membaca deskripsi Anda apa adanya. Detail di bawah adalah petunjuk tambahan opsional.",
     "define_by_design": "Lewat desain",
     "define_from_audio": "Dari audio",
     "define_voice": "Tentukan suara",
@@ -2076,6 +2091,7 @@
     "installing": "Memasang…",
     "setup_space": "Kosongkan setidaknya 9 GiB di drive aplikasi, lalu coba lagi.",
     "setup_access": "Izinkan akses tulis ke folder data aplikasi, lalu coba lagi.",
+    "setup_unsupported_platform": "Mac Intel ini tidak dapat menjalankan backend AI lokal — PyTorch tidak menyediakan wheel macOS Intel. Hubungkan backend jarak jauh di bawah; instalasi lokal tidak diperlukan.",
     "ready": "Mesin siap",
     "show_log": "Tampilkan log",
     "hide_log": "Sembunyikan log",
@@ -2125,7 +2141,9 @@
     "mode_label": "Mode Dikte",
     "mode_sub": "Beralih: tekan sekali untuk memulai, sekali lagi untuk berhenti. Tahan: mendiktekan saat kunci dipegang.",
     "mode_toggle": "Beralih",
-    "mode_hold": "Tahan"
+    "mode_hold": "Tahan",
+    "prompt_label": "Petunjuk kosakata",
+    "prompt_sub": "Nama, istilah, dan ejaan yang diharapkan saat mendikte. Dipakai oleh Faster Whisper, MLX Whisper, dan mesin yang kompatibel dengan OpenAI (dikirim ke server tersebut bersama audio); mesin lain mengabaikannya."
   },
   "trimmer": {
     "title": "Pangkas audio referensi",
@@ -3164,7 +3182,14 @@
     "step_audio": "Klip sumber",
     "step_transcribe": "Transkripsikan",
     "step_translate": "Terjemahkan",
-    "step_convert": "Konversi"
+    "step_convert": "Konversi",
+    "condition_phrase": "Teks yang dicari",
+    "condition_match": "Kecocokan",
+    "condition_hint": "Cabang ya berjalan saat teks cocok; jika tidak, cabang tidak yang berjalan. Huruf besar-kecil diabaikan.",
+    "match_contains": "Mengandung",
+    "match_equals": "Persis sama dengan",
+    "match_starts": "Diawali dengan",
+    "match_ends": "Diakhiri dengan"
   },
   "proPage": {
     "title": "VoiceStudio Pro",
@@ -3284,8 +3309,8 @@
     "progress": "{{done}} / {{total}} klip siap",
     "changed": "Pengaturan berubah. Eksekusi membuat keluaran baru.",
     "incomplete": "Ucapan tidak lengkap. Coba lagi sebelum ekspor.",
-    "invalid_graph": "Hubungkan semua langkah dari Mulai ke Selesai tanpa cabang atau siklus.",
-    "invalid_unsupported": "Langkah tidak cocok: teks ke terjemahan atau ucapan, audio ke transkripsi atau konversi, ucapan buatan ke normalisasi.",
+    "invalid_graph": "Hubungkan setiap langkah dari Mulai hingga Selesai. Hanya kondisi yang boleh bercabang, dan tidak ada rute yang boleh berputar.",
+    "invalid_unsupported": "Langkah tidak cocok: teks ke terjemahan atau ucapan, audio ke transkripsi atau konversi, ucapan buatan ke normalisasi. Cabang yang bergabung kembali harus membawa jenis nilai yang sama.",
     "invalid_voice": "Pilih suara tersimpan untuk setiap langkah ucapan atau konversi.",
     "invalid_scripts": "Tambahkan 1–50 naskah tidak kosong, maksimal 20.000 karakter per naskah.",
     "peak": "Puncak (dBFS)",
@@ -3298,7 +3323,8 @@
     "transcription_recipe": "Audio menjadi teks",
     "conversion_recipe": "Ubah suara",
     "localization_recipe": "Terjemahkan dan narasikan",
-    "invalid_language": "Pilih bahasa sumber dan tujuan."
+    "invalid_language": "Pilih bahasa sumber dan tujuan.",
+    "invalid_condition": "Masukkan teks yang harus dicari oleh kondisi."
   },
   "voiceSelector": {
     "designed": "Suara yang dirancang",

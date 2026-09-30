@@ -81,7 +81,12 @@
     "onDemand": "使用時に読み込み",
     "checkSetup": "設定を確認",
     "wait": "この設定を変更するには、現在の処理が完了するまでお待ちください。",
-    "speedHelp": "高品質にすると時間がかかる場合があります。まずは「バランス」をお試しください。"
+    "speedHelp": "高品質にすると時間がかかる場合があります。まずは「バランス」をお試しください。",
+    "engineLabel": "エンジン",
+    "modelLabel": "モデル",
+    "runsOn": "実行環境",
+    "copyModel": "モデル ID をコピー",
+    "copied": "コピーしました"
   },
   "homeUi": {
     "subtitle": "オープンソースで完全ローカルなElevenLabsの代替 — 声のクローンとデザイン、動画の吹き替え、音声入力、文字起こし、オーディオブック制作を646言語で。",
@@ -306,7 +311,16 @@
     "choose_voice": "音声を選択",
     "change_voice": "音声を変更",
     "voice_sample": "音声サンプル",
-    "prompt_named": "{{name}}に何を話してもらいますか？"
+    "prompt_named": "{{name}}に何を話してもらいますか？",
+    "choose_hint": "保存した音声を選ぶか、短いクリップから新しい音声を追加します。",
+    "add_voice": "新しい音声を追加",
+    "sort_label": "音声を並べ替え",
+    "sort_recent": "新しい順",
+    "sort_name": "A–Z",
+    "change_photo": "写真を変更",
+    "remove_photo": "写真を削除",
+    "photo_hint": "クリックするか画像をドロップします。PNG、JPG、WebP（5 MB まで）。",
+    "current": "現在の音声"
   },
   "profileIdentity": {
     "save_hint": "この音声を保存すると、次回からワンクリックで使えます。",
@@ -524,6 +538,7 @@
     "describe_hint": "声を説明するか、起点を選んでください。どちらでも下の詳細が自動入力されます。",
     "describe_unmatched": "対応付けできません: {{items}}",
     "describe_no_match": "まだ声の特徴を認識できていません。deep、elderly、British などの単語を試してください。",
+    "describe_freeform": "このエンジンは説明文をそのまま読み取ります。下の詳細は任意の追加ヒントです。",
     "define_by_design": "デザインで",
     "define_from_audio": "音声から",
     "define_voice": "音声の定義",
@@ -2076,6 +2091,7 @@
     "installing": "依存関係のインストール中…",
     "setup_space": "アプリのドライブに9 GiB以上の空き容量を確保して、再試行してください。",
     "setup_access": "アプリのデータフォルダーへの書き込みを許可して、再試行してください。",
+    "setup_unsupported_platform": "このIntel MacではローカルAIバックエンドを実行できません — PyTorchにmacOS Intel用wheelがありません。代わりに下でリモートバックエンドに接続してください。ローカルインストールは不要です。",
     "ready": "エンジン準備完了",
     "show_log": "ログを表示",
     "hide_log": "ログを非表示",
@@ -2125,7 +2141,9 @@
     "mode_label": "ディクテーションモード",
     "mode_sub": "トグル: 1 回押すと開始し、もう一度押すと停止します。 Hold: キーを押したままにします。",
     "mode_toggle": "トグル",
-    "mode_hold": "ホールド"
+    "mode_hold": "ホールド",
+    "prompt_label": "語彙ヒント",
+    "prompt_sub": "音声入力で想定される人名・専門用語・表記。Faster Whisper、MLX Whisper、OpenAI 互換エンジンのみが使用し（音声とともにそのサーバーへ送信されます）、その他のエンジンは無視します。"
   },
   "trimmer": {
     "title": "リファレンスオーディオをトリミングする",
@@ -3164,7 +3182,14 @@
     "step_audio": "ソースクリップ",
     "step_transcribe": "転写する",
     "step_translate": "翻訳する",
-    "step_convert": "変換"
+    "step_convert": "変換",
+    "condition_phrase": "検索するテキスト",
+    "condition_match": "一致方法",
+    "condition_hint": "テキストが一致すると「はい」の分岐が、一致しなければ「いいえ」の分岐が実行されます。大文字と小文字は区別しません。",
+    "match_contains": "次を含む",
+    "match_equals": "次と完全に一致",
+    "match_starts": "次で始まる",
+    "match_ends": "次で終わる"
   },
   "proPage": {
     "title": "VoiceStudio Pro",
@@ -3284,8 +3309,8 @@
     "progress": "{{done}} / {{total}} クリップ完了",
     "changed": "設定が変更されました。実行すると新しい出力を作成します。",
     "incomplete": "音声が不完全です。書き出す前に再試行してください。",
-    "invalid_graph": "分岐や循環なしで開始から終了まですべてのステップを接続してください。",
-    "invalid_unsupported": "互換性のないステップです。テキストは翻訳か発話、音声は文字起こしか変換、生成音声は正規化に接続してください。",
+    "invalid_graph": "開始から終了まですべてのステップをつないでください。分岐できるのは条件だけで、経路をループさせることはできません。",
+    "invalid_unsupported": "互換性のないステップです。テキストは翻訳か発話、音声は文字起こしか変換、生成音声は正規化に接続してください。 再び合流する分岐は、同じ種類の値を運ぶ必要があります。",
     "invalid_voice": "発話または変換の各ステップで保存済みの声を選んでください。",
     "invalid_scripts": "空でない台本を1～50件、各20,000文字以内で追加してください。",
     "peak": "ピーク (dBFS)",
@@ -3298,7 +3323,8 @@
     "transcription_recipe": "音声を文字起こし",
     "conversion_recipe": "声を変更",
     "localization_recipe": "翻訳して読み上げ",
-    "invalid_language": "元の言語と翻訳先の言語を選んでください。"
+    "invalid_language": "元の言語と翻訳先の言語を選んでください。",
+    "invalid_condition": "条件が探すテキストを入力してください。"
   },
   "voiceSelector": {
     "designed": "デザインされた音声",

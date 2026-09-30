@@ -81,7 +81,12 @@
     "onDemand": "Ładuje przy użyciu",
     "checkSetup": "Sprawdź konfigurację",
     "wait": "Poczekaj na zakończenie bieżącego zadania, zanim to zmienisz.",
-    "speedHelp": "Wyższa jakość może wymagać więcej czasu. Zacznij od trybu Zrównoważony."
+    "speedHelp": "Wyższa jakość może wymagać więcej czasu. Zacznij od trybu Zrównoważony.",
+    "engineLabel": "Silnik",
+    "modelLabel": "Model",
+    "runsOn": "Działa na",
+    "copyModel": "Kopiuj ID modelu",
+    "copied": "Skopiowano"
   },
   "homeUi": {
     "subtitle": "Twoja otwartoźródłowa, w pełni lokalna alternatywa dla ElevenLabs — klonuj i projektuj głosy, dubbinguj filmy, dyktuj, transkrybuj i twórz audiobooki w 646 językach.",
@@ -310,7 +315,16 @@
     "choose_voice": "Wybierz głos",
     "change_voice": "Zmień głos",
     "voice_sample": "Próbka głosu",
-    "prompt_named": "Co ma powiedzieć {{name}}?"
+    "prompt_named": "Co ma powiedzieć {{name}}?",
+    "choose_hint": "Wybierz zapisany głos lub dodaj nowy z krótkiego nagrania.",
+    "add_voice": "Dodaj nowy głos",
+    "sort_label": "Sortuj głosy",
+    "sort_recent": "Najnowsze",
+    "sort_name": "A–Z",
+    "change_photo": "Zmień zdjęcie",
+    "remove_photo": "Usuń zdjęcie",
+    "photo_hint": "Kliknij lub upuść obraz. PNG, JPG lub WebP do 5 MB.",
+    "current": "Bieżący głos"
   },
   "profileIdentity": {
     "save_hint": "Zapisz ten głos, aby użyć go ponownie jednym kliknięciem.",
@@ -528,6 +542,7 @@
     "describe_hint": "Opisz głos albo wybierz punkt wyjścia. Każde z tych działań wypełni szczegóły poniżej.",
     "describe_unmatched": "Nie udało się dopasować: {{items}}",
     "describe_no_match": "Nie rozpoznano jeszcze cech głosu — spróbuj słów takich jak deep, elderly lub British.",
+    "describe_freeform": "Ten silnik odczytuje opis dokładnie tak, jak go napisano. Szczegóły poniżej to opcjonalne dodatkowe wskazówki.",
     "define_by_design": "Według projektu",
     "define_from_audio": "Z audio",
     "define_voice": "Zdefiniuj głos",
@@ -2080,6 +2095,7 @@
     "installing": "Instalowanie…",
     "setup_space": "Zwolnij co najmniej 9 GiB na dysku aplikacji i spróbuj ponownie.",
     "setup_access": "Zezwól na zapis w folderze danych aplikacji i spróbuj ponownie.",
+    "setup_unsupported_platform": "Ten Mac z procesorem Intel nie może uruchomić lokalnego backendu AI — PyTorch nie udostępnia pakietów wheel dla macOS Intel. Podłącz zdalny backend poniżej; instalacja lokalna nie jest potrzebna.",
     "ready": "Silnik gotowy",
     "show_log": "Pokaż dziennik",
     "hide_log": "Ukryj dziennik",
@@ -2129,7 +2145,9 @@
     "mode_label": "Tryb dyktowania",
     "mode_sub": "Przełącz: naciśnij raz, aby rozpocząć, ponownie, aby zatrzymać. Przytrzymaj: dyktuj, gdy klawisz jest przytrzymywany.",
     "mode_toggle": "Przełącz",
-    "mode_hold": "Trzymaj"
+    "mode_hold": "Trzymaj",
+    "prompt_label": "Podpowiedź słownictwa",
+    "prompt_sub": "Nazwy, żargon i pisownia oczekiwane podczas dyktowania. Używana przez Faster Whisper, MLX Whisper i silniki zgodne z OpenAI (wysyłana na ten serwer razem z dźwiękiem); pozostałe silniki ją ignorują."
   },
   "trimmer": {
     "title": "Przytnij dźwięk referencyjny",
@@ -3168,7 +3186,14 @@
     "step_audio": "Klip źródłowy",
     "step_transcribe": "Transkrybuj",
     "step_translate": "Przetłumacz",
-    "step_convert": "Konwertuj"
+    "step_convert": "Konwertuj",
+    "condition_phrase": "Szukany tekst",
+    "condition_match": "Dopasowanie",
+    "condition_hint": "Gałąź „tak” działa, gdy tekst pasuje; w przeciwnym razie działa gałąź „nie”. Wielkość liter nie ma znaczenia.",
+    "match_contains": "Zawiera",
+    "match_equals": "Jest dokładnie",
+    "match_starts": "Zaczyna się od",
+    "match_ends": "Kończy się na"
   },
   "proPage": {
     "title": "VoiceStudio Pro",
@@ -3288,8 +3313,8 @@
     "progress": "{{done}} / {{total}} klipów gotowych",
     "changed": "Zmieniono ustawienia. Uruchomienie utworzy nowe wyniki.",
     "incomplete": "Mowa niepełna. Ponów przed eksportem.",
-    "invalid_graph": "Połącz wszystkie kroki od początku do końca bez rozgałęzień ani pętli.",
-    "invalid_unsupported": "Niezgodne kroki: tekst do tłumaczenia lub mowy, audio do transkrypcji lub konwersji, wygenerowana mowa do normalizacji.",
+    "invalid_graph": "Połącz każdy krok od początku do końca. Tylko warunek może się rozgałęziać, a żadna ścieżka nie może tworzyć pętli.",
+    "invalid_unsupported": "Niezgodne kroki: tekst do tłumaczenia lub mowy, audio do transkrypcji lub konwersji, wygenerowana mowa do normalizacji. Gałęzie, które się łączą, muszą nieść ten sam rodzaj wartości.",
     "invalid_voice": "Wybierz zapisany głos dla każdego kroku mowy lub konwersji.",
     "invalid_scripts": "Dodaj 1–50 niepustych skryptów po maksymalnie 20 000 znaków.",
     "peak": "Szczyt (dBFS)",
@@ -3302,7 +3327,8 @@
     "transcription_recipe": "Audio na tekst",
     "conversion_recipe": "Zmień głos",
     "localization_recipe": "Przetłumacz i przeczytaj",
-    "invalid_language": "Wybierz język źródłowy i docelowy."
+    "invalid_language": "Wybierz język źródłowy i docelowy.",
+    "invalid_condition": "Wpisz tekst, którego ma szukać warunek."
   },
   "voiceSelector": {
     "designed": "Zaprojektowane głosy",

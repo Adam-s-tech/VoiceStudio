@@ -49,6 +49,7 @@ class OmniVoiceSubprocessBackend(SubprocessBackend):
 
     id = "omnivoice-subprocess"
     display_name = "OmniVoice (subprocess-isolated, killable on timeout)"
+    instruct_vocabulary = "tags"
     _DEFAULT_SAMPLE_RATE = 24000
     gpu_compat = ("cuda", "rocm", "mps", "cpu")
     # Match OmniVoiceBackend: the measured floor below which a render that

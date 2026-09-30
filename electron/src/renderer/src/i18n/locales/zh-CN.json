@@ -81,7 +81,12 @@
     "onDemand": "使用时加载",
     "checkSetup": "检查设置",
     "wait": "请等待当前任务完成后再更改此设置。",
-    "speedHelp": "更高的质量可能需要更长时间。建议从“均衡”开始。"
+    "speedHelp": "更高的质量可能需要更长时间。建议从“均衡”开始。",
+    "engineLabel": "引擎",
+    "modelLabel": "模型",
+    "runsOn": "运行于",
+    "copyModel": "复制模型 ID",
+    "copied": "已复制"
   },
   "homeUi": {
     "subtitle": "你的开源、完全本地运行的 ElevenLabs 替代方案——克隆与设计声音、视频配音、语音输入、转录和有声书制作，支持 646 种语言。",
@@ -306,7 +311,16 @@
     "choose_voice": "选择声音",
     "change_voice": "更换声音",
     "voice_sample": "声音样本",
-    "prompt_named": "想让{{name}}说些什么？"
+    "prompt_named": "想让{{name}}说些什么？",
+    "choose_hint": "选择已保存的声音，或用一段短音频添加新声音。",
+    "add_voice": "添加新声音",
+    "sort_label": "排序声音",
+    "sort_recent": "最新",
+    "sort_name": "A–Z",
+    "change_photo": "更换照片",
+    "remove_photo": "移除照片",
+    "photo_hint": "点击或拖入图片。PNG、JPG 或 WebP，最大 5 MB。",
+    "current": "当前声音"
   },
   "profileIdentity": {
     "save_hint": "保存此声音，下次即可一键使用。",
@@ -541,6 +555,7 @@
     "describe_hint": "描述这个声音，或选择一个起点——两者都会自动填好下方的详情。",
     "describe_unmatched": "无法识别：{{items}}",
     "describe_no_match": "尚未识别出声音特征——试试 deep、elderly、British 或「中年」「低音调」等词。",
+    "describe_freeform": "此引擎会按原样读取你的描述。下方细节为可选的补充提示。",
     "define_by_design": "通过设计",
     "define_from_audio": "从音频",
     "define_voice": "定义声音",
@@ -2080,6 +2095,7 @@
     "installing": "正在安装依赖项…",
     "setup_space": "请在应用所在磁盘上释放至少 9 GiB 空间，然后重试。",
     "setup_access": "请允许写入应用数据文件夹，然后重试。",
+    "setup_unsupported_platform": "此 Intel Mac 无法运行本地 AI 后端——PyTorch 不提供 macOS Intel 构建。请在下方连接远程后端，无需本地安装。",
     "retry": "重试",
     "ready": "引擎已就绪",
     "show_log": "显示日志",
@@ -2129,7 +2145,9 @@
     "mode_label": "听写模式",
     "mode_sub": "切换：按一次启动，再按一次停止。按住：按住按键时听写。",
     "mode_toggle": "切换",
-    "mode_hold": "按住"
+    "mode_hold": "按住",
+    "prompt_label": "词汇提示",
+    "prompt_sub": "听写时预期会出现的人名、术语与写法。仅 Faster Whisper、MLX Whisper 与 OpenAI 兼容引擎会使用（会随音频发送到该服务器），其他引擎会忽略。"
   },
   "trimmer": {
     "title": "修剪参考音频",
@@ -3168,7 +3186,14 @@
     "step_audio": "源音频",
     "step_transcribe": "转录",
     "step_translate": "翻译",
-    "step_convert": "转换"
+    "step_convert": "转换",
+    "condition_phrase": "要查找的文本",
+    "condition_match": "匹配方式",
+    "condition_hint": "文本匹配时运行“是”分支，否则运行“否”分支。不区分大小写。",
+    "match_contains": "包含",
+    "match_equals": "完全等于",
+    "match_starts": "开头为",
+    "match_ends": "结尾为"
   },
   "proPage": {
     "title": "VoiceStudio Pro",
@@ -3288,8 +3313,8 @@
     "progress": "{{done}} / {{total}} 个片段已就绪",
     "changed": "设置已更改。运行将生成新输出。",
     "incomplete": "语音不完整。请在导出前重试。",
-    "invalid_graph": "将所有步骤从开始连接到结束，不要分支或循环。",
-    "invalid_unsupported": "步骤不兼容：文本连接翻译或说话，音频连接转录或转换，合成语音连接归一化。",
+    "invalid_graph": "将从开始到结束的每个步骤连接起来。只有条件可以分支，且任何路径都不能循环。",
+    "invalid_unsupported": "步骤不兼容：文本连接翻译或说话，音频连接转录或转换，合成语音连接归一化。 重新汇合的分支必须携带同一种值。",
     "invalid_voice": "请为每个说话或转换步骤选择已保存的声音。",
     "invalid_scripts": "添加 1–50 个非空脚本，每个最多 20,000 字符。",
     "peak": "峰值 (dBFS)",
@@ -3302,7 +3327,8 @@
     "transcription_recipe": "音频转文字",
     "conversion_recipe": "更换声音",
     "localization_recipe": "翻译并配音",
-    "invalid_language": "请选择源语言和目标语言。"
+    "invalid_language": "请选择源语言和目标语言。",
+    "invalid_condition": "请输入条件要查找的文本。"
   },
   "voiceSelector": {
     "designed": "设计的声音",
