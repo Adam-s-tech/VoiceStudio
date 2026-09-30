@@ -757,22 +757,22 @@ var); it only stops doing so once you also set an explicit
 
 Both budgets are also editable from **Settings → Performance & Device →
 Compute-time budget** — no env var or config file needed. A value saved there
-persists across restarts but only takes effect on the *next* backend restart.
+persists across restarts but only takes effect on the *next* backend restart
+(the running process already read the old value at startup), which the panel
+states — and if an external env var (shell profile, `.env`, Docker `-e`,
+systemd unit, …) is already providing the same key, the panel says so instead,
+since that external value keeps winning on every future restart too, not just
+this one.
 
 **While the backend is busy, the app now stays usable.** The desktop shell polls
 the backend's `/health` endpoint while you work, and a long GPU job can hold the
 Python event loop long enough to miss those probes. The shell knows the process
 is still alive (it checks for an exit before reacting), so it now shows a
 **recoverable busy state** instead of an error: the status-bar dot pulses amber,
-your workspace stays open, and requests wait for the current job to finish rather
-than failing with "Can't reach the local backend". Nothing to do — it clears
-itself as soon as the job releases the event loop. If the dot turns **red** and
-names an exit code, that is a real crash; use the sections above.
-(the running process already read the old value at startup), which the panel
-states — and if an external env var (shell profile, `.env`, Docker `-e`,
-systemd unit, …) is already providing the same key, the panel says so instead,
-since that external value keeps winning on every future restart too, not just
-this one.
+your workspace stays open, and requests wait for the current job to finish
+rather than failing with "Can't reach the local backend". Nothing to do — it
+clears itself as soon as the job releases the event loop. If the dot turns
+**red** and names an exit code, that is a real crash; use the sections above.
 
 **Two things changed here** ([#1190](https://github.com/debpalash/VoiceStudio/issues/1190)):
 
