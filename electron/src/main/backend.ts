@@ -1024,6 +1024,7 @@ export class BackendSupervisor extends EventEmitter<{
     });
   }
 
+  /** Launch the resolved backend command and wire its lifecycle events. */
   private spawnChild(plan: SpawnPlan, gen: number): void {
     this.crashes.resetCapture();
     const [command, ...args] = plan.argv;
@@ -1160,6 +1161,7 @@ export class BackendSupervisor extends EventEmitter<{
     }
   }
 
+  /** Poll /health until ready, retiring the launch when the budget expires. */
   private async waitUntilReady(gen: number, budgetMs: number): Promise<void> {
     const deadline = this.startedAt + budgetMs;
     const waitingStage = this.stage;
