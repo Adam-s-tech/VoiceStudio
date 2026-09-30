@@ -16,6 +16,7 @@ function openProfile(event: MouseEvent<HTMLAnchorElement>) {
   runRendererTask('Open contributor profile', () => bridge.files.openExternal(href));
 }
 
+/** Home contributor credits: every qualifying avatar, then the All link. */
 export function HomeContributors() {
   const { t } = useTranslation();
   // Fill three tapered rows from the right edge, ending with All.
