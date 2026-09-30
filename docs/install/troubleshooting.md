@@ -683,6 +683,8 @@ order:
   - macOS/Linux: `export HF_ENDPOINT=https://hf-mirror.com`
   - Windows (PowerShell): `[Environment]::SetEnvironmentVariable("HF_ENDPOINT","https://hf-mirror.com","User")`
 
+A segmented download refuses a response whose status or Content-Range does not match the requested bytes and file size. An invalid response is not published as the model file; retry through a server or mirror that supports correct byte ranges.
+
 **Manual fallback** (if downloads keep failing), pull the weights yourself into
 the same cache, then relaunch:
 

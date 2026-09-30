@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 from typing import Callable, Optional
 
 import httpx
@@ -170,6 +171,12 @@ async def segmented_download(
                 headers = {**_auth_headers(final_url, token), "Range": f"bytes={start}-{end}"}
                 async with client.stream("GET", final_url, headers=headers) as r:
                     r.raise_for_status()
+                    match = re.fullmatch(r"bytes\s+([0-9]+)-([0-9]+)/([0-9]+|\*)",
+                                         r.headers.get("content-range", "").strip(), re.IGNORECASE)
+                    if (r.status_code != 206 or match is None
+                            or (int(match[1]), int(match[2])) != (start, end)
+                            or (match[3] != "*" and int(match[3]) != size)):
+                        raise ValueError(f"invalid response range for bytes {start}-{end}/{size}")
                     got = 0
                     with open(part, "r+b") as fh:
                         fh.seek(start)
