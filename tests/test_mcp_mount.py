@@ -49,6 +49,7 @@ def test_list_voices_returns_valid_json(monkeypatch):
 
     @app.get("/profiles")
     async def list_profiles():
+        """Supply profiles in-process so the test needs no running backend."""
         return profiles
 
     monkeypatch.delenv("OMNIVOICE_API_URL", raising=False)
@@ -68,10 +69,12 @@ def json_response_server(monkeypatch):
     from mcp_server import create_mcp_server
 
     def build(path, payload, method="GET"):
+        """Connect an MCP server to a stub endpoint serving the chosen payload."""
         app = FastAPI()
 
         @app.api_route(path, methods=[method])
         async def response():
+            """Return controlled API data to isolate MCP response serialization."""
             return payload
 
         monkeypatch.delenv("OMNIVOICE_API_URL", raising=False)
