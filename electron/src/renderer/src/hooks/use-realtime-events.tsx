@@ -36,12 +36,15 @@ async function devBackendReady(signal: AbortSignal, remote: boolean): Promise<bo
 export function RealtimeEventSync() {
   const backend = useBackendStatus();
   const client = useQueryClient();
+  // Keyed on reachability, not the stage label, for the same reason as
+  // CaptureWidget: a `unresponsive` -> `ready` flip is the backend simply
+  // finishing its job, not a reason to drop a healthy socket. Depending on
+  // `backend.stage` tore the connection down and reconnected on every such
+  // flip, which is the reconnect storm this guard exists to avoid (#2430).
+  const backendReachable = isBackendReachable(backend.stage);
 
   useEffect(() => {
-    // #2430: a live-but-busy backend keeps its event socket. Dropping it here
-    // would discard the live subscriptions the user already has and force a
-    // reconnect storm through the exact window the backend cannot serve.
-    if (!isBackendReachable(backend.stage)) return;
+    if (!backendReachable) return;
     let active = true;
     let socket: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -111,7 +114,7 @@ export function RealtimeEventSync() {
         socket.close();
       }
     };
-  }, [backend.baseUrl, backend.remote, backend.stage, client]);
+  }, [backend.baseUrl, backend.remote, backendReachable, client]);
 
   return null;
 }
