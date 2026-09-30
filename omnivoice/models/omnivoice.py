@@ -842,7 +842,21 @@ class OmniVoice(PreTrainedModel):
 
             if self._asr_pipe is None:
                 logger.info("Loading cached ASR for reference transcription ...")
-                self._load_cached_reference_asr()
+                try:
+                    self._load_cached_reference_asr()
+                except ValueError as exc:
+                    if ref_duration <= CLONE_REF_TEXT_MAX_SECONDS:
+                        raise
+                    # A typed transcript is refused for this length, so the
+                    # transcript advice in the generic message is a dead end.
+                    raise ValueError(
+                        f"{CLONE_REF_TOO_LONG_MARKER} Reference audio is "
+                        f"{ref_duration:.1f} seconds long; a transcript only "
+                        f"works up to {CLONE_REF_TEXT_MAX_SECONDS:.0f} seconds. "
+                        "Trim the audio and transcript to a 3-10 second "
+                        "passage, or install a speech-to-text model so "
+                        "VoiceStudio can pick the passage automatically."
+                    ) from exc
             candidates = list(ref_wav.split(max_samples, dim=-1))
 
             def speech_score(text):
@@ -895,7 +909,21 @@ class OmniVoice(PreTrainedModel):
         if ref_text is None:
             if self._asr_pipe is None:
                 logger.info("Loading cached ASR for reference transcription ...")
-                self._load_cached_reference_asr()
+                try:
+                    self._load_cached_reference_asr()
+                except ValueError as exc:
+                    if ref_duration <= CLONE_REF_TEXT_MAX_SECONDS:
+                        raise
+                    # A typed transcript is refused for this length, so the
+                    # transcript advice in the generic message is a dead end.
+                    raise ValueError(
+                        f"{CLONE_REF_TOO_LONG_MARKER} Reference audio is "
+                        f"{ref_duration:.1f} seconds long; a transcript only "
+                        f"works up to {CLONE_REF_TEXT_MAX_SECONDS:.0f} seconds. "
+                        "Trim the audio and transcript to a 3-10 second "
+                        "passage, or install a speech-to-text model so "
+                        "VoiceStudio can pick the passage automatically."
+                    ) from exc
             ref_text = self.transcribe((ref_wav, self.sampling_rate))
             logger.debug("Auto-transcribed ref_text: %s", ref_text)
 
