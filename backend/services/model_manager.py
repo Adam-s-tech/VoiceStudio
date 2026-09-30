@@ -2350,6 +2350,45 @@ class ModelLoadInterruptedByShutdown(RuntimeError):
     """
 
 
+class ModelLoadAbandoned(RuntimeError):
+    """A cold load is still running after its deadline and was given up on
+    (#2394).
+
+    ``asyncio.wait_for`` cancels the *await*, not the thread: the worker stays
+    inside the native ``from_pretrained``, which cannot be interrupted, and it
+    still holds ``_model_load_thread_lock``. ``_reset_gpu_pool()`` drops the
+    pool but not that thread, so the lock is pinned until the load dies on its
+    own.
+
+    A caller arriving after that cannot succeed, whatever it does — it would
+    queue behind a load nobody is waiting on any more, for up to the full load
+    budget, and then be told to "retry", which is the advice that produced the
+    original dead end. This says what is actually true: the load is stuck, and
+    only restarting the backend clears it.
+    """
+
+
+#: Set by a cold load for as long as it holds ``_model_load_thread_lock`` —
+#: i.e. while it is inside the native loader and cannot be cancelled.
+#: #2394: this is what lets a later caller tell "another load is still working,
+#: wait your turn" (fine, and it will return the model) apart from "a load was
+#: already abandoned and may never finish" (a restart is the only way out).
+#: An Event, not a flag: the wait must be able to distinguish the two without
+#: polling.
+_load_in_progress = threading.Event()
+
+#: Set when a load is GIVEN UP ON at its deadline while still running (#2394),
+#: cleared by that load's own ``finally`` if it ever finishes. Read before
+#: waiting on the load lock: a caller that arrives after an abandonment must
+#: fail immediately, because the lock it would queue behind is held by a
+#: loader nobody is waiting on any more. Without this, a retry re-waits the
+#: whole budget — the inline ``get_model()`` route included, which passes no
+#: deadline of its own — and only then reports a failure the retry could not
+#: have avoided.
+_load_abandoned = threading.Event()
+
+
+
 # Flipped by main.py's lifespan: set the moment graceful shutdown starts,
 # cleared on startup (in-process relaunches: TestClient boots, the
 # --health-check thread). While set, executor-rejection errors during a load
@@ -2843,7 +2882,7 @@ def _reset_gpu_pool() -> None:
         _gpu_pool_singleton.reset()
 
 
-def _load_model_exclusive():
+def _load_model_exclusive(timeout: float | None = None):
     """The single cold-load leaf: reclaim, load, publish — under ONE lock.
 
     #2394. Both cold routes reach the native `from_pretrained` through here:
@@ -2870,14 +2909,60 @@ def _load_model_exclusive():
     Reclaim lives here, not in the callers: it has to happen once per real
     load, immediately before it, on every route — including the inline one,
     which is the route a memory-tight machine reaches first.
+
+    The lock is acquired with a deadline rather than indefinitely (#2394). A
+    plain ``with`` here converts one wedged load into a backend that can never
+    load again: the abandoned worker keeps holding the lock, and every later
+    caller would block on it for the full load budget and then be told to
+    "retry" — advice that can never work, because the load it is waiting on is
+    the one that already failed. Failing with :class:`ModelLoadAbandoned`
+    instead turns that silent dead end into an honest "restart the backend".
+
+    The ``_load_abandoned`` check is what makes that prompt rather than merely
+    bounded. Waiting out a deadline on a lock held by an abandoned loader buys
+    nothing — the waiter is not going to be woken by that load finishing in any
+    useful time, and a caller with no deadline of its own (the inline route)
+    would wait forever. So once a load is known-abandoned we refuse straight
+    away, while still never entering the critical section: exclusion against
+    the original loader is preserved, because we only ever decline, never
+    load alongside it.
     """
     global model
-    with _model_load_thread_lock:
+    if _load_abandoned.is_set():
+        # A loader was given up on and is still inside the native call. It will
+        # clear the flag itself if it ever finishes, so this is not permanent.
+        raise ModelLoadAbandoned(
+            "A previous model load is stuck and cannot be interrupted, so it is "
+            "still holding the model in memory. Restart the backend (Settings → "
+            "Logs → Restart backend), then try again."
+        )
+    deadline = _model_load_timeout() if timeout is None else timeout
+    if not _model_load_thread_lock.acquire(timeout=max(0.0, deadline)):
+        # The holder is still going, but it was never abandoned (its own
+        # deadline has not passed), so waiting was correct and simply ran out
+        # here. Name that honestly rather than implying a restart.
+        raise ModelLoadAbandoned(
+            "Another model load is still running and has now passed the time "
+            "this request was willing to wait. Restart the backend (Settings → "
+            "Logs → Restart backend) if it does not finish on its own, then try "
+            "again."
+        )
+    # Reaching the lock clears the "stuck" verdict: whoever held it has
+    # finished, so the backend is healthy again and needs no restart. A load
+    # that merely looked stuck from outside is not permanently disarmed.
+    _load_abandoned.clear()
+    _load_in_progress.set()
+    try:
         if model is not None:
+            # A load that finished while we waited. It also clears
+            # ``_load_in_progress`` on its way out.
             return model
         _make_room_before_tts_load()
         model = _load_model_sync()
         return model
+    finally:
+        _load_in_progress.clear()
+        _model_load_thread_lock.release()
 
 
 async def _load_model_with_timeout():
@@ -2893,17 +2978,50 @@ async def _load_model_with_timeout():
     get_model()). It now lives in ``_load_model_exclusive``, which this
     dispatches, so the inline pool-worker route inherits it too instead of
     keeping a private second copy.
+
+    #2394: the deadline is passed DOWN to the leaf rather than only wrapping the
+    await here. ``wait_for`` gives up on the await; the worker keeps running and
+    keeps holding the load lock. So a load abandoned at this deadline would
+    otherwise pin the lock for the next caller, who would burn a second full
+    budget waiting for it and then be told to retry — advice that cannot work,
+    because the load being waited on is the one that already failed. Handing
+    the leaf the same deadline bounds the wait and turns that into an honest
+    ModelLoadAbandoned ("restart the backend").
     """
     loop = asyncio.get_running_loop()
     timeout = _model_load_timeout()
     try:
         return await asyncio.wait_for(
-            loop.run_in_executor(_get_gpu_pool(), _load_model_exclusive),
+            loop.run_in_executor(
+                _get_gpu_pool(), _load_model_exclusive, timeout
+            ),
             timeout=timeout,
         )
     except asyncio.TimeoutError as exc:
         _set_loading("error", "Model load timed out", error="timeout")
         _reset_gpu_pool()
+        # The pool is gone but the worker is not: it is still inside the native
+        # loader and still holding the load lock. Saying "then retry" here is
+        # what strands the user, so name the real state and the real remedy.
+        #
+        # `_load_abandoned` is what makes the NEXT attempt fail immediately
+        # rather than re-waiting the full budget behind this loader — the
+        # inline route passes no deadline of its own, so without the flag it
+        # would sit on the lock indefinitely (#2394).
+        if _load_in_progress.is_set():
+            _load_abandoned.set()
+            logger.error(
+                "Model load exceeded %ss and is still running in a worker that "
+                "cannot be interrupted; the load lock stays held until it "
+                "finishes. Further cold loads will fail fast until it does.",
+                timeout,
+            )
+            raise ModelLoadAbandoned(
+                f"Model loading timed out after {int(timeout)}s and is still "
+                "stuck — it cannot be interrupted, so retrying would only "
+                "stall behind it. Restart the backend (Settings → Logs → "
+                "Restart backend), then try again."
+            ) from exc
         logger.error("Model load exceeded %ss; resetting GPU pool.", timeout)
         raise RuntimeError(
             f"Model loading timed out after {int(timeout)}s — usually a network "

@@ -35,6 +35,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 import threading
+import time
 
 import pytest
 
@@ -52,21 +53,41 @@ class _ConcurrentLoadProbe:
     ``max_in_flight`` is the assertion that matters: a real native load that
     overlaps another is unrecoverable, so the fix has to make the *count* one,
     not merely make both callers eventually succeed.
+
+    Explicit coordination, no sleeps (#2394 review): the FIRST load parks on
+    ``release`` until the test has confirmed the second route actually reached
+    the load boundary and was excluded there. A timed wait would only prove
+    the overlap if scheduling happened to cooperate — on a loaded CI runner the
+    second thread can be descheduled past the window and the broken
+    implementation would sail through.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, on_enter=None) -> None:
         self._lock = threading.Lock()
         self.calls = 0
         self.max_in_flight = 0
         self.model = object()
+        self._on_enter = on_enter
+        #: Set by the first load once it is inside; the test waits on this.
+        self.entered = threading.Event()
+        #: The first load parks here until the test releases it.
+        self.release = threading.Event()
 
     def __call__(self):
         with self._lock:
             self.calls += 1
-            self.max_in_flight = max(self.max_in_flight, self.calls)
-        # Hold the "native load" open long enough that a second route which is
-        # wrongly allowed in lands inside this window.
-        threading.Event().wait(0.2)
+            index = self.calls
+            self.max_in_flight = max(self.max_in_flight, index)
+        # Counted here, at the native loader itself, not at the lock — this is
+        # the overlap that kills the process. Only entries BEYOND the first
+        # count as a violation; the first is the load doing the work.
+        if index > 1 and self._on_enter is not None:
+            self._on_enter()
+        self.entered.set()
+        # Only the first load parks; a second one that wrongly gets in returns
+        # at once so the overlap it represents is visible immediately.
+        if self.calls == 1:
+            assert self.release.wait(30), "test never released the first load"
         return self.model
 
 
@@ -78,32 +99,101 @@ def _drive_both_cold_routes(mm):
     ``OmniVoiceBackend._ensure_loaded()``, which is already on that pool.
     """
     results: dict[str, object] = {}
-    started = threading.Barrier(2, timeout=10)
+    # Instrumentation for the exclusion itself: a second route that reaches the
+    # load boundary must be seen arriving there, and it must not get past it
+    # while the first load is parked. `arrived` counts boundary arrivals,
+    # `past` counts entrants into the native loader.
+    lock = threading.RLock()
+    stats = {"arrived": 0, "past": 0}
+    probe = _ConcurrentLoadProbe(on_enter=lambda: stats.__setitem__("past", stats["past"] + 1))
+
+    class _ObservedLock:
+        """The load lock, instrumented — still a real RLock underneath."""
+
+        def __init__(self, inner):
+            self._inner = inner
+
+        def acquire(self, *a, **kw):
+            with lock:
+                stats["arrived"] += 1
+            return self._inner.acquire(*a, **kw)
+
+        def release(self):
+            return self._inner.release()
 
     def _call(key: str) -> None:
         try:
-            started.wait()
             results[key] = asyncio.run(mm.get_model())
         except BaseException as exc:  # noqa: BLE001 — the failure IS the subject
             results[key] = exc
 
-    preload = threading.Thread(target=_call, args=("preload",), name="server-loop")
-    generate = threading.Thread(
-        target=_call, args=("generate",), name=f"{mm._GPU_POOL_THREAD_PREFIX}1"
+    original_lock = mm._model_load_thread_lock
+    original_loader = mm._load_model_sync
+    mm._model_load_thread_lock = _ObservedLock(original_lock)
+    mm._load_model_sync = probe
+    try:
+        preload = threading.Thread(target=_call, args=("preload",), name="server-loop")
+        generate = threading.Thread(
+            target=_call, args=("generate",), name=f"{mm._GPU_POOL_THREAD_PREFIX}1"
+        )
+        # Start the preload and wait until it is genuinely inside the native
+        # loader — not merely launched — so the second route has something real
+        # to be excluded from.
+        preload.start()
+        assert probe.entered.wait(30), "the preload never entered the native loader"
+
+        generate.start()
+        # The second route must reach the load boundary and be refused there.
+        # Poll the instrumented lock rather than sleeping a fixed interval.
+        deadline = time.monotonic() + 30
+        while stats["arrived"] < 2 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert stats["arrived"] >= 2, (
+            "the generate route never reached the load boundary, so the "
+            "exclusion was never exercised"
+        )
+        # Give the (correctly blocked) second route a real chance to be
+        # scheduled while the first load is still parked — without this, a
+        # broken implementation could pass simply by never being given the CPU.
+        settled = time.monotonic() + 2
+        while time.monotonic() < settled:
+            if stats["past"] > 0:
+                break
+            time.sleep(0.01)
+        assert stats["past"] == 0, (
+            f"{stats['past']} route(s) entered the native load while the "
+            "preload still held it — exclusion is not working"
+        )
+    finally:
+        # Release the parked first load before anything is asserted, or the
+        # worker thread would outlive the test and hold module state.
+        probe.release.set()
+        preload.join(timeout=30)
+        generate.join(timeout=30)
+        mm._model_load_thread_lock = original_lock
+        mm._load_model_sync = original_loader
+
+    return (
+        results.get("preload"),
+        results.get("generate"),
+        probe,
+        preload,
+        generate,
     )
-    preload.start()
-    generate.start()
-    preload.join(timeout=30)
-    generate.join(timeout=30)
-    return results.get("preload"), results.get("generate"), preload, generate
 
 
-def _isolate(mm, monkeypatch, probe):
+def _isolate(mm, monkeypatch, probe=None):
     """Fresh locks + a probe loader, so no other test's state can mask a race."""
     monkeypatch.setattr(mm, "model", None, raising=False)
     monkeypatch.setattr(mm, "_model_lock", asyncio.Lock(), raising=False)
     monkeypatch.setattr(mm, "_model_load_thread_lock", threading.RLock(), raising=False)
-    monkeypatch.setattr(mm, "_load_model_sync", probe, raising=False)
+    # Abandonment state is process-global; a leftover from another test would
+    # make every load here fail fast for the wrong reason.
+    for flag in ("_load_in_progress", "_load_abandoned"):
+        if hasattr(mm, flag):
+            getattr(mm, flag).clear()
+    if probe is not None:
+        monkeypatch.setattr(mm, "_load_model_sync", probe, raising=False)
     # Reclaim touches real memory/disk probes; keep the leaf's other work out.
     monkeypatch.setattr(mm, "_make_room_before_tts_load", lambda: None, raising=False)
 
@@ -112,10 +202,9 @@ def test_a_generate_cannot_enter_the_native_load_during_a_background_preload(
     mm, monkeypatch
 ):
     """THE CRASH. Fail-before: two overlapping ``from_pretrained`` calls."""
-    probe = _ConcurrentLoadProbe()
-    _isolate(mm, monkeypatch, probe)
+    _isolate(mm, monkeypatch)
 
-    preload_result, generate_result, preload, generate = _drive_both_cold_routes(mm)
+    preload_result, generate_result, probe, preload, generate = _drive_both_cold_routes(mm)
 
     # A timed-out thread is still inside `get_model()`; touching module state
     # under it would leak a live thread into later tests.
@@ -145,10 +234,8 @@ def test_a_generate_cannot_enter_the_native_load_during_a_background_preload(
 def test_a_lone_cold_load_still_loads_and_publishes(mm, monkeypatch):
     """The exclusion must not turn into "never load"."""
     probe = _ConcurrentLoadProbe()
-    monkeypatch.setattr(mm, "model", None, raising=False)
-    monkeypatch.setattr(mm, "_model_lock", asyncio.Lock(), raising=False)
-    monkeypatch.setattr(mm, "_model_load_thread_lock", threading.RLock(), raising=False)
-    monkeypatch.setattr(mm, "_load_model_sync", probe, raising=False)
+    probe.release.set()  # nothing else will arrive to exclude
+    _isolate(mm, monkeypatch, probe)
     reclaimed = []
     monkeypatch.setattr(
         mm, "_make_room_before_tts_load", lambda: reclaimed.append(1), raising=False
@@ -168,6 +255,96 @@ def test_a_lone_cold_load_still_loads_and_publishes(mm, monkeypatch):
 
 def test_a_warm_model_never_takes_the_load_lock(mm, monkeypatch):
     """The guard must not serialise the hot path behind a load lock."""
+
+
+def test_a_retry_after_a_timed_out_load_must_not_block_forever(mm, monkeypatch):
+    """#2394 follow-up: the exclusion must not outlive the timeout it caused.
+
+    ``asyncio.wait_for`` cancels the *await*, not the thread: the worker stays
+    inside the native ``from_pretrained`` and keeps holding the load lock. The
+    pool reset drops the pool, not that thread. So a wedged load pins the lock
+    indefinitely, and because the timeout error advises "then retry", every
+    retry queues on a lock nobody will ever release — turning one visible
+    failure into a backend that never answers again.
+
+    Fail-before: this second call never returns. The assertion that matters is
+    the join timeout below; without it a regression would hang the suite rather
+    than fail it.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    wedged = threading.Event()
+    release = threading.Event()
+
+    def _never_finishes():
+        wedged.set()
+        release.wait(30.0)  # the native load that cannot be interrupted
+        return object()
+
+    monkeypatch.setattr(mm, "model", None, raising=False)
+    monkeypatch.setattr(mm, "_model_lock", asyncio.Lock(), raising=False)
+    monkeypatch.setattr(mm, "_model_load_thread_lock", threading.RLock(), raising=False)
+    monkeypatch.setattr(mm, "_load_model_sync", _never_finishes, raising=False)
+    monkeypatch.setattr(mm, "_make_room_before_tts_load", lambda: None, raising=False)
+    monkeypatch.setattr(mm, "_model_load_timeout", lambda: 0.3, raising=False)
+
+    # Two workers, as a CUDA pool has (#567). One wedged worker must not stop
+    # the retry from reaching the lock — otherwise this test would prove the
+    # queueing, not the locking.
+    pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="test-pool")
+    monkeypatch.setattr(mm, "_get_gpu_pool", lambda: pool, raising=False)
+
+    outcome: dict[str, object] = {}
+
+    def _first_attempt():
+        try:
+            asyncio.run(mm.get_model())
+        except BaseException as exc:  # noqa: BLE001 — the failure IS the subject
+            outcome["first"] = exc
+
+    try:
+        first = threading.Thread(target=_first_attempt, daemon=True)
+        first.start()
+        first.join(timeout=30)
+        assert wedged.wait(10), "the load never reached the native loader"
+        assert isinstance(outcome.get("first"), RuntimeError), outcome
+
+        # The retry the timeout error tells the user to perform.
+        def _retry():
+            outcome["second"] = _run_capture(mm)
+
+        second = threading.Thread(target=_retry, daemon=True)
+        second.start()
+        second.join(timeout=15)
+        assert not second.is_alive(), (
+            "a retry after a timed-out load never returned: it re-queued on the "
+            "load lock the abandoned worker still holds"
+        )
+
+        retry_error = outcome.get("second")
+        assert isinstance(retry_error, RuntimeError), retry_error
+        # It must name the real remedy. Telling this user to "check your
+        # connection, then retry" is exactly what made the original report
+        # unactionable: the retry cannot succeed, because the load it waits on
+        # was already abandoned and cannot be interrupted.
+        assert "restart" in str(retry_error).lower(), (
+            "a retry behind an abandoned load must say to restart the backend, "
+            f"not to retry again: {retry_error}"
+        )
+    finally:
+        # Let the wedged worker finish so the interpreter can exit; a
+        # non-daemon pool worker would otherwise hang the whole suite.
+        release.set()
+        monkeypatch.setattr(mm, "model", None, raising=False)
+        pool.shutdown(wait=False)
+
+
+def _run_capture(mm):
+    try:
+        return asyncio.run(mm.get_model())
+    except BaseException as exc:  # noqa: BLE001 — the failure IS the subject
+        return exc
+
     probe = _ConcurrentLoadProbe()
     resident = object()
     monkeypatch.setattr(mm, "model", resident, raising=False)
