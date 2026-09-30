@@ -562,12 +562,33 @@ def is_host_oom(error: BaseException | str) -> bool:
     return False
 
 
-def classify(reason: str) -> str:
+def classify(reason: BaseException | str) -> str:
     """Map a failure reason to a docs-taxonomy key, or "" when unknown.
 
     Heuristic substring match — mirrors the frontend ``classifyError`` so the
     backend log / diagnostic names the same class the UI deeplink will use.
+
+    Accepts an exception as well as a message (#2462). A message is all the
+    older callers have and all most rules need, but the memory classes cannot
+    work from one: a bare ``MemoryError()`` has an EMPTY message, and
+    ``generation._oom_friendly_reraise`` replaces the allocator's own wording
+    with its own "ran out of memory" prose. In both cases ``str(exc)`` carries
+    no allocator signature, so the failure that IS a host OOM classifies to
+    nothing and the user gets the floor message. The exception's TYPE, and the
+    originals re-raised behind it, are the only evidence left — so when handed
+    one, the two chain-walking memory helpers get first refusal on it and the
+    message rules run on ``str(exc)`` exactly as before.
     """
+    if isinstance(reason, BaseException):
+        # GPU first, so a real device OOM keeps GPU_OOM (and its VRAM remedy)
+        # even when the host was short too — same precedence as the message
+        # path below, so passing an exception can never disagree with a string.
+        if is_gpu_oom(reason):
+            return "GPU_OOM"
+        if is_host_oom(reason):
+            return "HOST_MEMORY_EXHAUSTED"
+        # Every other rule is a message rule; unchanged behavior from here.
+        reason = str(reason)
     low = (reason or "").lower()
     if is_gpu_oom(low):
         return "GPU_OOM"
