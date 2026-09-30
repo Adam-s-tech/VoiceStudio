@@ -415,6 +415,8 @@ export class BackendSupervisor extends EventEmitter<{
   private startedAt = Date.now();
   private child: ChildProcess | null = null;
   private readonly log: string[] = [];
+  /** Only the spawned process's own output, for quoting back in failure messages. */
+  private readonly childLog: string[] = [];
   /** Bumped on every start/shutdown so stale poll loops and exit handlers no-op. */
   private generation = 0;
   /** A generation owns at most one health loop, even if readiness is observed twice. */
@@ -631,6 +633,7 @@ export class BackendSupervisor extends EventEmitter<{
     const gen = ++this.generation;
     this.startedAt = Date.now();
     this.log.length = 0;
+    this.childLog.length = 0;
     this.setupIssue = undefined;
     this.runtimeInterrupted = false;
     this.setupPhase = 'checking';
@@ -958,12 +961,21 @@ export class BackendSupervisor extends EventEmitter<{
     this.emit('status', this.status);
   }
 
-  private pushLog(stream: 'out' | 'err', line: string): void {
+  private pushLog(stream: 'out' | 'err', line: string, fromChild = false): void {
     line = cleanProcessLine(line);
     if (!line) return;
     if (stream === 'err') this.crashes.captureLine(line);
     this.log.push(line);
     if (this.log.length > LOG_RING_LINES) this.log.splice(0, this.log.length - LOG_RING_LINES);
+    // Failure messages quote the backend, not this shell. `log` also carries
+    // the supervisor's own "Reusing compatible Tauri runtime"/"spawning in …"
+    // lines, so taking its tail would report a launch banner as the backend's
+    // last word — exactly the evidence a startup failure needs.
+    if (fromChild) {
+      this.childLog.push(line);
+      if (this.childLog.length > LOG_RING_LINES)
+        this.childLog.splice(0, this.childLog.length - LOG_RING_LINES);
+    }
     (stream === 'err' ? console.error : console.log)(`[backend] ${line}`);
     if (this.stage === 'installing') {
       this.setupProgress.ingest(line);
@@ -975,7 +987,7 @@ export class BackendSupervisor extends EventEmitter<{
     if (!readable) return;
     let pending = '';
     const flushPending = () => {
-      if (pending.length > 0) this.pushLog(stream, pending);
+      if (pending.length > 0) this.pushLog(stream, pending, true);
       pending = '';
     };
     readable.setEncoding('utf8');
@@ -983,7 +995,7 @@ export class BackendSupervisor extends EventEmitter<{
       pending += chunk;
       const lines = pending.split(/[\r\n]+/);
       pending = lines.pop() ?? '';
-      for (const line of lines) if (line.length > 0) this.pushLog(stream, line);
+      for (const line of lines) if (line.length > 0) this.pushLog(stream, line, true);
     });
     readable.on('end', flushPending);
     readable.on('error', (error: unknown) => {
@@ -1092,7 +1104,7 @@ export class BackendSupervisor extends EventEmitter<{
       });
       return;
     }
-    const lastLine = this.log.at(-1);
+    const lastLine = this.childLog.at(-1);
     const why = signal ? `signal ${signal}` : `exit code ${code}`;
     this.setStage('crashed', {
       message: `Backend exited unexpectedly (${why}).${lastLine ? ` Last output: ${lastLine}` : ''}`,
@@ -1128,7 +1140,18 @@ export class BackendSupervisor extends EventEmitter<{
   }
 
   private async waitUntilReady(gen: number, budgetMs: number): Promise<void> {
-    const deadline = this.startedAt + budgetMs;
+    // `OMNIVOICE_STARTUP_BUDGET_S` bounds how long the *backend* may take to
+    // answer, so it is measured from the moment this poll loop begins — which
+    // is right after the process was spawned. Anchoring it to `startedAt`
+    // charged the launch against the backend's window (#2445), and everything
+    // ahead of the spawn is slow and independently bounded: resolving the
+    // runtime imports torch in a child interpreter (30 s each, once per
+    // candidate project, then again in resolveSpawnPlan), staging the bundled
+    // sources is a recursive copy, and port selection walks up to 17
+    // candidates. Once that pre-spawn work outlasted the budget, this loop
+    // failed on its very first probe — killing a backend that had been alive
+    // for a second and reporting "did not answer within 300 s".
+    const deadline = Date.now() + budgetMs;
     const waitingStage = this.stage;
     while (gen === this.generation && this.stage === waitingStage) {
       const ready = await this.probe();
@@ -1146,10 +1169,15 @@ export class BackendSupervisor extends EventEmitter<{
       if (Date.now() > deadline) {
         this.generation++;
         await this.killChild();
+        // "Check the log above" is unactionable when the backend printed
+        // nothing (a missing interpreter fails silently) or its output has
+        // rolled past the 200-line ring, so carry the last line inline. This
+        // mirrors the `crashed` message, which already does.
+        const lastLine = this.childLog.at(-1);
         this.setStage('failed', {
           message:
             `Backend did not answer on port ${this.port} within ${Math.round(budgetMs / 1000)} s ` +
-            '(OMNIVOICE_STARTUP_BUDGET_S). Check the log above.',
+            `(OMNIVOICE_STARTUP_BUDGET_S).${lastLine ? ` Last output: ${lastLine}` : ' It printed no output.'}`,
         });
         return;
       }

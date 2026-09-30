@@ -86,6 +86,7 @@ metadata and the backend fallback mirror it.
 - The Twilio guide and integration directory describe the guided setup and in-app integration pages (#2304)
 
 ### Fixed
+- A slow launch no longer spends the backend's own startup budget, so a freshly spawned process is no longer killed and reported as "Backend did not answer on port 3900 within 300 s" seconds after it started; the failure also quotes the backend's last output line instead of the shell's launch banner (#2445)
 - Dub assembly, cached segments and audio tools can read generated WAV files when TorchCodec is missing or cannot load (#2379) — thanks @tokutei58301-boop!
 - Remote API-key and share-PIN clients can record and read export history while native filesystem operations stay local (#2383, #2384) — thanks @sedatdagg!
 - Concurrent job events receive unique sequence numbers (#2384) — thanks @sedatdagg!
