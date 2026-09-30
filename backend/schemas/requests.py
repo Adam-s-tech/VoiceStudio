@@ -222,6 +222,16 @@ class CleanupSegmentsRequest(BaseModel):
 
     segments: List[dict] = Field(max_length=20000)
 
+    @field_validator("segments")
+    @classmethod
+    def validate_segment_shape(cls, segments: List[dict]) -> List[dict]:
+        # Cleanup defaults missing fields to empty values and drops them, so a
+        # malformed segment would silently vanish instead of being rejected.
+        required = {"start", "end", "text"}
+        if any(not required.issubset(segment) for segment in segments):
+            raise ValueError("Each cleanup segment must include start, end and text")
+        return segments
+
 
 class ProsodyMirrorRequest(BaseModel):
     """Segments as the editor currently holds them: splits, merges and timing

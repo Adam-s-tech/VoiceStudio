@@ -511,12 +511,18 @@ def dub_cleanup_segments(job_id: str, req: Optional[CleanupSegmentsRequest] = No
     """Re-run merge/stitch passes to drop fragments.
 
     Cleans the editor's segments when sent, so unsaved text, timing and
-    direction edits survive; otherwise the job's stored segments.
+    direction edits survive; otherwise the job's stored segments. The
+    editor's result is returned without being stored: it is an undoable edit
+    like any other, and the job keeps the segments its existing audio and
+    subtitle exports were generated from until the next generation.
     """
     job = _get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    segments = req.segments if req is not None else job.get("segments") or []
+    if req is not None:
+        cleaned = clean_up_segments(req.segments)
+        return {"segments": cleaned, "before": len(req.segments), "after": len(cleaned)}
+    segments = job.get("segments") or []
     cleaned = clean_up_segments(segments)
     job["segments"] = cleaned
     _save_job(job_id, job)

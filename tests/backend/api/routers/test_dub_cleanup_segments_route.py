@@ -35,10 +35,25 @@ def test_cleans_the_editor_segments_and_keeps_their_edits(job):
     assert res["segments"][0]["text"].startswith("Edited first line here.")
     assert res["segments"][0]["direction"] == "calm"
     assert "stale" not in " ".join(seg["text"] for seg in res["segments"])
-    assert saved["job-clean"]["segments"] == res["segments"]
+    # An undoable editor edit: the job keeps the segments its audio and
+    # subtitle exports were generated from until the next generation.
+    assert saved == {}
+    assert stored["segments"][0]["text"] == "stale transcript line"
+
+
+@pytest.mark.parametrize("missing", ["start", "end", "text"])
+def test_rejects_editor_segments_missing_required_fields(missing):
+    from pydantic import ValidationError
+    from schemas.requests import CleanupSegmentsRequest
+
+    segment = {"start": 0.0, "end": 1.0, "text": "line"}
+    del segment[missing]
+    with pytest.raises(ValidationError):
+        CleanupSegmentsRequest(segments=[segment])
 
 
 def test_without_a_body_cleans_the_stored_segments(job):
-    module, stored, _ = job
+    module, stored, saved = job
     res = module.dub_cleanup_segments("job-clean")
     assert res["segments"][0]["text"] == "stale transcript line"
+    assert saved["job-clean"]["segments"] == res["segments"]
