@@ -439,6 +439,8 @@ export class BackendSupervisor extends EventEmitter<{
   private startedAt = Date.now();
   private child: ChildProcess | null = null;
   private readonly log: string[] = [];
+  /** Last line of the current launch; the shared log also holds setup/older launches. */
+  private lastLaunchOutput: string | undefined;
   /** Bumped on every start/shutdown so stale poll loops and exit handlers no-op. */
   private generation = 0;
   /** A generation owns at most one health loop, even if readiness is observed twice. */
@@ -530,6 +532,7 @@ export class BackendSupervisor extends EventEmitter<{
     const gen = ++this.generation;
     this.shuttingDown = false;
     this.startedAt = Date.now();
+    this.lastLaunchOutput = undefined;
     this.exitCode = undefined;
     this.exitSignal = undefined;
     this.setStage('attaching', { managed: false, message: undefined });
@@ -988,9 +991,9 @@ export class BackendSupervisor extends EventEmitter<{
     this.emit('status', this.status);
   }
 
-  private pushLog(stream: 'out' | 'err', line: string): void {
+  private pushLog(stream: 'out' | 'err', line: string): string | undefined {
     line = cleanProcessLine(line);
-    if (!line) return;
+    if (!line) return undefined;
     if (stream === 'err') this.crashes.captureLine(line);
     this.log.push(line);
     if (this.log.length > LOG_RING_LINES) this.log.splice(0, this.log.length - LOG_RING_LINES);
@@ -999,13 +1002,18 @@ export class BackendSupervisor extends EventEmitter<{
       this.setupProgress.ingest(line);
       this.emitStatus();
     }
+    return line;
+  }
+
+  private recordLaunchOutput(line: string | undefined): void {
+    if (line) this.lastLaunchOutput = line;
   }
 
   private attachLineReader(readable: NodeJS.ReadableStream | null, stream: 'out' | 'err'): void {
     if (!readable) return;
     let pending = '';
     const flushPending = () => {
-      if (pending.length > 0) this.pushLog(stream, pending);
+      if (pending.length > 0) this.recordLaunchOutput(this.pushLog(stream, pending));
       pending = '';
     };
     readable.setEncoding('utf8');
@@ -1013,7 +1021,8 @@ export class BackendSupervisor extends EventEmitter<{
       pending += chunk;
       const lines = pending.split(/[\r\n]+/);
       pending = lines.pop() ?? '';
-      for (const line of lines) if (line.length > 0) this.pushLog(stream, line);
+      for (const line of lines)
+        if (line.length > 0) this.recordLaunchOutput(this.pushLog(stream, line));
     });
     readable.on('end', flushPending);
     readable.on('error', (error: unknown) => {
@@ -1126,7 +1135,7 @@ export class BackendSupervisor extends EventEmitter<{
       });
       return;
     }
-    const lastLine = this.log.at(-1);
+    const lastLine = this.lastLaunchOutput;
     const why = signal ? `signal ${signal}` : `exit code ${code}`;
     this.setStage('crashed', {
       message: `Backend exited unexpectedly (${why}).${lastLine ? ` Last output: ${lastLine}` : ''}`,
@@ -1180,7 +1189,7 @@ export class BackendSupervisor extends EventEmitter<{
       }
       if (Date.now() > deadline) {
         // Capture the last line before teardown can append shutdown output.
-        const lastOutput = this.log.at(-1);
+        const lastOutput = this.lastLaunchOutput;
         this.generation++;
         await this.killChild();
         this.setStage('failed', {

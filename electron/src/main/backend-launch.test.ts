@@ -173,16 +173,17 @@ it('keeps the startup output when the timeout teardown logs shutdown chatter', a
     startedAt: number;
     stage: string;
     log: string[];
+    lastLaunchOutput?: string;
     probe(): Promise<boolean>;
     killChild(): Promise<void>;
     waitUntilReady(gen: number, budgetMs: number): Promise<void>;
   };
   internals.stage = 'starting';
   internals.startedAt = Date.now() - 10;
-  internals.log.push('INFO: loading model weights');
+  internals.lastLaunchOutput = 'INFO: loading model weights';
   internals.probe = async () => false;
   internals.killChild = async () => {
-    internals.log.push('INFO: uvicorn shutting down');
+    internals.lastLaunchOutput = 'INFO: uvicorn shutting down';
   };
 
   await internals.waitUntilReady(internals.generation, 1);
@@ -190,4 +191,31 @@ it('keeps the startup output when the timeout teardown logs shutdown chatter', a
   expect(supervisor.status.stage).toBe('failed');
   expect(supervisor.status.message).toContain('Last output: INFO: loading model weights');
   expect(supervisor.status.message).not.toContain('shutting down');
+});
+
+it('ignores older setup or launch output when this launch printed nothing', async () => {
+  const { BackendSupervisor } = await import('./backend');
+  const supervisor = new BackendSupervisor();
+  const internals = supervisor as unknown as {
+    generation: number;
+    startedAt: number;
+    stage: string;
+    log: string[];
+    lastLaunchOutput?: string;
+    probe(): Promise<boolean>;
+    killChild(): Promise<void>;
+    waitUntilReady(gen: number, budgetMs: number): Promise<void>;
+  };
+  internals.stage = 'starting';
+  internals.startedAt = Date.now() - 10;
+  internals.log.push('Reusing compatible Tauri runtime: /old/setup');
+  internals.lastLaunchOutput = undefined;
+  internals.probe = async () => false;
+  internals.killChild = async () => {};
+
+  await internals.waitUntilReady(internals.generation, 1);
+
+  expect(supervisor.status.stage).toBe('failed');
+  expect(supervisor.status.message).toContain('Check the log above.');
+  expect(supervisor.status.message).not.toContain('Reusing compatible');
 });
