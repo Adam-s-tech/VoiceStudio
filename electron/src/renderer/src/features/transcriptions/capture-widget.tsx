@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { CopyIcon, MicIcon, PauseIcon, PlayIcon, SquareIcon, XIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useBackendStatus } from '@/hooks/use-backend-status';
+import { isBackendReachable } from '@shared/utils/backendStage';
 import { LiveDictation } from './live-dictation';
 import { addTranscription } from '@shared/utils/transcriptionsStore';
 
@@ -20,7 +21,7 @@ export function CaptureWidget() {
   const api = window.voicestudio?.capture;
 
   useEffect(() => {
-    if (!api || backend.stage !== 'ready' || !backend.baseUrl) return;
+    if (!api || !isBackendReachable(backend.stage) || !backend.baseUrl) return;
     const unsubscribe = api.onEvent((event) => {
       if (event.action === 'cancel') {
         if (session.current !== event.session) return;

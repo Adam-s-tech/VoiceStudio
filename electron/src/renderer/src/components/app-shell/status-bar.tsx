@@ -27,6 +27,7 @@ import { useIsFetching, useQuery } from '@tanstack/react-query';
 import { apiJson } from '@/lib/api/client';
 import { useTranslation } from 'react-i18next';
 import { useBackendStatus } from '@/hooks/use-backend-status';
+import { isBackendReachable } from '@shared/utils/backendStage';
 import { engineFamilyState, useEngines } from '@/hooks/use-engines';
 import { useDeviceUsage } from '@/hooks/use-device-usage';
 import { useDictationSelection } from '@/hooks/use-dictation-selection';
@@ -168,7 +169,7 @@ export function StatusBar({
   const [appliedProfile, setAppliedProfile] = useState<PerformanceProfileState | null>(null);
   const enginesRefreshing = useIsFetching({ queryKey: ['engines'] }) > 0;
   const status = useBackendStatus();
-  const computeTarget = useComputeTarget(status.stage === 'ready');
+  const computeTarget = useComputeTarget(isBackendReachable(status.stage));
   const activeComputeTarget = computeTarget.data?.active;
   const activeRemoteTarget = activeComputeTarget?.remote
     ? computeTarget.data?.targets.find((item) => item.id === activeComputeTarget.worker_id)
@@ -186,13 +187,13 @@ export function StatusBar({
     activeRemoteTarget?.id,
     selectedTts?.id,
     'tts',
-    status.stage === 'ready' && Boolean(activeRemoteTarget),
+    isBackendReachable(status.stage) && Boolean(activeRemoteTarget),
     activityCount > 0,
   );
   const model = useQuery({
     queryKey: ['sidebar-model-status'],
     queryFn: () => apiJson<SidebarModelStatus>('/model/status'),
-    enabled: status.stage === 'ready',
+    enabled: isBackendReachable(status.stage),
     refetchInterval: (query) => modelStatusPollMs(activityCount, query.state.data?.status),
   });
   const translation = useTranslationEngines();
@@ -202,7 +203,7 @@ export function StatusBar({
   const dictation = useDictationSelection();
   const modelCatalogue = useQuery({
     queryKey: ['model-catalogue'],
-    enabled: status.stage === 'ready',
+    enabled: isBackendReachable(status.stage),
     staleTime: 30_000,
     queryFn: () =>
       apiJson<{
@@ -216,7 +217,7 @@ export function StatusBar({
   });
   const batchJobs = useQuery({
     queryKey: ['batch-jobs', 'active'],
-    enabled: status.stage === 'ready',
+    enabled: isBackendReachable(status.stage),
     queryFn: ({ signal }) => apiJson<BatchJob[]>('/batch/jobs?status=active&limit=100', { signal }),
     staleTime: 1_000,
     refetchInterval: (query) => batchStatusPollMs(query.state.data?.length ?? 0),
@@ -233,7 +234,7 @@ export function StatusBar({
   const batchTtsActive = runningBatchStages.has('generate');
   const loadedModels = useQuery({
     queryKey: ['loaded-models'],
-    enabled: status.stage === 'ready',
+    enabled: isBackendReachable(status.stage),
     staleTime: 5_000,
     refetchInterval: loadedModelsPollMs(activityCount > 0 || hasBatchWork),
     queryFn: () =>
@@ -252,7 +253,7 @@ export function StatusBar({
   const loadedDiarisation = loadedModels.data?.models.find((entry) => entry.id === 'diarization');
   const diarisation = useQuery({
     queryKey: ['diarisation-status'],
-    enabled: status.stage === 'ready',
+    enabled: isBackendReachable(status.stage),
     refetchInterval: IDLE_STATUS_POLL_MS,
     queryFn: () =>
       apiJson<{
@@ -766,7 +767,7 @@ export function StatusBar({
             {viewControl}
           </div>
         )}
-        {status.stage === 'ready' && (
+        {isBackendReachable(status.stage) && (
           <PerformanceProfile
             onApplied={(applied) => {
               appliedRefreshStarted.current = presetRefreshing;
@@ -792,7 +793,7 @@ export function StatusBar({
                 key={row.family}
                 row={row}
                 level={level}
-                online={status.stage === 'ready'}
+                online={isBackendReachable(status.stage)}
                 dotClass={engineStateClass(row.state)}
                 open={selectedDetail === row.family}
                 onToggle={() =>

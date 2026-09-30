@@ -4,6 +4,7 @@ import { queryKeys } from '@/lib/query';
 import { useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useBackendStatus } from './use-backend-status';
+import { isBackendReachable } from '@shared/utils/backendStage';
 
 const EVENT_QUERY_KEYS: Readonly<Record<string, readonly QueryKey[]>> = {
   projects: [['projects']],
@@ -37,7 +38,10 @@ export function RealtimeEventSync() {
   const client = useQueryClient();
 
   useEffect(() => {
-    if (backend.stage !== 'ready') return;
+    // #2430: a live-but-busy backend keeps its event socket. Dropping it here
+    // would discard the live subscriptions the user already has and force a
+    // reconnect storm through the exact window the backend cannot serve.
+    if (!isBackendReachable(backend.stage)) return;
     let active = true;
     let socket: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;

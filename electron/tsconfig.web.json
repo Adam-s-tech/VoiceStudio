@@ -38,6 +38,7 @@
     "src/shared/utils/runCrashRecord.ts",
     "src/shared/utils/nativeExit.ts",
     "src/shared/utils/backendContact.ts",
+    "src/shared/utils/backendStage.ts",
     "src/shared/utils/deploymentMode.ts",
     "src/shared/utils/errorDocsMap.ts",
     "src/shared/utils/analytics.ts",

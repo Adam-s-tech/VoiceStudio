@@ -28,6 +28,8 @@
  * The stage probe now returns `{ stage, message }` and callers surface it.
  */
 
+import { isBackendBusy } from './backendStage';
+
 export type BackendLifecycleStage = 'ready' | 'starting' | 'failed' | 'unknown';
 
 /** The shell's lifecycle answer: the coarse stage plus, for `failed`, the
@@ -88,7 +90,7 @@ export async function backendLifecycleStage(): Promise<BackendLifecycle> {
     // past its deadline; the shell already knows the process is alive, so hold
     // the request open the same way a start/restart does and let it land once
     // the current job finishes.
-    if (status.stage === 'unresponsive') return { stage: 'starting', message: null };
+    if (isBackendBusy(status.stage)) return { stage: 'starting', message: null };
     return { stage: 'unknown', message: null };
   } catch {
     return { stage: 'unknown', message: null };

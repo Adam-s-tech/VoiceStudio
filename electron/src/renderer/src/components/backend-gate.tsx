@@ -25,6 +25,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { ConfirmDialog } from '@/features/clone/confirm-dialog';
 import { RemoteBackendSettings } from '@/features/settings/remote-backend-settings';
 import { useBackendStatus } from '@/hooks/use-backend-status';
+import { isBackendBusy } from '@shared/utils/backendStage';
 import i18n, { APP_LANGUAGE_ITEMS, APP_LANGUAGES, setAppLanguage, type AppLocale } from '@/i18n';
 import { brandIcon } from '@/lib/brand';
 import { cn } from '@/lib/utils';
@@ -119,7 +120,7 @@ export function BackendGate({ children, repairDock }: BackendGateProps) {
   // user's own job, so the workspace stays mounted and usable and the status
   // bar carries the only signal this needs. Tearing the app down behind an
   // error screen mid-generation is the bug this stage exists to prevent.
-  const busy = status.stage === 'unresponsive';
+  const busy = isBackendBusy(status.stage);
 
   useEffect(() => {
     setRestarting(false);
