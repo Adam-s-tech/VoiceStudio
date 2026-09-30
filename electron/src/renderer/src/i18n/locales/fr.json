@@ -81,7 +81,12 @@
     "onDemand": "Chargé à la demande",
     "checkSetup": "Vérifier les réglages",
     "wait": "Attendez la fin du travail en cours avant de modifier ce réglage.",
-    "speedHelp": "Une meilleure qualité peut prendre plus de temps. Commencez par Équilibré."
+    "speedHelp": "Une meilleure qualité peut prendre plus de temps. Commencez par Équilibré.",
+    "engineLabel": "Moteur",
+    "modelLabel": "Modèle",
+    "runsOn": "S’exécute sur",
+    "copyModel": "Copier l’ID du modèle",
+    "copied": "Copié"
   },
   "homeUi": {
     "subtitle": "Votre alternative à ElevenLabs, open source et entièrement locale — clonez et créez des voix, doublez des vidéos, dictez, transcrivez et créez des livres audio dans 646 langues.",
@@ -308,7 +313,16 @@
     "choose_voice": "Choisir une voix",
     "change_voice": "Changer de voix",
     "voice_sample": "Échantillon vocal",
-    "prompt_named": "Que doit dire {{name}} ?"
+    "prompt_named": "Que doit dire {{name}} ?",
+    "choose_hint": "Choisissez une voix enregistrée ou ajoutez-en une à partir d’un court extrait.",
+    "add_voice": "Ajouter une voix",
+    "sort_label": "Trier les voix",
+    "sort_recent": "Plus récentes",
+    "sort_name": "A–Z",
+    "change_photo": "Changer la photo",
+    "remove_photo": "Retirer la photo",
+    "photo_hint": "Cliquez ou déposez une image. PNG, JPG ou WebP jusqu’à 5 Mo.",
+    "current": "Voix actuelle"
   },
   "profileIdentity": {
     "save_hint": "Enregistrez cette voix pour la réutiliser en un clic.",
@@ -526,6 +540,7 @@
     "describe_hint": "Décrivez la voix, ou choisissez un point de départ. L'un ou l'autre renseigne les détails ci-dessous.",
     "describe_unmatched": "Impossible d'associer : {{items}}",
     "describe_no_match": "Aucun trait vocal reconnu pour l'instant — essayez des mots comme deep, elderly ou British.",
+    "describe_freeform": "Ce moteur lit votre description telle quelle. Les détails ci-dessous sont des indications facultatives.",
     "define_by_design": "Par conception",
     "define_from_audio": "À partir de l'audio",
     "define_voice": "Définir la voix",
@@ -2072,6 +2087,7 @@
     "installing": "Installation…",
     "setup_space": "Libérez au moins 9 Gio sur le disque de l’application, puis réessayez.",
     "setup_access": "Autorisez l’écriture dans le dossier de données de l’application, puis réessayez.",
+    "setup_unsupported_platform": "Ce Mac Intel ne peut pas exécuter le backend IA local — PyTorch ne fournit pas de wheels macOS Intel. Connectez plutôt un backend distant ci-dessous ; aucune installation locale n'est nécessaire.",
     "ready": "Moteur prêt",
     "show_log": "Afficher le journal",
     "hide_log": "Masquer le journal",
@@ -2121,7 +2137,9 @@
     "mode_label": "Mode dictée",
     "mode_sub": "Basculer : appuyez une fois pour démarrer, une nouvelle fois pour arrêter. Maintenir : dicter pendant que la touche est maintenue.",
     "mode_toggle": "Basculer",
-    "mode_hold": "Tenir"
+    "mode_hold": "Tenir",
+    "prompt_label": "Indice de vocabulaire",
+    "prompt_sub": "Noms, jargon et orthographes attendus pendant la dictée. Utilisé par Faster Whisper, MLX Whisper et les moteurs compatibles OpenAI (envoyé à ce serveur avec l’audio) ; les autres moteurs l’ignorent."
   },
   "trimmer": {
     "title": "Couper l'audio de référence",
@@ -3160,7 +3178,14 @@
     "step_audio": "Clip source",
     "step_transcribe": "Transcrire",
     "step_translate": "Traduire",
-    "step_convert": "Convertir"
+    "step_convert": "Convertir",
+    "condition_phrase": "Texte à rechercher",
+    "condition_match": "Correspondance",
+    "condition_hint": "La branche « oui » s'exécute lorsque le texte correspond, sinon c'est la branche « non ». La casse est ignorée.",
+    "match_contains": "Contient",
+    "match_equals": "Est exactement",
+    "match_starts": "Commence par",
+    "match_ends": "Se termine par"
   },
   "proPage": {
     "title": "VoiceStudio Pro",
@@ -3280,8 +3305,8 @@
     "progress": "{{done}} / {{total}} clips prêts",
     "changed": "Paramètres modifiés. Relancer crée de nouvelles sorties.",
     "incomplete": "Voix incomplète. Réessayez avant d’exporter.",
-    "invalid_graph": "Reliez toutes les étapes du début à la fin, sans branches ni cycles.",
-    "invalid_unsupported": "Étapes incompatibles : texte vers traduction ou parole, audio vers transcription ou conversion, parole générée vers normalisation.",
+    "invalid_graph": "Reliez chaque étape du début à la fin. Seule une condition peut créer un embranchement, et aucun chemin ne peut boucler.",
+    "invalid_unsupported": "Étapes incompatibles : texte vers traduction ou parole, audio vers transcription ou conversion, parole générée vers normalisation. Les branches qui se rejoignent doivent porter le même type de valeur.",
     "invalid_voice": "Choisissez une voix enregistrée pour chaque étape de parole ou conversion.",
     "invalid_scripts": "Ajoutez 1 à 50 scripts non vides de 20 000 caractères maximum chacun.",
     "peak": "Crête (dBFS)",
@@ -3294,7 +3319,8 @@
     "transcription_recipe": "Audio en texte",
     "conversion_recipe": "Changer la voix",
     "localization_recipe": "Traduire et raconter",
-    "invalid_language": "Choisissez les langues source et cible."
+    "invalid_language": "Choisissez les langues source et cible.",
+    "invalid_condition": "Saisissez le texte que la condition doit rechercher."
   },
   "voiceSelector": {
     "designed": "Voix conçues",

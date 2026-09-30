@@ -222,6 +222,56 @@ async def _run_with_reference_lease(lease, factory):
             release()
 
 
+_DESIGN_DESCRIPTION_MAX = 2000  # the Voice Design description field's maxLength
+_DESIGN_DETAIL_MAX = 64
+
+
+def _design_recipe_json(raw: Optional[str]) -> Optional[str]:
+    """Validated Voice Design draft to store with a take, or None (#2389).
+
+    ``design_recipe`` is display metadata from the Design page: the description
+    as written and the user's explicit picks. It never affects synthesis, so a
+    malformed or oversized value is dropped instead of failing the take. Only
+    known categories and bounded strings survive, and the stored JSON is
+    re-serialized from the parsed value — the raw form field is never
+    persisted. The details the description maps to are derived here with the
+    same mapper as ``/design/describe``, so they always match the description
+    this take was rendered from, even when the page's own mapping had not
+    landed yet.
+    """
+    if not raw or len(raw) > 4 * _DESIGN_DESCRIPTION_MAX:
+        return None
+    import json
+
+    from core.describe_voice import CATEGORY_ORDER, parse_description
+
+    try:
+        value = json.loads(raw)
+    except ValueError:
+        return None
+    if not isinstance(value, dict):
+        return None
+    description = value.get("description")
+    if not isinstance(description, str) or len(description) > _DESIGN_DESCRIPTION_MAX:
+        return None
+
+    picks = value.get("picks")
+    if not isinstance(picks, dict):
+        return None
+    for category, detail in picks.items():
+        if (
+            category not in CATEGORY_ORDER
+            or not isinstance(detail, str)
+            or len(detail) > _DESIGN_DETAIL_MAX
+        ):
+            return None
+    mapped = parse_description(description)["attrs"]
+    return json.dumps(
+        {"description": description, "picks": picks, "mapped": mapped},
+        ensure_ascii=False,
+    )
+
+
 def _profile_instruct(row):
     """Validator-safe instruct for a stored profile row.
 
@@ -912,6 +962,22 @@ def _oom_friendly_reraise(e):
             + _HINTS["WINDOWS_PAGING_FILE_TOO_SMALL"]
             + f" Underlying error: {e}"
         ) from e
+    from core.failure import _HINTS, classify
+    if classify(str(e)) == "POCKETTTS_GATED_WEIGHTS":
+        raise RuntimeError(
+            "PocketTTS voice cloning uses gated weights this install can't "
+            "download yet; its built-in voices still work. "
+            + _HINTS["POCKETTTS_GATED_WEIGHTS"]
+            + f" Underlying error: {_safe_exc_text(e)}"
+        ) from e
+    if classify(str(e)) == "HF_AUTH_FAILED":
+        # A gated or private model file (e.g. Sesame CSM's default-voice
+        # prompts) is an access problem, not an unknown fault.
+        raise RuntimeError(
+            "This model needs files from a gated Hugging Face repository that "
+            "this install can't access yet. " + _HINTS["HF_AUTH_FAILED"]
+            + f" Underlying error: {_safe_exc_text(e)}"
+        ) from e
     if _is_oom_failure(e):
         raise RuntimeError(
             f"TTS engine stopped mid-generation. This usually means it ran out of memory. "
@@ -1322,7 +1388,7 @@ def _persist_profile_ref_text(profile_id: str, ref_text: str) -> None:
 async def _finalize_generation(
     audio_tensor, sample_rate, *, text, history_mode, ref_audio_path,
     language, instruct, resolved_profile_id, used_seed, start_time,
-    already_marked=False, wav_bits=16, include_wav_bytes=False,
+    already_marked=False, design_recipe=None, wav_bits=16, include_wav_bytes=False,
 ):
     """Shared tail of a successful generation: watermark → save WAV →
     history row (self-healing) → retention prune → event emit.
@@ -1407,13 +1473,17 @@ async def _finalize_generation(
     # failure — e.g. "no such table: generation_history" on a DB that missed
     # schema init — must NOT 500 the user's generation. Self-heal the schema
     # once and retry; if it still fails, log and return the audio anyway.
+    take_mode = history_mode or ("clone" if ref_audio_path else "design")
+    if take_mode != "design":
+        design_recipe = None
+
     def _write_history():
         with db_conn() as conn:
             conn.execute(
-                "INSERT INTO generation_history (id, text, mode, language, instruct, profile_id, audio_path, duration_seconds, generation_time, seed, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                (audio_id, text[:200], history_mode or ("clone" if ref_audio_path else "design"),
+                "INSERT INTO generation_history (id, text, mode, language, instruct, profile_id, audio_path, duration_seconds, generation_time, seed, design_recipe, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                (audio_id, text[:200], take_mode,
                  language or "Auto", instruct or "", resolved_profile_id,
-                 audio_filename, audio_dur, gen_time, used_seed, time.time())
+                 audio_filename, audio_dur, gen_time, used_seed, design_recipe, time.time())
             )
     try:
         _write_history()
@@ -1621,6 +1691,9 @@ async def generate_speech(
     ref_audio: Optional[UploadFile] = File(None),
     ref_text: Optional[str] = Form(None),
     instruct: Optional[str] = Form(None),
+    # #2389: the Voice Design draft behind this take (description, picks,
+    # mapped details) so reopening it rebuilds the same draft. Metadata only.
+    design_recipe: Optional[str] = Form(None),
     duration: Optional[float] = Form(None),
     num_step: Optional[int] = Form(None),
     guidance_scale: float = Form(2.0),
@@ -1850,6 +1923,7 @@ async def generate_speech(
     # never sent, so a rejection can name the profile instead of the picker.
     language_from_profile = False
     history_mode = None  # profile.kind when a profile drives; else inferred at insert
+    stored_design_recipe = _design_recipe_json(design_recipe)
     # #1032: profile id to persist an auto-transcribed reference transcript to.
     # Set only for a plain (unlocked) clone profile whose stored ref_text is
     # empty — the case where every /generate re-ran a full ASR model load +
@@ -2170,6 +2244,7 @@ async def generate_speech(
                     ref_audio_path=ref_audio_path, language=language,
                     instruct=instruct, resolved_profile_id=resolved_profile_id,
                     used_seed=used_seed, start_time=start_time, already_marked=True, wav_bits=int(wav_bits),
+                    design_recipe=stored_design_recipe,
                 )
                 # #1330's dropped-chunk warning has no remote carrier yet: the
                 # gateway hands back audio, not the worker's render metadata.
@@ -2492,6 +2567,7 @@ async def generate_speech(
                     ref_audio_path=ref_audio_path, language=language,
                     instruct=instruct, resolved_profile_id=resolved_profile_id,
                     used_seed=used_seed, start_time=start_time, wav_bits=int(wav_bits),
+                    design_recipe=stored_design_recipe,
                 )
                 # #1330: before `done`, say what the take is missing. Its own
                 # frame rather than a `done` field so a consumer that only
@@ -2647,6 +2723,7 @@ async def generate_speech(
             ref_audio_path=ref_audio_path, language=language, instruct=instruct,
             resolved_profile_id=resolved_profile_id, used_seed=used_seed,
             start_time=start_time, already_marked=_already_marked, wav_bits=int(wav_bits), include_wav_bytes=True,
+            design_recipe=stored_design_recipe,
         )
         audio_id = _meta["id"]
         audio_filename = _meta["filename"]

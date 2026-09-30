@@ -39,8 +39,15 @@ MAX_BACKUP_DB_BYTES = 500 * 1024 * 1024
 
 #: ``<db name>.backup-<version>-<n>`` — ``<version>`` may itself contain
 #: dashes (preview builds stamp ``0.3.9-41``), so the counter is the final
-#: ``-<digits>`` group.
-_BACKUP_SUFFIX_RE = re.compile(r"\.backup-(?P<version>.+)-(?P<n>\d+)$")
+#: ``-<digits>`` group. ``<version>`` is limited to the characters
+#: ``_sanitize_version`` emits, and the counter must be the whole tail:
+#: an in-progress snapshot (``…backup-<version>-<n>.part-<pid>``) left
+#: behind by a crash mid-copy must never be listed as a backup.
+_BACKUP_SUFFIX_RE = re.compile(r"\.backup-(?P<version>[A-Za-z0-9._-]+)-(?P<n>\d+)$")
+
+#: Temp name a snapshot is copied into before ``os.replace`` to its final
+#: name (see ``snapshot_before_migration``).
+_PARTIAL_SUFFIX_RE = re.compile(r"\.part-\d+$")
 
 
 def _sanitize_version(version: str) -> str:
@@ -61,6 +68,8 @@ def list_backups(db_path: str) -> list[str]:
     out = []
     for name in names:
         if not name.startswith(base + ".backup-"):
+            continue
+        if _PARTIAL_SUFFIX_RE.search(name):
             continue
         if not _BACKUP_SUFFIX_RE.search(name[len(base):]):
             continue
@@ -105,9 +114,57 @@ def _next_counter(db_path: str, safe_version: str) -> int:
     return highest + 1
 
 
+def stale_partial_backups(db_path: str) -> list[str]:
+    """``<db>.backup-<version>-<n>.part-<pid>`` files whose writer is gone.
+
+    ``snapshot_before_migration`` copies into such a temp name and renames it
+    into place at the end; a crash, kill or power loss mid-copy leaves the
+    torn file behind. Those are never valid backups (``list_backups`` skips
+    them) and are removed by ``prune_backups``. A partial owned by a live
+    process is left alone.
+    """
+    directory = os.path.dirname(os.path.abspath(db_path)) or "."
+    base = os.path.basename(db_path)
+    try:
+        names = os.listdir(directory)
+    except OSError:
+        return []
+    stale = []
+    for name in names:
+        if not name.startswith(base + ".backup-"):
+            continue
+        m = _PARTIAL_SUFFIX_RE.search(name)
+        if not m or not _BACKUP_SUFFIX_RE.fullmatch(name[len(base):m.start()]):
+            continue
+        pid = int(name[m.start() + len(".part-"):])
+        if pid != os.getpid() and not _pid_alive(pid):
+            stale.append(os.path.join(directory, name))
+    return stale
+
+
+def _pid_alive(pid: int) -> bool:
+    import psutil
+
+    if pid <= 0:
+        return False
+    try:
+        return psutil.pid_exists(pid)
+    except (OSError, psutil.Error):
+        # An uncertain owner must never cause deletion of its partial backup.
+        return True
+
+
 def prune_backups(db_path: str, keep: int = KEEP_BACKUPS) -> list[str]:
-    """Delete all but the ``keep`` newest backups. Returns deleted paths."""
+    """Delete all but the ``keep`` newest backups, plus torn partial
+    snapshots from earlier runs. Returns deleted paths."""
     deleted = []
+    for path in stale_partial_backups(db_path):
+        try:
+            os.remove(path)
+            deleted.append(path)
+            logger.info("Removed torn partial DB backup %s", path)
+        except OSError as exc:
+            logger.warning("Could not remove partial DB backup %s: %s", path, exc)
     for path in list_backups(db_path)[keep:]:
         try:
             os.remove(path)

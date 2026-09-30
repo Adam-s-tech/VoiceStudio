@@ -359,6 +359,7 @@ def _make_backend_class():
 
         id = "omnivoice-gguf"
         display_name = "OmniVoice (GGUF, hardware-adaptive)"
+        instruct_vocabulary = "tags"
         gpu_compat = ("cuda", "mps", "cpu")
         supports_voice_design = False
         # Every generate() spawns the external binary — allocations live in

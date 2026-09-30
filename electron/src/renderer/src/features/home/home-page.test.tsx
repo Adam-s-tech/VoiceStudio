@@ -28,6 +28,16 @@ import en from '@/i18n/locales/en.json';
 
 afterEach(cleanup);
 
+it('keeps the heading and description together beside the contributor artwork', () => {
+  render(<HomePage />);
+  const heading = screen.getByRole('heading', { name: 'homeUi.title' });
+  const description = screen.getByText('homeUi.subtitle');
+  const copy = heading.parentElement!;
+  expect(copy).toContainElement(description);
+  expect(copy.querySelector('.home-contributors')).toBeNull();
+  expect(copy.nextElementSibling).toHaveClass('home-contributors');
+});
+
 it('previews the official website only when the title is clicked', () => {
   browser.open.mockClear();
   render(<HomePage />);

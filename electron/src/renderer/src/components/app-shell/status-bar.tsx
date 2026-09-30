@@ -15,7 +15,6 @@ import {
   BrainCircuitIcon,
   KeyboardIcon,
   UsersRoundIcon,
-  SlidersHorizontalIcon,
   ListIcon,
   LayersIcon,
   CodeXmlIcon,
@@ -161,7 +160,6 @@ export function StatusBar({
 }) {
   const { t } = useTranslation();
   const { level, chooseLevel } = useEngineDetailLevel();
-  const [viewOpen, setViewOpen] = useState(false);
   const [deviceOpen, setDeviceOpen] = useState(false);
   const profile = usePerformanceProfile();
   const [appliedProfile, setAppliedProfile] = useState<PerformanceProfileState | null>(null);
@@ -667,55 +665,36 @@ export function StatusBar({
         ),
   );
   const viewControl = (
-    <Popover open={viewOpen} onOpenChange={setViewOpen}>
-      <PopoverTrigger
-        render={
+    <div
+      role="radiogroup"
+      data-slot="engine-view-toggle"
+      aria-label={t('sidebarTools.title')}
+      className="flex shrink-0 items-center gap-0.5 rounded-md bg-sidebar-accent/35 p-0.5 ring-1 ring-inset ring-sidebar-border/50"
+    >
+      {engineDetailLevels.map((value) => {
+        const label = t(value === 'models' ? 'modelSettings.models' : 'sidebarTools.' + value);
+        const Icon = value === 'simple' ? ListIcon : value === 'models' ? LayersIcon : CodeXmlIcon;
+        return (
           <button
+            key={value}
             type="button"
-            data-slot="engine-view-toggle"
-            aria-label={
-              t('sidebarTools.title') +
-              ': ' +
-              t(level === 'models' ? 'modelSettings.models' : 'sidebarTools.' + level)
-            }
-            title={t('sidebarTools.title')}
-            className="grid size-8 shrink-0 place-items-center rounded-md outline-none hover:bg-sidebar-accent/60 focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        }
-      >
-        <SlidersHorizontalIcon className="size-3.5" aria-hidden="true" />
-      </PopoverTrigger>
-      <PopoverContent side="right" className="w-36 p-1">
-        <div role="group" aria-label={t('sidebarTools.title')}>
-          {engineDetailLevels.map((value) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={level === value}
-              onClick={() => {
-                chooseLevel(value);
-                setViewOpen(false);
-              }}
-              className={cn(
-                'flex min-h-9 w-full items-center gap-2 rounded px-3 text-start text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                level === value
-                  ? 'bg-sidebar-accent font-medium text-foreground'
-                  : 'hover:bg-sidebar-accent/50',
-              )}
-            >
-              {value === 'simple' ? (
-                <ListIcon className="size-3.5" aria-hidden="true" />
-              ) : value === 'models' ? (
-                <LayersIcon className="size-3.5" aria-hidden="true" />
-              ) : (
-                <CodeXmlIcon className="size-3.5" aria-hidden="true" />
-              )}
-              {t(value === 'models' ? 'modelSettings.models' : 'sidebarTools.' + value)}
-            </button>
-          ))}
-        </div>
-      </PopoverContent>
-    </Popover>
+            role="radio"
+            aria-checked={level === value}
+            aria-label={label}
+            title={label}
+            onClick={() => chooseLevel(value)}
+            className={cn(
+              'grid size-6 place-items-center rounded-[5px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+              level === value
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Icon className="size-3.5" aria-hidden="true" />
+          </button>
+        );
+      })}
+    </div>
   );
   const iconDevicePopover = (
     <Popover open={deviceOpen} onOpenChange={setDeviceOpen}>

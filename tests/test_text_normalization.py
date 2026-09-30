@@ -40,6 +40,13 @@ _CHANGE_CASES = [
     ("English", "It costs $5", "It costs five dollars"),
     ("English", "Just $1 more", "Just one dollar more"),
     ("English", "It costs $5.99 now", "It costs five dollars, ninety-nine cents now"),
+    # Sentence punctuation after an amount is not part of it: the lookahead
+    # used to reject any period or comma, so these reached the engine as digits.
+    ("English", "It costs $5.", "It costs five dollars."),
+    ("English", "Pay $5, please", "Pay five dollars, please"),
+    ("English", "It costs $5.99.", "It costs five dollars, ninety-nine cents."),
+    ("English", "$12.34, $56.78, and $9.",
+     "twelve dollars, thirty-four cents, fifty-six dollars, seventy-eight cents, and nine dollars."),
     ("English", "rated 3.5 stars", "rated three point five stars"),
     # English writes decimals with a period, so three digits after it are a
     # decimal here (the same digits are a thousands group in German, below).
@@ -144,6 +151,8 @@ _UNCHANGED_CASES = [
     # (language, input) — ambiguous constructs keep their digits/shape
     ("English", "version v2 shipped"),          # digit glued to a letter
     ("English", "order 1,000 units"),           # thousands separator: ambiguous
+    ("English", "It costs $1,000."),            # a dollar amount with a separator
+    ("English", "It costs $5.5."),              # one decimal digit: not cents
     ("English", "pages 3-5 tonight"),           # range
     ("English", "agent 007 reporting"),         # leading-zero code
     ("English", "see 3.5.1 in the docs"),       # version string

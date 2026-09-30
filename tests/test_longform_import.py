@@ -149,6 +149,25 @@ def test_epub_extracts_chapters_in_spine_order():
     assert len(plan.chapters) == 2
 
 
+def test_epub_chapter_title_keeps_all_of_a_styled_heading():
+    # A heading holding inline markup or a <br> reaches the parser in pieces, and
+    # only the first piece named the chapter: "Chapter" for "Chapter <em>One</em>",
+    # "3" for "<span>3</span> The Calm". The rest was neither title nor body.
+    data = _make_epub_raw([
+        b"<html><body><h1>Chapter <em>One</em></h1><p>It began.</p></body></html>",
+        b"<html><body><h1>CHAPTER II<br/>THE STORM</h1><p>Rain fell.</p></body></html>",
+        b'<html><body><h2><span class="num">3</span> The Calm</h2><p>Quiet.</p></body></html>',
+        b"<html><body><h1>Chapter&#160;<a href=\"#n\">Four</a></h1><p>Last.</p></body></html>",
+    ])
+    script = epub_to_chapter_script(data)
+    assert "# Chapter One\n" in script
+    assert "# CHAPTER II THE STORM\n" in script
+    assert "# 3 The Calm\n" in script
+    assert "# Chapter Four\n" in script
+    assert [c.title for c in parse_audiobook_script(script).chapters] == [
+        "Chapter One", "CHAPTER II THE STORM", "3 The Calm", "Chapter Four"]
+
+
 def test_epub_skips_empty_documents():
     data = _make_epub([("Real", "Has text."), ("Blank", "")])
     plan = parse_audiobook_script(epub_to_chapter_script(data))

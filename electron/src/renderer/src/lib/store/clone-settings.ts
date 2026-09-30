@@ -132,6 +132,29 @@ export function patchCloneSettings(partial: Partial<CloneSettings>): void {
   cloneSettingsStore.setState((prev) => ({ ...prev, ...partial }));
 }
 
+/** Restore next-take quality without touching voice controls or the draft. */
+export function resetAudioQuality(): void {
+  const { wavBits, steps, effectPreset } = DEFAULT_CLONE_SETTINGS;
+  patchCloneSettings({ wavBits, steps, effectPreset });
+}
+
+/** Restore voice controls without changing next-take quality or the draft. */
+export function resetVoiceControls(): void {
+  const { cfg, speed, tShift, posTemp, classTemp, layerPenalty, denoise, postprocess, duration } =
+    DEFAULT_CLONE_SETTINGS;
+  patchCloneSettings({
+    cfg,
+    speed,
+    tShift,
+    posTemp,
+    classTemp,
+    layerPenalty,
+    denoise,
+    postprocess,
+    duration,
+  });
+}
+
 /** Reset the production overrides (steps, cfg, …, duration) to their defaults. */
 export function resetOverrides(): void {
   const { steps, cfg, speed, tShift, posTemp, classTemp, layerPenalty, denoise, postprocess } =
