@@ -100,11 +100,23 @@ def _manifest_path(part: str) -> str:
 
 def _load_done(part: str, size: int) -> set[tuple[int, int]]:
     try:
+        if os.path.getsize(part) != size:
+            return set()  # missing/truncated bytes cannot be certified by a sidecar
         with open(_manifest_path(part)) as f:
             data = json.load(f)
-        if data.get("size") != size:
+        if not isinstance(data, dict) or data.get("size") != size:
             return set()
-        return {tuple(s) for s in data.get("done", [])}
+        ranges = data.get("done", [])
+        if not isinstance(ranges, list):
+            return set()
+        done = set()
+        for segment in ranges:
+            if (not isinstance(segment, list) or len(segment) != 2
+                    or any(type(value) is not int for value in segment)
+                    or not 0 <= segment[0] <= segment[1] < size):
+                return set()
+            done.add(tuple(segment))
+        return done
     except (OSError, ValueError):
         return set()
 

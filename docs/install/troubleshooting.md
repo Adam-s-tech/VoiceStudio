@@ -683,6 +683,8 @@ order:
   - macOS/Linux: `export HF_ENDPOINT=https://hf-mirror.com`
   - Windows (PowerShell): `[Environment]::SetEnvironmentVariable("HF_ENDPOINT","https://hf-mirror.com","User")`
 
+Segmented download resume records are reused only with an existing partial file of the expected size and valid byte-range entries. If a partial file is missing or truncated, or its sidecar is malformed, the download fetches those bytes again instead of treating preallocated zeros as completed data.
+
 **Manual fallback** (if downloads keep failing), pull the weights yourself into
 the same cache, then relaunch:
 
