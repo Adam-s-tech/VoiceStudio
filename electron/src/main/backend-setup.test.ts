@@ -238,6 +238,45 @@ it('attaches to a healthy replacement instead of reporting its exited child as c
   await supervisor.shutdown();
   vi.useRealTimers();
 });
+it.each([
+  {
+    label: 'managed',
+    backendCmd: '',
+    advice: 'repair the local runtime',
+    forbidden: 'can be launched',
+  },
+  {
+    label: 'custom command',
+    backendCmd: '["custom-python"]',
+    advice: 'can be launched',
+    forbidden: 'local runtime',
+  },
+])('scopes spawn-failure advice to the $label launch', ({ backendCmd, advice, forbidden }) => {
+  vi.stubEnv('OMNIVOICE_BACKEND_CMD', backendCmd);
+  const child = Object.assign(new EventEmitter(), {
+    stdin: null,
+    stdout: null,
+    stderr: null,
+    stdio: [],
+    pid: 4242,
+  });
+  mocks.spawn.mockReturnValueOnce(child);
+  const supervisor = new BackendSupervisor();
+  const internal = supervisor as unknown as {
+    generation: number;
+    spawnChild: (plan: { argv: string[]; cwd: string }, generation: number) => void;
+  };
+  internal.generation = 1;
+  internal.spawnChild({ argv: ['missing-backend'], cwd: '/project' }, 1);
+
+  child.emit('error', Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }));
+
+  expect(supervisor.status.stage).toBe('failed');
+  expect(supervisor.status.message).toContain('missing-backend');
+  expect(supervisor.status.message).toContain('spawn ENOENT');
+  expect(supervisor.status.message).toContain(advice);
+  expect(supervisor.status.message).not.toContain(forbidden);
+});
 it('startup and retry await explicit setup without staging, spawning or installing', async () => {
   vi.stubGlobal(
     'fetch',

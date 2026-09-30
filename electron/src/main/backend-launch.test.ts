@@ -164,3 +164,30 @@ it('includes the backend last output in a startup-budget failure', () => {
     'Backend did not answer on port 3900 within 300 s (OMNIVOICE_STARTUP_BUDGET_S). Last output: INFO: loading model',
   );
 });
+
+it('keeps the startup output when the timeout teardown logs shutdown chatter', async () => {
+  const { BackendSupervisor } = await import('./backend');
+  const supervisor = new BackendSupervisor();
+  const internals = supervisor as unknown as {
+    generation: number;
+    startedAt: number;
+    stage: string;
+    log: string[];
+    probe(): Promise<boolean>;
+    killChild(): Promise<void>;
+    waitUntilReady(gen: number, budgetMs: number): Promise<void>;
+  };
+  internals.stage = 'starting';
+  internals.startedAt = Date.now() - 10;
+  internals.log.push('INFO: loading model weights');
+  internals.probe = async () => false;
+  internals.killChild = async () => {
+    internals.log.push('INFO: uvicorn shutting down');
+  };
+
+  await internals.waitUntilReady(internals.generation, 1);
+
+  expect(supervisor.status.stage).toBe('failed');
+  expect(supervisor.status.message).toContain('Last output: INFO: loading model weights');
+  expect(supervisor.status.message).not.toContain('shutting down');
+});
