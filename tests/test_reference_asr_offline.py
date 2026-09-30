@@ -27,7 +27,9 @@ def test_missing_implicit_asr_never_calls_network_capable_loader(monkeypatch, se
     model.load_asr_model = loader
     lookup = Mock(side_effect=LocalEntryNotFoundError("not cached"))
     monkeypatch.setattr("huggingface_hub.snapshot_download", lookup)
-    with pytest.raises(ValueError, match="reference transcript"):
+    # Over 20 s a transcript is refused, so the message names the length limit.
+    expected = "reference transcript" if seconds <= 20 else "20 seconds"
+    with pytest.raises(ValueError, match=expected):
         model.create_voice_clone_prompt(
             (torch.full((1, seconds * 24_000), 0.1), 24_000),
             preprocess_prompt=False,

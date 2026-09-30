@@ -830,7 +830,7 @@ class OmniVoice(PreTrainedModel):
                     f"{CLONE_REF_TOO_LONG_MARKER} Reference audio is "
                     f"{ref_duration:.1f} seconds long; automatic transcript-free "
                     "selection supports at most 75 seconds. Trim the audio to a "
-                    "3-10 second speech passage, or supply a matching transcript."
+                    "3-10 second speech passage."
                 )
 
             original_power = ref_wav.abs().amax(dim=0).square()
@@ -854,8 +854,9 @@ class OmniVoice(PreTrainedModel):
                         f"{ref_duration:.1f} seconds long; a transcript only "
                         f"works up to {CLONE_REF_TEXT_MAX_SECONDS:.0f} seconds. "
                         "Trim the audio and transcript to a 3-10 second "
-                        "passage, or install a speech-to-text model so "
-                        "VoiceStudio can pick the passage automatically."
+                        "passage. A longer clip needs a speech-to-text model "
+                        "to pick the passage, and none could be loaded; "
+                        "install or select one in Model Catalogue."
                     ) from exc
             candidates = list(ref_wav.split(max_samples, dim=-1))
 
@@ -871,10 +872,16 @@ class OmniVoice(PreTrainedModel):
                 key=lambda item: (speech_score(item[0]), activity_score(item[1])),
             )
             if speech_score(ref_text) == 0:
+                # A transcript is only accepted up to CLONE_REF_TEXT_MAX_SECONDS.
+                transcript_hint = (
+                    ", or supply a matching transcript"
+                    if ref_duration <= CLONE_REF_TEXT_MAX_SECONDS
+                    else ""
+                )
                 raise ValueError(
                     f"{CLONE_REF_NO_SPEECH_MARKER} Automatic speech detection "
                     "could not find spoken words in the reference. Trim it to a "
-                    "clear 3-10 second speech passage, or supply a matching transcript."
+                    f"clear 3-10 second speech passage{transcript_hint}."
                 )
 
         if preprocess_prompt:
@@ -909,21 +916,7 @@ class OmniVoice(PreTrainedModel):
         if ref_text is None:
             if self._asr_pipe is None:
                 logger.info("Loading cached ASR for reference transcription ...")
-                try:
-                    self._load_cached_reference_asr()
-                except ValueError as exc:
-                    if ref_duration <= CLONE_REF_TEXT_MAX_SECONDS:
-                        raise
-                    # A typed transcript is refused for this length, so the
-                    # transcript advice in the generic message is a dead end.
-                    raise ValueError(
-                        f"{CLONE_REF_TOO_LONG_MARKER} Reference audio is "
-                        f"{ref_duration:.1f} seconds long; a transcript only "
-                        f"works up to {CLONE_REF_TEXT_MAX_SECONDS:.0f} seconds. "
-                        "Trim the audio and transcript to a 3-10 second "
-                        "passage, or install a speech-to-text model so "
-                        "VoiceStudio can pick the passage automatically."
-                    ) from exc
+                self._load_cached_reference_asr()
             ref_text = self.transcribe((ref_wav, self.sampling_rate))
             logger.debug("Auto-transcribed ref_text: %s", ref_text)
 
