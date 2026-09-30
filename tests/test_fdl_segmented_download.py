@@ -39,7 +39,7 @@ def _ranged_handler(payload=PAYLOAD, *, accept_ranges=True, record=None):
         if rng and accept_ranges:
             lo, hi = rng.replace("bytes=", "").split("-")
             lo, hi = int(lo), int(hi)
-            return httpx.Response(206, content=payload[lo:hi + 1])
+            return httpx.Response(206, content=payload[lo:hi + 1], headers={"content-range": f"bytes {lo}-{hi}/{len(payload)}"})
         return httpx.Response(200, content=payload)
     return handler
 
@@ -177,7 +177,7 @@ def test_concurrency_stays_at_num_connections(tmp_path, monkeypatch):
                 except asyncio.TimeoutError:
                     pass
                 lo, hi = request.headers["range"].replace("bytes=", "").split("-")
-                return httpx.Response(206, content=PAYLOAD[int(lo):int(hi) + 1])
+                return httpx.Response(206, content=PAYLOAD[int(lo):int(hi) + 1], headers={"content-range": f"bytes {lo}-{hi}/{len(PAYLOAD)}"})
             finally:
                 state["inflight"] -= 1
 
@@ -215,7 +215,7 @@ def test_dropped_connection_resumes_from_manifest(tmp_path, monkeypatch):
                 raise httpx.RemoteProtocolError("peer closed connection", request=request)
         lo, hi = request.headers["range"].replace("bytes=", "").split("-")
         served.append(int(hi) - int(lo) + 1)
-        return httpx.Response(206, content=PAYLOAD[int(lo):int(hi) + 1])
+        return httpx.Response(206, content=PAYLOAD[int(lo):int(hi) + 1], headers={"content-range": f"bytes {lo}-{hi}/{len(PAYLOAD)}"})
 
     with pytest.raises(httpx.RemoteProtocolError):
         _download(handler, dest, expected_size=len(PAYLOAD), num_connections=2)
@@ -230,3 +230,27 @@ def test_dropped_connection_resumes_from_manifest(tmp_path, monkeypatch):
     # Resumed, not restarted: total bytes served stay below two full copies.
     assert sum(served) < 2 * len(PAYLOAD)
     assert sum(served) >= len(PAYLOAD)
+
+
+def test_fetch_rejects_non_206_status(tmp_path):
+    dest = str(tmp_path / "err.bin")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "HEAD":
+            return httpx.Response(200, headers={"content-length": "100", "accept-ranges": "bytes"})
+        return httpx.Response(200, content=b"x" * 100)
+
+    with pytest.raises(ValueError, match="expected HTTP 206 Partial Content, got 200"):
+        _download(handler, dest, expected_size=100)
+
+
+def test_fetch_rejects_mismatched_content_range(tmp_path):
+    dest = str(tmp_path / "mismatch.bin")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "HEAD":
+            return httpx.Response(200, headers={"content-length": "100", "accept-ranges": "bytes"})
+        return httpx.Response(206, content=b"x" * 100, headers={"content-range": "bytes 10-109/100"})
+
+    with pytest.raises(ValueError, match="Content-Range mismatch"):
+        _download(handler, dest, expected_size=100)

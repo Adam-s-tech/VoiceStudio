@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import os
 from typing import Callable, Optional
 
@@ -38,6 +39,7 @@ _MIN_SEGMENT_BYTES = 4 * 1024 * 1024   # don't split below this — overhead > g
 # forward progress.
 _MAX_SEGMENT_BYTES = 16 * 1024 * 1024
 _READ_CHUNK = 1024 * 1024
+_CONTENT_RANGE_RE = re.compile(r"^bytes\s+(\d+)-(\d+)/(\d+|\*)$")
 
 
 class DownloadCancelled(Exception):
@@ -170,6 +172,17 @@ async def segmented_download(
                 headers = {**_auth_headers(final_url, token), "Range": f"bytes={start}-{end}"}
                 async with client.stream("GET", final_url, headers=headers) as r:
                     r.raise_for_status()
+                    if r.status_code != 206:
+                        raise ValueError(f"expected HTTP 206 Partial Content, got {r.status_code}")
+                    cr = r.headers.get("content-range", "")
+                    m = _CONTENT_RANGE_RE.match(cr)
+                    if not m:
+                        raise ValueError(f"missing or malformed Content-Range header: {cr!r}")
+                    r_start, r_end, r_total = int(m.group(1)), int(m.group(2)), m.group(3)
+                    if r_start != start or r_end != end:
+                        raise ValueError(f"Content-Range mismatch: got {r_start}-{r_end}, want {start}-{end}")
+                    if r_total != "*" and int(r_total) != size:
+                        raise ValueError(f"Content-Range size mismatch: got total {r_total}, expected {size}")
                     got = 0
                     with open(part, "r+b") as fh:
                         fh.seek(start)
