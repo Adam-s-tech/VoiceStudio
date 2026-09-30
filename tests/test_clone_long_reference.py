@@ -256,6 +256,24 @@ def test_over_limit_reference_without_asr_names_the_length_limit(
     assert "3-10 second" in message
 
 
+def test_unrelated_asr_load_error_is_not_reported_as_length(
+    tmp_path, monkeypatch
+):
+    """Only the missing-snapshot case maps to [clone_ref_too_long]."""
+    model = _omnivoice_stub()
+    model._asr_pipe = None
+
+    def _broken(*_args, **_kwargs):
+        raise ValueError("corrupt ASR weights")
+
+    monkeypatch.setattr(model, "_load_cached_reference_asr", _broken)
+
+    with pytest.raises(ValueError, match="corrupt ASR weights") as caught:
+        model.create_voice_clone_prompt(_wav(tmp_path / "long.wav", 35), None)
+
+    assert "[clone_ref_too_long]" not in str(caught.value)
+
+
 def test_reference_within_transcript_limit_keeps_the_asr_hint(
     tmp_path, monkeypatch
 ):

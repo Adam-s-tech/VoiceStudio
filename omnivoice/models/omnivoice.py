@@ -99,6 +99,10 @@ class OmniVoiceModelAssetError(RuntimeError):
 _VOICE_CLONE_PROMPT_FORMAT_VERSION = 1
 
 
+class _ReferenceAsrNotInstalled(ValueError):
+    """No cached speech-to-text snapshot exists for implicit cloning."""
+
+
 @dataclass
 class VoiceClonePrompt:
     ref_audio_tokens: torch.Tensor  # (C, T)
@@ -480,7 +484,7 @@ class OmniVoice(PreTrainedModel):
         try:
             snapshot = snapshot_download(_DEFAULT_ASR_MODEL, local_files_only=True)
         except LocalEntryNotFoundError as exc:
-            raise ValueError(
+            raise _ReferenceAsrNotInstalled(
                 "Automatic reference transcription needs an installed speech-to-text "
                 "model. Provide a matching reference transcript, or install and select "
                 "a speech-to-text model in Model Catalogue, then try again."
@@ -844,7 +848,7 @@ class OmniVoice(PreTrainedModel):
                 logger.info("Loading cached ASR for reference transcription ...")
                 try:
                     self._load_cached_reference_asr()
-                except ValueError as exc:
+                except _ReferenceAsrNotInstalled as exc:
                     if ref_duration <= CLONE_REF_TEXT_MAX_SECONDS:
                         raise
                     # A typed transcript is refused for this length, so the
