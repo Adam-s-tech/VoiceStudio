@@ -16,6 +16,11 @@ const mocks = vi.hoisted(() => ({
   close: vi.fn(),
   /** Fake-clock milliseconds each pre-spawn step burns. */
   prespawnMs: 0,
+  /** Ports the bind preflight reports as denied (EACCES) or taken (EADDRINUSE). */
+  denied: new Set<number>(),
+  occupied: new Set<number>(),
+  /** False simulates an unbuilt runtime, so start() lands on setup_required. */
+  runtimeReadyNow: true,
 }));
 
 vi.mock('electron', () => ({ app: { isPackaged: true, getPath: () => '/unused-budget-test' } }));
@@ -23,9 +28,18 @@ vi.mock('node:child_process', () => ({ spawn: mocks.spawn }));
 vi.mock('node:net', () => ({
   createServer: () => {
     const server = Object.assign(new EventEmitter(), {
-      listen: (_options: { port: number }, done: () => void) => {
-        mocks.listen();
-        queueMicrotask(done);
+      listen: (options: { port: number }, done: () => void) => {
+        mocks.listen(options.port);
+        const code = mocks.denied.has(options.port)
+          ? 'EACCES'
+          : mocks.occupied.has(options.port)
+            ? 'EADDRINUSE'
+            : null;
+        if (code) {
+          queueMicrotask(() =>
+            server.emit('error', Object.assign(new Error('bind failed'), { code })),
+          );
+        } else queueMicrotask(done);
         return server;
       },
       address: () => ({ port: 49152 }),
@@ -45,11 +59,28 @@ vi.mock('./runtime-project', () => {
     if (mocks.prespawnMs > 0) await vi.advanceTimersByTimeAsync(mocks.prespawnMs);
   };
   return {
-    runtimeReady: async () => true,
-    runtimeCompatible: async () => true,
+    runtimeReady: async () => mocks.runtimeReadyNow,
+    runtimeCompatible: async () => false,
     runtimeDependenciesReady: async () => {
       await burn();
-      return true;
+      return mocks.runtimeReadyNow;
+    },
+    runtimeInstallInterrupted: async () => false,
+    // Stands in for uv sync: the real installer spawns a child, so its output
+    // lands in the same ring the backend's does.
+    installRuntime: async (
+      _bundle: string,
+      _project: string,
+      _uv: string | null,
+      run: (
+        command: string,
+        args: string[],
+        cwd: string,
+        env: NodeJS.ProcessEnv,
+      ) => Promise<string>,
+    ) => {
+      mocks.runtimeReadyNow = true;
+      await run('uv', ['sync'], '/unused-budget-test', {});
     },
     stageRuntimeSources: burn,
     runtimePython: () => '/runtime/python',
@@ -99,6 +130,9 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.clearAllMocks();
   mocks.prespawnMs = 0;
+  mocks.denied.clear();
+  mocks.occupied.clear();
+  mocks.runtimeReadyNow = true;
 });
 
 it('gives a freshly spawned backend its whole budget after slow pre-launch work', async () => {
@@ -171,6 +205,116 @@ it.each([
     await vi.advanceTimersByTimeAsync(11_000);
     expect(supervisor.status.stage).toBe('failed');
     expect(supervisor.status.message).toContain(expected);
+  } finally {
+    (supervisor as unknown as { child: null }).child = null;
+    await supervisor.shutdown();
+  }
+});
+
+/**
+ * A launch owns its own diagnostics. `childLog` is a ring of process output,
+ * and the previous launch — or the runtime installer, whose uv children share
+ * the same reader — leaves lines behind. A backend that then dies silently
+ * must not be handed someone else's last word.
+ */
+it('does not quote the previous backend after a restart', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+  stubEnv();
+  stubBackend(() => false);
+  const first = fakeChild();
+  mocks.spawn.mockReturnValue(first.child);
+  const supervisor = new BackendSupervisor();
+  try {
+    await supervisor.start();
+    first.stdout.emit('data', 'previous run: CUDA out of memory\r\n');
+    await vi.advanceTimersByTimeAsync(11_000);
+    expect(supervisor.status.stage).toBe('failed');
+    expect(supervisor.status.message).toContain('previous run: CUDA out of memory');
+
+    // The replacement fails silently, so it must not inherit that line.
+    mocks.spawn.mockReturnValue(fakeChild().child);
+    await supervisor.restart();
+    await vi.advanceTimersByTimeAsync(11_000);
+    expect(supervisor.status.stage).toBe('failed');
+    expect(supervisor.status.message).toContain('It printed no output.');
+    expect(supervisor.status.message).not.toContain('previous run: CUDA out of memory');
+  } finally {
+    (supervisor as unknown as { child: null }).child = null;
+    await supervisor.shutdown();
+  }
+});
+
+it('blames no backend for an attach-only wait that times out', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+  stubEnv();
+  stubBackend(() => false);
+  const first = fakeChild();
+  mocks.spawn.mockReturnValue(first.child);
+  const supervisor = new BackendSupervisor();
+  try {
+    await supervisor.start();
+    first.stdout.emit('data', 'previous run: CUDA out of memory\r\n');
+    await vi.advanceTimersByTimeAsync(11_000);
+    expect(supervisor.status.stage).toBe('failed');
+
+    // Deny the default port so port selection falls through to 4900, which
+    // answers the identity probe but never the health one. That is the
+    // attach-only wait: a finite budget, and no process of ours to quote.
+    mocks.denied.add(3900);
+    mocks.occupied.add(4900);
+    let identified = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (!url.includes(':4900') || ++identified > 1) throw new Error('never ready');
+        return new Response(JSON.stringify({ status: 'starting' }), {
+          status: 503,
+          headers: { 'x-omnivoice-backend': 'test' },
+        });
+      }),
+    );
+    await supervisor.restart();
+    expect(mocks.spawn).toHaveBeenCalledTimes(1);
+    expect(supervisor.port).toBe(4900);
+    await vi.advanceTimersByTimeAsync(11_000);
+    expect(supervisor.status.stage).toBe('failed');
+    expect(supervisor.status.message).toContain('Nothing was spawned for this attempt.');
+    expect(supervisor.status.message).not.toContain('previous run: CUDA out of memory');
+  } finally {
+    (supervisor as unknown as { child: null }).child = null;
+    await supervisor.shutdown();
+  }
+});
+
+it('does not quote the installer after a completed runtime setup', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+  stubEnv();
+  stubBackend(() => false);
+  mocks.runtimeReadyNow = false;
+  // First spawn is uv inside installRuntime, second is the real backend.
+  let spawns = 0;
+  mocks.spawn.mockImplementation(() => {
+    spawns++;
+    const made = fakeChild();
+    if (spawns === 1)
+      queueMicrotask(() => {
+        made.stdout.emit('data', 'uv: installed 412 packages\r\n');
+        made.child.emit('close', 0);
+      });
+    return made.child;
+  });
+  const supervisor = new BackendSupervisor();
+  try {
+    // No runtime yet, so the first launch asks for setup.
+    await supervisor.start();
+    expect(supervisor.status.stage).toBe('setup_required');
+    await supervisor.setupRuntime();
+    expect(mocks.spawn).toHaveBeenCalledTimes(2);
+    expect(supervisor.status.stage).toBe('starting');
+    await vi.advanceTimersByTimeAsync(11_000);
+    expect(supervisor.status.stage).toBe('failed');
+    expect(supervisor.status.message).toContain('It printed no output.');
+    expect(supervisor.status.message).not.toContain('uv: installed 412 packages');
   } finally {
     (supervisor as unknown as { child: null }).child = null;
     await supervisor.shutdown();

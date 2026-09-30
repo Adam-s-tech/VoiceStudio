@@ -510,6 +510,10 @@ export class BackendSupervisor extends EventEmitter<{
     this.startedAt = Date.now();
     this.exitCode = undefined;
     this.exitSignal = undefined;
+    // Every launch begins with an empty child-output ring. A restart must not
+    // quote the backend it just killed, and a completed runtime install must
+    // not quote the installer — setupRuntime's uv children share this ring.
+    this.childLog.length = 0;
     this.setStage('attaching', { managed: false, message: undefined });
     try {
       if (await this.probe()) {
@@ -1168,16 +1172,28 @@ export class BackendSupervisor extends EventEmitter<{
       }
       if (Date.now() > deadline) {
         this.generation++;
+        // killChild() nulls this.child, so record whether this launch owned a
+        // process *before* tearing it down. Checking afterwards would
+        // suppress the one diagnostic that matters — a managed backend that
+        // died silently — and would let an attach-only wait blame output from
+        // a backend this attempt never started.
+        // killChild() nulls this.child, so record whether this launch owned a
+        // process *before* tearing it down. Checking afterwards would
+        // suppress the one diagnostic that matters — a managed backend that
+        // died silently — and would let an attach-only wait blame output from
+        // a backend this attempt never started.
+        const owned = this.child !== null;
         await this.killChild();
-        // "Check the log above" is unactionable when the backend printed
-        // nothing (a missing interpreter fails silently) or its output has
-        // rolled past the 200-line ring, so carry the last line inline. This
-        // mirrors the `crashed` message, which already does.
-        const lastLine = this.childLog.at(-1);
+        const lastLine = owned ? this.childLog.at(-1) : undefined;
         this.setStage('failed', {
           message:
             `Backend did not answer on port ${this.port} within ${Math.round(budgetMs / 1000)} s ` +
-            `(OMNIVOICE_STARTUP_BUDGET_S).${lastLine ? ` Last output: ${lastLine}` : ' It printed no output.'}`,
+            '(OMNIVOICE_STARTUP_BUDGET_S).' +
+            (!owned
+              ? ' Nothing was spawned for this attempt.'
+              : lastLine
+                ? ` Last output: ${lastLine}`
+                : ' It printed no output.'),
         });
         return;
       }
