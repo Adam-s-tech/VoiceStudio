@@ -140,6 +140,16 @@ it('names the program and runtime repair when the OS rejects a spawn', () => {
   expect(message).toContain('repair the local runtime');
 });
 
+it('points a custom backend command at its own executable', () => {
+  const message = spawnFailureMessage(
+    '/opt/custom/python',
+    Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }),
+    { runtimeOwned: false },
+  );
+  expect(message).toContain('can be launched');
+  expect(message).not.toContain('local runtime');
+});
+
 it('keeps a plain spawn failure message free of install advice', () => {
   expect(spawnFailureMessage('uv', new Error('Runtime setup exited with code 1'))).toBe(
     'Could not start uv: Runtime setup exited with code 1',

@@ -384,15 +384,21 @@ export function managedBackendSpawnOptions(
 }
 
 /** A failed spawn names the program, not just the OS error. Windows denies a
- *  blocked executable with a bare `spawn UNKNOWN`, which the runtime install
- *  owns; the message points at it instead of looking like a mystery (#2440). */
-export function spawnFailureMessage(command: string, error: unknown): string {
+ *  blocked executable with a bare `spawn UNKNOWN`; runtime-owned launches get
+ *  the install that owns the program, while custom `OMNIVOICE_BACKEND_CMD`
+ *  launches point at their own executable instead (#2440). */
+export function spawnFailureMessage(
+  command: string,
+  error: unknown,
+  { runtimeOwned = true }: { runtimeOwned?: boolean } = {},
+): string {
   const detail = errorMessage(error);
   const code = (error as NodeJS.ErrnoException | undefined)?.code;
   const launchRejected = ['ENOENT', 'UNKNOWN', 'EACCES', 'EPERM'].includes(code ?? '');
-  return launchRejected
+  if (!launchRejected) return `Could not start ${command}: ${detail}`;
+  return runtimeOwned
     ? `Could not start ${command}: ${detail}. Install or repair the local runtime, then restart VoiceStudio.`
-    : `Could not start ${command}: ${detail}`;
+    : `Could not start ${command}: ${detail}. Check that the program exists and can be launched, then try again.`;
 }
 
 /** The startup-budget failure carries what the backend last printed, so a
@@ -1021,6 +1027,9 @@ export class BackendSupervisor extends EventEmitter<{
   private spawnChild(plan: SpawnPlan, gen: number): void {
     this.crashes.resetCapture();
     const [command, ...args] = plan.argv;
+    // A custom command bypasses the managed runtime; its own executable is the
+    // only thing that can be repaired.
+    const runtimeOwned = !parseBackendCmdOverride(process.env.OMNIVOICE_BACKEND_CMD);
     if (!command) {
       this.setStage('failed', { message: 'Empty backend command' });
       return;
@@ -1040,7 +1049,7 @@ export class BackendSupervisor extends EventEmitter<{
       });
     } catch (err) {
       this.setStage('failed', {
-        message: spawnFailureMessage(command, err),
+        message: spawnFailureMessage(command, err, { runtimeOwned }),
       });
       return;
     }
@@ -1068,7 +1077,7 @@ export class BackendSupervisor extends EventEmitter<{
       if (gen !== this.generation) return;
       this.child = null;
       this.setStage('failed', {
-        message: spawnFailureMessage(command, err),
+        message: spawnFailureMessage(command, err, { runtimeOwned }),
       });
     });
     child.on('exit', (code, signal) => {
@@ -1168,10 +1177,12 @@ export class BackendSupervisor extends EventEmitter<{
         return;
       }
       if (Date.now() > deadline) {
+        // Capture the last line before teardown can append shutdown output.
+        const lastOutput = this.log.at(-1);
         this.generation++;
         await this.killChild();
         this.setStage('failed', {
-          message: startupTimeoutMessage(this.port, budgetMs, this.log.at(-1)),
+          message: startupTimeoutMessage(this.port, budgetMs, lastOutput),
         });
         return;
       }
