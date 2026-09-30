@@ -89,14 +89,17 @@ receive a stable `docs_topic` and a safe fallback message, never private excepti
 | Topic | Recovery |
 | --- | --- |
 | `GPU_ARCH_UNSUPPORTED` | The installed PyTorch build cannot run kernels on this GPU. Select CPU in Settings → Performance & Device, or use a PyTorch build compatible with the GPU. |
+| `HOST_MEMORY_EXHAUSTED` | The machine ran out of system memory, so the engine could not finish. Close other memory-heavy apps, unload unused models with **Flush models**, render a shorter passage, or select a lighter TTS engine. On Windows, enlarging the page file also helps. A CPU-only machine has no GPU memory to free — this is RAM, not VRAM. |
 | `WINDOWS_APP_CONTROL_BLOCKED` | Windows application control blocked a required file. Ask the administrator to allow the trusted VoiceStudio runtime, then restart the app. |
 | `AUDIO_IO_FAILED` | Check the audio format, free disk space, and file permissions; review the folder in Settings → Storage. |
 | `HF_MIRROR_UNREACHABLE` | The configured Hugging Face mirror could not be reached while fetching the engine's weights. Restore the official endpoint in Settings → Models → Hugging Face mirror, then retry. |
 
 Unsupported GPU builds and application-control blocks are terminal for the current
 stream: the client does not automatically render the whole passage again. After
-correcting the cause, start a new generation. Unknown failures retain generic
-guidance; a report with only `RuntimeError` does not establish which cause applies.
+correcting the cause, start a new generation. Host RAM exhaustion is *not*
+terminal — freeing memory genuinely repairs it, so a retry can succeed.
+Unknown failures retain generic guidance; a report with only `RuntimeError` does
+not establish which cause applies.
 
 An engine downloads its weights the first time it is used, so the first
 generation with a newly selected engine can fail on the download rather than on

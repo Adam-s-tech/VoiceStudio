@@ -115,6 +115,13 @@ def no_audio_track_detail() -> dict[str, str]:
 _HINTS: dict[str, str] = {
     "GPU_OOM": "Close other GPU-heavy apps or unload models, then retry. You can also choose CPU in Settings → Performance & Device or select a smaller TTS engine.",
     "GPU_ARCH_UNSUPPORTED": "This PyTorch build does not support your GPU. Choose CPU in Settings → Performance & Device, or install a compatible PyTorch build.",
+    # #2462: the HOST ran out of RAM, not a GPU. On a CPU-only machine there is
+    # no device to spill to, so *every* out-of-memory failure there is this
+    # class — and GPU_OOM's "close other GPU-heavy apps … or choose CPU" is
+    # nonsense on a machine already running on CPU, which is why the reporter
+    # was told to go and check their engine instead. A separate class (not a
+    # wider GPU_OOM) because the remedy differs: free system RAM, not VRAM.
+    "HOST_MEMORY_EXHAUSTED": "The machine ran out of memory during generation. Close other memory-heavy apps and browser tabs, unload models you are not using with Flush models, render a shorter passage, or select a lighter TTS engine. On Windows, enlarging the page file also gives a large engine room to load.",
     "WORKER_AT_CAPACITY": "Wait for a running job on that worker to finish, or choose another available worker and retry.",
     "MODEL_NOT_INSTALLED": "Install or enable this engine on the worker machine, then refresh its capabilities and retry.",
     "MODEL_NOT_DOWNLOADED": "Open Models, install this model on the selected worker, then retry when the download completes.",
@@ -370,6 +377,12 @@ _CONTEXT_FREE_HINT_CLASSES = frozenset({
     # Device allocator signatures are specific enough to attach the shared
     # recovery without exposing CUDA's process table or filesystem paths.
     "GPU_OOM",
+    # #2462: an allocator/OS "not enough memory" string — a machine signature
+    # nothing else produces, and the ONLY memory class a CPU-only host can
+    # produce. Without it, every OOM on a machine with no GPU reached the user
+    # as the bare "Generation failed. Check the selected engine and try
+    # again." with no hint, and the reporter could only file a RuntimeError.
+    "HOST_MEMORY_EXHAUSTED",
     # #2177: CUDA's own "no kernel image is available for execution" — a driver
     # sentence no other failure produces, and the one class a streaming render
     # on an unsupported card hits every single time. The non-streaming path has
@@ -495,6 +508,60 @@ def is_gpu_oom(error: BaseException | str) -> bool:
     return False
 
 
+# Host-RAM exhaustion — the machine ran out of system memory, not a GPU (#2462).
+# Every entry is a machine string from an allocator or the OS, never a phrase a
+# dependency writes in prose: attaching a "free some RAM" remedy to an unrelated
+# failure is the #1943 failure mode, and the trigger has to be as unmistakable
+# as the device signatures above are.
+_HOST_OOM_SIGNATURES = (
+    # torch's own CPU allocator, which is what a CPU render produces:
+    #   RuntimeError: [enforce fail at alloc_cpu.cpp:117] . DefaultCPUAllocator:
+    #   not enough memory: you tried to allocate 2000000000 bytes.
+    "defaultcpuallocator: not enough memory",
+    "not enough memory: you tried to allocate",
+    # c10/ATen allocation failures.
+    "can't allocate memory",
+    "cannot allocate memory",
+    # std::bad_alloc — the C++ allocator's own exception, which arrives as a
+    # RuntimeError because torch wraps it.
+    "std::bad_alloc",
+    # Windows WinError 8. Deliberately NOT matched on a bare "not enough
+    # memory": the paging-file class (WinError 1455, "the paging file is too
+    # small for this operation to complete") has its own, more specific remedy
+    # and must keep it.
+    "not enough memory to continue the execution of the program",
+)
+
+
+def is_host_oom(error: BaseException | str) -> bool:
+    """Recognize host-RAM exhaustion through wrappers without importing torch.
+
+    The twin of :func:`is_gpu_oom` for the other memory device. Kept separate
+    rather than folded into that one because the recovery differs: freeing
+    VRAM cannot help a machine with no GPU, and the existing OOM retry in
+    ``tts_backend`` calls ``free_vram()`` — advice a CPU-only host cannot
+    follow (#2462). Never raises.
+    """
+    pending: list[BaseException] = [error] if isinstance(error, BaseException) else []
+    seen: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        if type(current).__name__ == "MemoryError":
+            return True
+        if any(signature in str(current).lower() for signature in _HOST_OOM_SIGNATURES):
+            return True
+        if current.__cause__ is not None:
+            pending.append(current.__cause__)
+        if current.__context__ is not None:
+            pending.append(current.__context__)
+    if isinstance(error, str):
+        return any(signature in error.lower() for signature in _HOST_OOM_SIGNATURES)
+    return False
+
+
 def classify(reason: str) -> str:
     """Map a failure reason to a docs-taxonomy key, or "" when unknown.
 
@@ -504,6 +571,13 @@ def classify(reason: str) -> str:
     low = (reason or "").lower()
     if is_gpu_oom(low):
         return "GPU_OOM"
+    # #2462: the host itself ran out of RAM. After the device branch above, so a
+    # real GPU OOM keeps GPU_OOM (and its VRAM remedy) rather than being told to
+    # close memory-heavy apps; before everything else, because on a CPU-only
+    # machine this is the ONLY memory class that can occur and it used to fall
+    # all the way through to the unclassified floor message.
+    if is_host_oom(low):
+        return "HOST_MEMORY_EXHAUSTED"
     # #2177: the GPU's compute capability isn't in this torch build's arch list,
     # so CUDA refuses to launch kernels. Checked after the OOM branch so real
     # memory pressure is never relabelled, and matched on CUDA's own sentence —

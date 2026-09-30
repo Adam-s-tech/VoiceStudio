@@ -54,6 +54,19 @@ _CLASS_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
         "hip out of memory",
         "out of memory on device",
     )),
+    # #2462: the host ran out of system RAM. Mirrors
+    # `failure._HOST_OOM_SIGNATURES` — kept as literals here so a journal
+    # classification never depends on importing the taxonomy, and pinned to
+    # agree with it by tests/test_host_memory_failure_2462.py. After GPU_OOM so
+    # a device OOM keeps its own class, exactly as `classify` orders them.
+    ("HOST_MEMORY_EXHAUSTED", (
+        "defaultcpuallocator: not enough memory",
+        "not enough memory: you tried to allocate",
+        "can't allocate memory",
+        "cannot allocate memory",
+        "std::bad_alloc",
+        "not enough memory to continue the execution of the program",
+    )),
     ("PYANNOTE_LICENSE_REQUIRED", (
         "pyannote",  # only meaningful combined with an auth marker — see classify()
     )),
