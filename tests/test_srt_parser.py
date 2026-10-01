@@ -49,6 +49,16 @@ Dotty.
     assert result.segments[0]["end"] == 3.25
 
 
+@pytest.mark.parametrize("separator", [",", "."])
+def test_short_millisecond_fields_are_milliseconds(separator):
+    # Leniently accepted 1- and 2-digit fields are millisecond counts,
+    # not decimal fractions of a second.
+    subtitle = f"1\n00:00:01{separator}5 --> 00:00:02{separator}50\nHello\n"
+    segment = parse_srt(subtitle).segments[0]
+    assert segment["start"] == pytest.approx(1.005)
+    assert segment["end"] == pytest.approx(2.050)
+
+
 def test_handles_utf8_bom_at_start_of_file():
     srt = "﻿1\n00:00:01,000 --> 00:00:02,000\nBOM cue.\n"
     result = parse_srt(srt)
