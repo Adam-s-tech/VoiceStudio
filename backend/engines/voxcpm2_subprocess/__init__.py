@@ -78,13 +78,14 @@ class VoxCPM2SubprocessBackend(SubprocessBackend):
     @property
     def recv_timeout_s(self) -> float:
         # A cold load downloads several GB of weights; the sidecar heartbeats
-        # progress frames meanwhile, and each one re-arms this deadline.
+        # progress frames meanwhile (also while generating, so a slow CPU render is
+        # not mistaken for a hang), and each one re-arms this deadline.
         try:
-            v = float(os.environ.get("OMNIVOICE_VOXCPM2_RECV_TIMEOUT_S", "180"))
+            v = float(os.environ.get("OMNIVOICE_VOXCPM2_RECV_TIMEOUT_S", "900"))
         except (TypeError, ValueError):
-            return 180.0
+            return 900.0
         if not math.isfinite(v):  # reject inf/nan so the deadline can't be disabled
-            return 180.0
+            return 900.0
         return max(30.0, v)
 
     @property

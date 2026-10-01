@@ -10,6 +10,7 @@ import json
 import re
 import struct
 import sys
+import threading
 import types
 from pathlib import Path
 
@@ -64,8 +65,8 @@ def test_voice_design_uses_native_control_prefix(monkeypatch):
         "prompt_wav_path": None,
         "prompt_text": None,
         "cfg_value": 2.0,
-        "max_len": 128,
-        "inference_timesteps": 4,
+        "max_len": 256,
+        "inference_timesteps": 10,
         "retry_badcase": False,
         "retry_badcase_max_times": 1,
     }
@@ -89,7 +90,7 @@ def test_style_clone_does_not_use_continuation_prompt(monkeypatch, tmp_path):
     assert calls[-1] == {
         "text": "(calm)hi",
         "cfg_value": 3.0,
-        "max_len": 128,
+        "max_len": 256,
         "inference_timesteps": 12,
         "reference_wav_path": str(ref),
         "prompt_wav_path": None,
@@ -103,14 +104,16 @@ def test_generation_work_is_bounded_for_short_and_long_text(monkeypatch):
     sidecar = _load_sidecar(monkeypatch, [])
 
     short = sidecar.generation_kwargs("hello", num_step="invalid")
-    assert short["max_len"] == 128
-    assert short["inference_timesteps"] == 4
+    assert short["max_len"] == 256
+    assert short["inference_timesteps"] == 10
     assert short["retry_badcase"] is False
     assert short["retry_badcase_max_times"] == 1
 
     long = sidecar.generation_kwargs("x" * 2000, num_step=100)
-    assert long["max_len"] == 2048
-    assert long["inference_timesteps"] == 30
+    assert long["max_len"] == 4096
+    # The requested quality preset is honoured up to the engine's 64-step range.
+    assert sidecar.generation_kwargs("hi", num_step=32)["inference_timesteps"] == 32
+    assert long["inference_timesteps"] == 64
 
     negative = sidecar.generation_kwargs("hello", num_step=-10)
     assert negative["inference_timesteps"] == 1
@@ -136,7 +139,7 @@ def test_loads_the_configured_checkpoint_without_the_denoiser(monkeypatch):
 
 @pytest.mark.parametrize(
     ("value", "expected"),
-    [(None, 180.0), ("bad", 180.0), ("nan", 180.0), ("inf", 180.0), ("1", 30.0), ("240", 240.0)],
+    [(None, 900.0), ("bad", 900.0), ("nan", 900.0), ("inf", 900.0), ("1", 30.0), ("240", 240.0)],
 )
 def test_sidecar_receive_timeout_is_bounded(monkeypatch, value, expected):
     from engines.voxcpm2_subprocess import VoxCPM2SubprocessBackend
@@ -318,3 +321,32 @@ def test_both_adapters_follow_native_modes(monkeypatch, text, options, expected_
     assert sidecar_call['prompt_wav_path'] == (options['ref_audio'] if continuation else None)
     assert sidecar_call['prompt_text'] == (options['ref_text'] if continuation else None)
     assert engine.supports_voice_design
+
+
+def test_generation_emits_heartbeats_so_a_slow_render_is_not_killed(monkeypatch):
+    """Review (Greptile P1): a CPU / small-GPU render can outlast any fixed recv
+    deadline, so the sidecar must keep sending progress frames while generating
+    (each one re-arms the parent's watchdog) instead of going silent."""
+    import json as _json
+    import struct
+
+    sidecar = _load_sidecar(monkeypatch, [])
+    monkeypatch.setattr(sidecar, "_HEARTBEAT_S", 0.01)
+    model = sidecar._load_model(io.BytesIO())
+    real_generate = type(model).generate
+
+    def generate(self, **kw):
+        threading.Event().wait(0.2)  # a render that outlasts several heartbeats
+        return real_generate(self, **kw)
+
+    monkeypatch.setattr(type(model), "generate", generate)
+    out = io.BytesIO()
+    sidecar._handle_synthesize({"text": "hello"}, out)
+
+    data, ops = out.getvalue(), []
+    while data:
+        (n,) = struct.unpack("!I", data[:4])
+        ops.append(_json.loads(data[4 : 4 + n])["op"])
+        data = data[4 + n :]
+    assert ops.count("progress") >= 2, ops
+    assert ops[-1] == "audio"
