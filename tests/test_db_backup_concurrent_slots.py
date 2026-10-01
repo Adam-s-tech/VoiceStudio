@@ -3,10 +3,11 @@ import concurrent.futures
 import sqlite3
 import threading
 
-from core import db_backup
 
 
 def test_concurrent_snapshots_cannot_share_a_recovery_slot(tmp_path, monkeypatch):
+    from core import db_backup
+
     path = tmp_path / 'voices.db'
     with sqlite3.connect(path) as connection:
         connection.execute('CREATE TABLE voices(name TEXT)')
@@ -32,6 +33,8 @@ def test_concurrent_snapshots_cannot_share_a_recovery_slot(tmp_path, monkeypatch
 
 
 def test_abandoned_reservation_is_not_reused_or_listed(tmp_path):
+    from core import db_backup
+
     path = tmp_path / 'voices.db'
     with sqlite3.connect(path) as connection:
         connection.execute('CREATE TABLE voices(name TEXT)')
@@ -44,6 +47,8 @@ def test_abandoned_reservation_is_not_reused_or_listed(tmp_path):
 
 
 def test_failed_copy_releases_its_reservation(tmp_path, monkeypatch):
+    from core import db_backup
+
     import pytest
 
     path = tmp_path / 'voices.db'
@@ -63,22 +68,29 @@ def test_failed_copy_releases_its_reservation(tmp_path, monkeypatch):
     assert db_backup.list_backups(str(path)) == []
 
 
-def test_abandoned_reservations_are_pruned_but_live_ones_kept(tmp_path):
+def test_reservations_are_pruned_only_when_the_owner_is_gone(tmp_path, monkeypatch):
     import os
     import time
 
+    from core import db_backup
+
     path = tmp_path / 'voices.db'
     path.write_bytes(b'')
-    base = f'{path}.backup-1.0-'
-    done = tmp_path / 'voices.db.backup-1.0-1'
-    done.write_bytes(b'x')
-    (tmp_path / 'voices.db.backup-1.0-1.reserve').write_bytes(b'')       # snapshot landed
-    old = tmp_path / 'voices.db.backup-1.0-2.reserve'                    # dead writer
-    old.write_bytes(b'')
+    dead = tmp_path / 'voices.db.backup-1.0-1.reserve'
+    dead.write_text('999999')
+    live_old = tmp_path / 'voices.db.backup-1.0-2.reserve'   # owner alive, however old
+    live_old.write_text('4242')
+    mine = tmp_path / 'voices.db.backup-1.0-3.reserve'
+    mine.write_text(str(os.getpid()))
+    ownerless_old = tmp_path / 'voices.db.backup-1.0-4.reserve'
+    ownerless_old.write_bytes(b'')
+    ownerless_fresh = tmp_path / 'voices.db.backup-1.0-5.reserve'
+    ownerless_fresh.write_bytes(b'')
     past = time.time() - 48 * 3600
-    os.utime(old, (past, past))
-    live = tmp_path / 'voices.db.backup-1.0-3.reserve'                   # in flight
-    live.write_bytes(b'')
+    for p in (dead, live_old, ownerless_old):
+        os.utime(p, (past, past))
+    monkeypatch.setattr(db_backup, '_pid_alive', lambda pid: pid == 4242)
     db_backup.prune_backups(str(path))
-    assert sorted(p.name for p in tmp_path.iterdir() if p.name.endswith('.reserve')) == [live.name]
-    assert done.exists() and base
+    assert sorted(p.name for p in tmp_path.iterdir() if p.name.endswith('.reserve')) == sorted(
+        [live_old.name, mine.name, ownerless_fresh.name]
+    )

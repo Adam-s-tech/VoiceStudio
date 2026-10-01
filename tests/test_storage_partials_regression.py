@@ -136,3 +136,28 @@ def test_transient_installed_entry_error_preserves_category_ownership(tmp_path, 
     other = next(c for c in categories["data"]["children"] if c["id"] == "other")
     assert other["bytes"] == 0
     assert any(w["kind"] == "unreadable" and w["path"] == str(installed) for w in report["warnings"])
+
+
+def test_unreadable_venv_is_not_treated_as_missing(tmp_path, monkeypatch):
+    from services import storage_report
+    data = tmp_path / "data"
+    engines = data / "engines"
+    installed = engines / "installed"
+    (installed / ".venv").mkdir(parents=True)
+    (installed / "model.bin").write_bytes(b"installed bytes")
+    venv = str(installed / ".venv")
+    real_stat = storage_report.os.stat
+
+    def stat(path, *args, **kwargs):
+        if str(path) == venv:
+            raise PermissionError("traversal denied")
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(storage_report.os, "stat", stat)
+    report = storage_report.build_report(data_dir=str(data), engines_dir=str(engines),
+        hf_cache_dir=str(tmp_path / "hf"), temp_root=str(tmp_path / "tmp"))
+    categories = {c["id"]: c for c in report["categories"]}
+    assert not categories["engine_venvs"]["complete"]
+    other = next(c for c in categories["data"]["children"] if c["id"] == "other")
+    assert other["bytes"] == 0  # not silently reclassified as application data
+    assert any(w["kind"] == "unreadable" and w["path"] == str(installed) for w in report["warnings"])

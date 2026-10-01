@@ -33,10 +33,11 @@ export function portableFilename(value: string, fallback = 'file', maxBytes = 20
     stem = name.slice(0, dot);
     ext = name.slice(dot);
   }
-  stem = stem.replace(/[ .]+$/, '');
+  const budget = Math.max(2, maxBytes - encoder.encode(ext).length);
+  const fit = (text: string) => truncateBytes(text, budget).replace(/[ .]+$/, '');
+  stem = fit(stem) || fallback;
   if (!stem.replace(/[_ ]/g, '')) stem = fallback;
-  if (RESERVED.has(stem.split('.')[0].toUpperCase())) stem = `_${stem}`;
-  const budget = Math.max(1, maxBytes - encoder.encode(ext).length);
-  stem = truncateBytes(stem, budget).replace(/[ .]+$/, '') || fallback;
+  // Check device names AFTER truncation: cutting a long stem can expose "CON".
+  if (RESERVED.has(stem.split('.')[0].trimEnd().toUpperCase())) stem = fit(`_${stem}`);
   return stem + ext;
 }

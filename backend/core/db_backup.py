@@ -129,7 +129,10 @@ def _reserve_snapshot(db_path: str, safe_version: str) -> tuple[str, str]:
         except FileExistsError:
             counter += 1
             continue
-        os.close(fd)
+        try:
+            os.write(fd, str(os.getpid()).encode("ascii"))  # ownership for stale_reservations
+        finally:
+            os.close(fd)
         if os.path.exists(target):
             os.unlink(reservation)
             counter += 1
@@ -137,13 +140,28 @@ def _reserve_snapshot(db_path: str, safe_version: str) -> tuple[str, str]:
         return target, reservation
 
 
-#: A reservation older than this with no finished backup belongs to a dead writer.
+#: Fallback only for a reservation whose owner PID was never recorded (a writer
+#: that died between creating the file and writing its PID).
 _RESERVATION_MAX_AGE_S = 24 * 3600
 
 
+def _reservation_owner(path: str) -> int | None:
+    try:
+        with open(path, "r", encoding="ascii") as fh:
+            pid = int(fh.read().strip())
+    except (OSError, ValueError):
+        return None
+    return pid if pid > 0 else None
+
+
 def stale_reservations(db_path: str) -> list[str]:
-    """``.reserve`` markers left by a crashed writer (or whose snapshot already
-    landed). Fresh ones may belong to a live snapshot and are never listed."""
+    """``.reserve`` markers whose writer is confirmed gone.
+
+    A reservation owned by a live process (including this one, other threads)
+    is never listed, however old: a snapshot can outlive a long suspend, and
+    removing its marker would let another startup claim the same counter.
+    ``_pid_alive`` errs toward "alive". Only a marker with no recorded owner
+    falls back to an age check."""
     directory = os.path.dirname(os.path.abspath(db_path)) or "."
     base = os.path.basename(db_path)
     try:
@@ -155,11 +173,15 @@ def stale_reservations(db_path: str) -> list[str]:
     for name in names:
         if not (name.startswith(base + ".backup-") and name.endswith(".reserve")):
             continue
-        target = name[: -len(".reserve")]
-        if not _BACKUP_SUFFIX_RE.fullmatch(target[len(base):]):
+        if not _BACKUP_SUFFIX_RE.fullmatch(name[: -len(".reserve")][len(base):]):
             continue
         path = os.path.join(directory, name)
-        if os.path.exists(os.path.join(directory, target)) or now - _mtime(path) > _RESERVATION_MAX_AGE_S:
+        owner = _reservation_owner(path)
+        if owner is not None:
+            if owner == os.getpid() or _pid_alive(owner):
+                continue
+            stale.append(path)
+        elif now - _mtime(path) > _RESERVATION_MAX_AGE_S:
             stale.append(path)
     return stale
 
@@ -261,7 +283,7 @@ def snapshot_before_migration(db_path: str, version: str) -> str | None:
             try:
                 os.remove(tmp)
             except OSError:
-                pass
+                pass  # best effort: the torn temp is pruned later; the backup error below matters more
             raise
         finally:
             src.close()
@@ -271,7 +293,7 @@ def snapshot_before_migration(db_path: str, version: str) -> str | None:
             now = time.time()
             os.utime(target, (now, now))
         except OSError:
-            pass
+            pass  # ordering hint only; the snapshot itself is already in place
         logger.info("Pre-migration DB backup written: %s (%.1f MB)", target, size / (1024 * 1024))
         prune_backups(db_path)
         return target
@@ -279,4 +301,4 @@ def snapshot_before_migration(db_path: str, version: str) -> str | None:
         try:
             os.unlink(reservation)
         except OSError:
-            pass
+            pass  # marker already gone; pruning handles any leftover

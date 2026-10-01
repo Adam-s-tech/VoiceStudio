@@ -254,7 +254,7 @@ def _invalidate_done(part: str) -> None:
     try:
         os.remove(_manifest_path(part))
     except FileNotFoundError:
-        pass
+        pass  # already absent: the goal of invalidation is met
 
 
 def _preallocate(part: str, size: int) -> None:

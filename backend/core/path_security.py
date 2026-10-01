@@ -68,13 +68,17 @@ def portable_filename(value: object, default: str = "file", max_bytes: int = 200
         stem, ext = name, ""
     else:
         ext = "." + ext
-    stem = stem.rstrip(" .")
+    budget = max(2, max_bytes - len(ext.encode("utf-8")))
+
+    def _fit(text: str) -> str:
+        return text.encode("utf-8")[:budget].decode("utf-8", "ignore").rstrip(" .")
+
+    stem = _fit(stem) or default
     if not stem.strip("_ "):
         stem = default
-    if stem.split(".", 1)[0].upper() in _WINDOWS_RESERVED_NAMES:
-        stem = "_" + stem
-    budget = max(1, max_bytes - len(ext.encode("utf-8")))
-    stem = stem.encode("utf-8")[:budget].decode("utf-8", "ignore").rstrip(" .") or default
+    # Check device names AFTER truncation: cutting a long stem can expose "CON".
+    if stem.split(".", 1)[0].rstrip().upper() in _WINDOWS_RESERVED_NAMES:
+        stem = _fit("_" + stem)
     return stem + ext
 
 

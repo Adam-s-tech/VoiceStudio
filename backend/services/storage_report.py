@@ -23,6 +23,7 @@ from __future__ import annotations
 import glob
 import os
 import shutil
+import stat
 import sys
 import tempfile
 import threading
@@ -60,6 +61,16 @@ def default_engines_dir() -> str:
     from core.config import DATA_DIR
 
     return str(Path(DATA_DIR) / "engines")
+
+
+def _has_venv(entry_path: str) -> bool:
+    """True when ``<entry>/.venv`` is a directory. Only a *missing* path means
+    "no venv"; a permission or I/O error propagates so the caller can mark the
+    scan incomplete instead of silently reclassifying an installed engine."""
+    try:
+        return stat.S_ISDIR(os.stat(os.path.join(entry_path, ".venv")).st_mode)
+    except (FileNotFoundError, NotADirectoryError):
+        return False
 
 
 def _engines_child_name(engines_dir: str, data_dir: str) -> str | None:
@@ -281,7 +292,7 @@ def build_report(
         # the entry. Persistently unknown ownership remains an incomplete scan.
         for _ in range(2):
             try:
-                if e.is_dir(follow_symlinks=False) and os.path.isdir(os.path.join(e.path, ".venv")):
+                if e.is_dir(follow_symlinks=False) and _has_venv(e.path):
                     engine_dirs.append(e.path)
                 break
             except OSError:

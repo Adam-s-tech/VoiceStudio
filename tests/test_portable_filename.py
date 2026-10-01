@@ -4,8 +4,6 @@ import re
 
 import pytest
 
-from core.path_security import portable_filename
-
 BACKEND = pathlib.Path(__file__).resolve().parents[1] / "backend"
 
 
@@ -23,10 +21,22 @@ BACKEND = pathlib.Path(__file__).resolve().parents[1] / "backend"
     ],
 )
 def test_portable_filename_repairs_windows_hostile_names(raw, expected):
+    from core.path_security import portable_filename
+
     assert portable_filename(raw) == expected
 
 
+def test_reserved_device_name_exposed_by_truncation_is_still_repaired():
+    from core.path_security import portable_filename
+
+    name = portable_filename("CON" + " " * 197 + "x.wav")
+    assert name.split(".")[0].upper() != "CON" and name.endswith(".wav")
+    assert len(name.encode("utf-8")) <= 200
+
+
 def test_portable_filename_truncates_by_bytes_and_keeps_extension():
+    from core.path_security import portable_filename
+
     name = portable_filename("日本語" * 60 + ".mp4")
     assert len(name.encode("utf-8")) <= 200
     assert name.endswith(".mp4") and "�" not in name

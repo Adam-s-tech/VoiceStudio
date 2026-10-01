@@ -15,6 +15,7 @@ Guarantees:
 """
 from __future__ import annotations
 
+import errno
 import os
 import platform
 import re
@@ -275,8 +276,14 @@ _HF_CONTEXT_MARKERS = (
 
 
 _DISK_FULL_SIGNATURES = (
-    "errno 28", "no space left", "errno 122", "disk quota exceeded",
+    "errno 28", "no space left",
+    # Linux says "Disk quota exceeded"; macOS says "Disc quota exceeded".
+    "disk quota exceeded", "disc quota exceeded",
     "winerror 112", "winerror 39", "not enough space on the disk",
+)
+# EDQUOT is 122 on Linux and 69 on macOS (absent on Windows) — use the platform's.
+_DISK_FULL_ERRNOS = frozenset(
+    n for n in (getattr(errno, "ENOSPC", None), getattr(errno, "EDQUOT", None)) if n is not None
 )
 
 
@@ -294,7 +301,7 @@ def is_disk_full_error(reason: "BaseException | str | None") -> bool:
             exc: "BaseException | None" = reason
             while exc is not None and id(exc) not in seen:
                 seen.add(id(exc))
-                if getattr(exc, "errno", None) in (28, 122) or getattr(exc, "winerror", None) in (39, 112):
+                if getattr(exc, "errno", None) in _DISK_FULL_ERRNOS or getattr(exc, "winerror", None) in (39, 112):
                     return True
                 if any(sig in str(exc).lower() for sig in _DISK_FULL_SIGNATURES):
                     return True
