@@ -396,7 +396,7 @@ def test_indextts_inspects_the_managed_default_venv_too(tmp_path, monkeypatch):
     assert IndexTTS2Backend.runtime_compute_profile(caps)["routing_status"] == "cpu_fallback"
 
 
-def test_linux_intel_arc_is_found_without_a_vram_figure(tmp_path):
+def test_linux_intel_arc_is_found_without_a_vram_figure(tmp_path, symlink_or_skip):
     """i915/xe expose no mem_info_vram_total, so Arc used to read 0 GB and be
     dropped as noise. A card behind a bridge is discrete; the iGPU at 00:02.0
     is not."""
@@ -406,7 +406,7 @@ def test_linux_intel_arc_is_found_without_a_vram_figure(tmp_path):
         (pci / name).mkdir(parents=True)
     for card, bdf in (("card0", "0000:00:02.0"), ("card1", "0000:03:00.0")):
         (tmp_path / card).mkdir()
-        (tmp_path / card / "device").symlink_to(pci / bdf)
+        symlink_or_skip(tmp_path / card / "device", pci / bdf, target_is_directory=True)
         (pci / bdf / "vendor").write_text("0x8086\n")
         (pci / bdf / "device").write_text("0x56a0\n")
     gpus = inv._read_linux(str(tmp_path))
