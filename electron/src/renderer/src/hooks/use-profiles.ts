@@ -28,6 +28,7 @@ import { readDraft, writeDraft } from '@/features/design/design-draft';
 import { useBackendStatus } from './use-backend-status';
 
 const PROFILES_STALE_MS = 30_000;
+const DELETION_CONFIRMATION_TIMEOUT_MS = 30_000;
 const deletionConfirmations = new WeakMap<QueryClient, Promise<void>>();
 
 export function useProfiles(): UseQueryResult<Profile[]> {
@@ -128,12 +129,46 @@ export function useDeleteProfile(): UseMutationResult<void, Error, string> {
           // Confirm absence before clearing state; a rollback or unreachable
           // backend must preserve the user's selected voice.
           await queryClient.cancelQueries({ queryKey: queryKeys.profiles });
-          const profiles = await queryClient.fetchQuery({
-            queryKey: queryKeys.profiles,
-            queryFn: listProfiles,
-            staleTime: 0,
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const clearTimer = () => {
+            if (timer !== undefined) clearTimeout(timer);
+            timer = undefined;
+          };
+          const trackRequest = () => {
+            if (originalQuery.state.fetchStatus !== 'fetching') {
+              clearTimer();
+            } else if (timer === undefined) {
+              timer = setTimeout(() => {
+                // Cancel this lifecycle only; a cleared cache may contain a
+                // replacement profiles query. Unknown absence keeps selections.
+                if (
+                  queryClient.getQueryCache().find({ queryKey: queryKeys.profiles }) ===
+                    originalQuery &&
+                  originalQuery.state.fetchStatus === 'fetching'
+                ) {
+                  void originalQuery.cancel();
+                }
+              }, DELETION_CONFIRMATION_TIMEOUT_MS);
+            }
+          };
+          const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+            if (event.query === originalQuery) trackRequest();
           });
-          if (!profiles.some((profile) => profile.id === id)) forgetProfile(id);
+          try {
+            // Bound stalled requests without expiring a check paused offline.
+            const request = queryClient.fetchQuery({
+              queryKey: queryKeys.profiles,
+              queryFn: listProfiles,
+              staleTime: 0,
+            });
+            // Joining an existing refresh emits no new fetching transition.
+            trackRequest();
+            const profiles = await request;
+            if (!profiles.some((profile) => profile.id === id)) forgetProfile(id);
+          } finally {
+            unsubscribe();
+            clearTimer();
+          }
         } catch {
           // The original error is already shown; absence is still unconfirmed.
         }

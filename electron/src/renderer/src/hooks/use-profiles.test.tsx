@@ -44,10 +44,132 @@ function setup() {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   onlineManager.setOnline(true);
   vi.clearAllMocks();
   patchCloneSettings({ selectedProfileId: null, refText: '' });
   localStorage.clear();
+});
+
+it.each(['same hook', 'separate hooks'])(
+  'continues queued deletion confirmation after an earlier request stalls: %s',
+  async (hookMode) => {
+    const stalled = deferred<Profile[]>();
+    mock.remove.mockRejectedValue(new Error('cleanup incomplete'));
+    mock.list.mockReturnValueOnce(stalled.promise).mockResolvedValue([]);
+    patchCloneSettings({ selectedProfileId: 'v2' });
+    writeDraft({ ...readDraft(), profileId: 'v2' });
+    const { client, result, wrapper } = setupDelete();
+    const second =
+      hookMode === 'separate hooks'
+        ? renderHook(() => useDeleteProfile(), { wrapper }).result
+        : result;
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        await expect(result.current.mutateAsync('v1')).rejects.toThrow('cleanup incomplete');
+        await expect(second.current.mutateAsync('v2')).rejects.toThrow('cleanup incomplete');
+      });
+      expect(mock.list).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(29_999);
+      });
+      expect(cloneSettingsStore.state.selectedProfileId).toBe('v2');
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(mock.list).toHaveBeenCalledTimes(2);
+      expect(cloneSettingsStore.state.selectedProfileId).toBeNull();
+      expect(readDraft().profileId).toBeNull();
+      expect(client.getQueryData(queryKeys.profiles)).toEqual([]);
+
+      // A cancelled transport that ignores abort cannot overwrite a newer list
+      // or clear a voice whose absence the timed-out request never established.
+      patchCloneSettings({ selectedProfileId: 'v1' });
+      writeDraft({ ...readDraft(), profileId: 'v1' });
+      await act(async () => {
+        stalled.resolve([profile({ id: 'v2' })]);
+      });
+      expect(client.getQueryData(queryKeys.profiles)).toEqual([]);
+      expect(cloneSettingsStore.state.selectedProfileId).toBe('v1');
+      expect(readDraft().profileId).toBe('v1');
+    } finally {
+      client.clear();
+    }
+  },
+);
+
+it('does not expire queued confirmation while offline longer than its request deadline', async () => {
+  const responses = deferred<void>();
+  mock.remove.mockImplementation(async () => {
+    await responses.promise;
+    throw new Error('backend stopped after DELETE');
+  });
+  mock.list.mockResolvedValue([]);
+  patchCloneSettings({ selectedProfileId: 'v1' });
+  writeDraft({ ...readDraft(), profileId: 'v2' });
+  const { client, result, wrapper } = setupDelete();
+  const second = renderHook(() => useDeleteProfile(), { wrapper });
+  vi.useFakeTimers();
+  try {
+    await act(async () => {
+      const first = result.current.mutateAsync('v1').catch((error) => error);
+      const next = second.result.current.mutateAsync('v2').catch((error) => error);
+      await Promise.resolve();
+      onlineManager.setOnline(false);
+      responses.resolve();
+      await Promise.all([first, next]);
+    });
+    expect(client.getQueryState(queryKeys.profiles)?.fetchStatus).toBe('paused');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(mock.list).not.toHaveBeenCalled();
+    expect(cloneSettingsStore.state.selectedProfileId).toBe('v1');
+    await act(async () => {
+      onlineManager.setOnline(true);
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(mock.list).toHaveBeenCalledTimes(2);
+    expect(cloneSettingsStore.state.selectedProfileId).toBeNull();
+    expect(readDraft().profileId).toBeNull();
+  } finally {
+    client.clear();
+  }
+});
+
+it('bounds confirmation when it joins a refresh already fetching after cancellation', async () => {
+  const stalled = deferred<Profile[]>();
+  mock.remove.mockRejectedValue(new Error('cleanup incomplete'));
+  mock.list.mockReturnValueOnce(stalled.promise).mockResolvedValue([]);
+  patchCloneSettings({ selectedProfileId: 'v2' });
+  writeDraft({ ...readDraft(), profileId: 'v2' });
+  const { client, result } = setupDelete();
+  const cancelQueries = client.cancelQueries.bind(client);
+  const cancel = vi.spyOn(client, 'cancelQueries').mockImplementationOnce((...args) => {
+    const cancelled = cancelQueries(...args);
+    void cancelled.then(() => {
+      void client.fetchQuery({ queryKey: queryKeys.profiles, queryFn: mock.list }).catch(() => {});
+    });
+    return cancelled;
+  });
+  vi.useFakeTimers();
+  try {
+    await act(async () => {
+      await expect(result.current.mutateAsync('v1')).rejects.toThrow('cleanup incomplete');
+      await expect(result.current.mutateAsync('v2')).rejects.toThrow('cleanup incomplete');
+    });
+    expect(mock.list).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(mock.list).toHaveBeenCalledTimes(2);
+    expect(cloneSettingsStore.state.selectedProfileId).toBeNull();
+    expect(readDraft().profileId).toBeNull();
+  } finally {
+    client.clear();
+    cancel.mockRestore();
+  }
 });
 
 it('writes the replaced clip back into the cached profile and the selected transcript', async () => {

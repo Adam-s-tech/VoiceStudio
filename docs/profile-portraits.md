@@ -127,4 +127,4 @@ If cleanup fails after the profile record is deleted, the response reports incom
 
 If the backend becomes unavailable during a deletion error, the error settles immediately while confirmation waits in the managed saved-voice query. Backend readiness resumes that query. Only a successful list confirming absence clears the selected voice; rollback, failed confirmation and query cancellation preserve it. This refresh does not retry asset cleanup.
 
-Errors during batch deletion are each checked in order, so a later error cannot discard an earlier deletion check. Clearing the query-client cache cancels checks from that earlier cache lifecycle.
+Errors during batch deletion are each checked in order, so a later error cannot discard an earlier deletion check. A confirmation request stalled for 30 seconds is cancelled so later checks can continue; the timed-out check preserves its voice selection because absence remains unknown. Time paused offline does not count toward this request limit. Clearing the query-client cache cancels checks from that earlier cache lifecycle.
