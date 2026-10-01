@@ -57,3 +57,9 @@ Finished renders in Projects identify themselves: the row shows the book's title
 Render history includes effective sampling settings (including performance-tier defaults). Non-finite request values are rejected; older malformed numeric details are sanitized so Projects and completion events remain readable.
 
 The output language picker in Clone, Stories and Audiobook disables languages outside the selected engine’s declared finite set. Auto remains available; unknown or model-specific language sets remain selectable and are checked by the backend. Reference recording languages and dubbing translation targets are independent of this output-language control. Switching engines preserves the selected language rather than rewriting saved projects.
+
+The finished-render library filters for Stories and Audiobooks before applying its row limit, so newer dubbing jobs cannot hide an older finished book.
+
+Resuming starts a fresh job while preserving the original checkpoint until all chapters render successfully. Checkpoint writes and syncs are best effort, so an interrupted resumed job can leave both the original and new checkpoints available; either can reuse the shared chapter cache. Closing an unstarted response or interrupting the render leaves the original plan available, including when a replacement checkpoint could not be saved. A render with no failed chapters retires the original even if the replacement checkpoint could not be saved. A partial output keeps the original plan available to retry its failed chapters.
+
+Cache pruning evicts the oldest chapter and segment audio, including interrupted partial files, while retaining JSON bookkeeping needed to locate older cache entries after moving the data directory. Bookkeeping contributes to the reported cache size; if it alone exceeds the budget, pruning remains best effort.

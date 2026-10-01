@@ -129,8 +129,9 @@ def get(job_id: str) -> Optional[dict]:
     return dict(row) if row else None
 
 
-def list_jobs(*, status: Optional[str] = None, project_id: Optional[str] = None, limit: int = 100) -> list[dict]:
-    """List jobs, newest first. Filter by status (e.g. `active` = running+pending) or project."""
+def list_jobs(*, status: Optional[str] = None, project_id: Optional[str] = None,
+              types: Optional[tuple[str, ...]] = None, limit: int = 100) -> list[dict]:
+    """List jobs, newest first. Filter by status (e.g. `active` = running+pending) or project, with type filtering before the row limit."""
     where = []
     params = []
     if status == "active":
@@ -141,6 +142,11 @@ def list_jobs(*, status: Optional[str] = None, project_id: Optional[str] = None,
     if project_id:
         where.append("project_id = ?")
         params.append(project_id)
+    if types is not None:
+        if not types:
+            return []
+        where.append("type IN (" + ",".join("?" for _ in types) + ")")
+        params.extend(types)
     sql = "SELECT * FROM jobs"
     if where:
         sql += " WHERE " + " AND ".join(where)

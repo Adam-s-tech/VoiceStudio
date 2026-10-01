@@ -7,6 +7,7 @@ import uuid
 import weakref
 import time
 import shutil
+import threading
 from typing import Optional
 from fastapi import APIRouter, File, Form, UploadFile, HTTPException
 from fastapi.responses import FileResponse, Response
@@ -15,6 +16,7 @@ from pydantic import BaseModel
 from core.db import db_conn
 from core.config import VOICES_DIR, OUTPUTS_DIR
 from core import event_bus
+from core.scrub import scrub_text
 from core.personalities import get_personalities
 from omnivoice.utils.voice_design import heal_design_instruct, sanitize_instruct
 from core.path_security import UnsafePath, resolve_within
@@ -768,13 +770,52 @@ async def _materialize_design_sample(profile_id: str, row) -> Optional[str]:
         )
     return audio_filename
 
+# Serializes the lock/unlock/consent file swaps so one request's cleanup can
+# never unlink audio another request just installed.
+_voice_file_lock = threading.RLock()
+
+
+def _install_staged(staged: str, target: str):
+    """Move ``staged`` onto ``target``, keeping any previous ``target`` as a
+    ``.bak`` so a later failure can put the old audio back.
+
+    Returns ``(restore, finalize)``: ``restore()`` undoes the install (old
+    file back, or the new file removed); ``finalize()`` drops the backup once
+    the database row that references ``target`` has committed."""
+    backup = None
+    if os.path.exists(target):
+        backup = f"{target}.bak"
+        os.replace(target, backup)
+    try:
+        os.replace(staged, target)
+    except BaseException:
+        if backup:
+            with contextlib.suppress(OSError):
+                os.replace(backup, target)
+        raise
+
+    def restore() -> None:
+        with contextlib.suppress(OSError):
+            if backup:
+                os.replace(backup, target)
+            else:
+                os.remove(target)
+
+    def finalize() -> None:
+        if backup:
+            with contextlib.suppress(OSError):
+                os.remove(backup)
+
+    return restore, finalize
+
+
 @router.post("/profiles/{profile_id}/lock")
 async def lock_profile(
     profile_id: str,
     history_id: str = Form(...),
     seed: Optional[int] = Form(None),
 ):
-    with db_conn() as conn:
+    with _voice_file_lock, db_conn() as conn:
         profile = conn.execute("SELECT * FROM voice_profiles WHERE id=?", (profile_id,)).fetchone()
         if not profile:
             raise HTTPException(
@@ -797,36 +838,57 @@ async def lock_profile(
         locked_path = _voices_path(locked_filename)
         if locked_path is None:
             raise HTTPException(status_code=400, detail="Invalid profile id")
-        shutil.copy2(str(src_path), locked_path)
+        # Install the take first (previous one kept as a backup), then point
+        # the row at it; any failure puts the previous take back so the row
+        # and its audio never disagree.
+        staged_path = f"{locked_path}.part"
+        restore = None
+        try:
+            shutil.copy2(str(src_path), staged_path)
+            restore, finalize = _install_staged(staged_path, locked_path)
 
-        ref_text = history["text"][:100] if history["text"] else ""
+            ref_text = history["text"][:100] if history["text"] else ""
 
-        conn.execute(
-            "UPDATE voice_profiles SET locked_audio_path=?, seed=?, is_locked=1, ref_text=? WHERE id=?",
-            (locked_filename, seed, ref_text, profile_id)
-        )
+            conn.execute(
+                "UPDATE voice_profiles SET locked_audio_path=?, seed=?, is_locked=1, ref_text=? WHERE id=?",
+                (locked_filename, seed, ref_text, profile_id)
+            )
+            conn.commit()
+        except BaseException:
+            if restore is not None:
+                restore()
+            raise
+        finally:
+            with contextlib.suppress(OSError):
+                os.remove(staged_path)
+        finalize()
     event_bus.emit("profiles", {"action": "locked", "id": profile_id})
     return {"locked": True, "profile_id": profile_id, "locked_audio_path": locked_filename}
 
 @router.post("/profiles/{profile_id}/unlock")
 async def unlock_profile(profile_id: str):
-    with db_conn() as conn:
-        profile = conn.execute("SELECT * FROM voice_profiles WHERE id=?", (profile_id,)).fetchone()
-        if not profile:
-            raise HTTPException(
-                status_code=404,
-                detail="Voice profile not found. It may have been deleted from another window — refresh the sidebar to see the current list.",
+    with _voice_file_lock:
+        with db_conn() as conn:
+            profile = conn.execute("SELECT * FROM voice_profiles WHERE id=?", (profile_id,)).fetchone()
+            if not profile:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Voice profile not found. It may have been deleted from another window — refresh the sidebar to see the current list.",
+                )
+
+            locked_path = (
+                _voices_path(profile["locked_audio_path"]) if profile["locked_audio_path"] else None
             )
-
-        if profile["locked_audio_path"]:
-            locked_path = _voices_path(profile["locked_audio_path"])
-            if locked_path and os.path.exists(locked_path):
+            conn.execute(
+                "UPDATE voice_profiles SET locked_audio_path='', seed=NULL, is_locked=0 WHERE id=?",
+                (profile_id,)
+            )
+        # Unlink only after the row change committed (a rolled-back unlock must
+        # keep its locked take). Holding the lock stops a concurrent re-lock
+        # from installing a take that this unlink would then remove.
+        if locked_path:
+            with contextlib.suppress(OSError):
                 os.remove(locked_path)
-
-        conn.execute(
-            "UPDATE voice_profiles SET locked_audio_path='', seed=NULL, is_locked=0 WHERE id=?",
-            (profile_id,)
-        )
     event_bus.emit("profiles", {"action": "unlocked", "id": profile_id})
     return {"unlocked": True, "profile_id": profile_id}
 
@@ -886,28 +948,45 @@ async def record_consent(
     audio_path = _voices_path(audio_filename)
     if audio_path is None:  # profile_id is server-generated; this is belt+braces
         raise HTTPException(status_code=400, detail="Invalid profile id")
-    with open(audio_path, "wb") as f:
-        f.write(data)
-
-    # A re-record may change the extension; drop the superseded file.
-    old = row["consent_audio_path"]
-    if old and old != audio_filename:
-        old_path = _voices_path(old)
-        if old_path and os.path.exists(old_path):
-            os.remove(old_path)
-
+    # Install the recording first (previous one kept as a backup), then commit
+    # the row that references it; any failure restores the previous recording,
+    # so consent metadata and audio never disagree.
     recorded_at = time.time()
-    try:
+    staged_path = f"{audio_path}.part"
+    with _voice_file_lock:
         with db_conn() as conn:
-            conn.execute(
-                "UPDATE voice_profiles SET verified_own_voice=1, consent_text=?, "
-                "consent_audio_path=?, consent_recorded_at=? WHERE id=?",
-                (consent_text.strip(), audio_filename, recorded_at, profile_id),
-            )
-    except Exception:
-        if os.path.exists(audio_path):
-            os.remove(audio_path)
-        raise
+            current = conn.execute(
+                "SELECT consent_audio_path FROM voice_profiles WHERE id=?", (profile_id,)
+            ).fetchone()
+        if not current:
+            raise HTTPException(status_code=404, detail="Profile not found")
+        old = current["consent_audio_path"]
+        restore = None
+        try:
+            with open(staged_path, "wb") as f:
+                f.write(data)
+            restore, finalize = _install_staged(staged_path, audio_path)
+            with db_conn() as conn:
+                conn.execute(
+                    "UPDATE voice_profiles SET verified_own_voice=1, consent_text=?, "
+                    "consent_audio_path=?, consent_recorded_at=? WHERE id=?",
+                    (consent_text.strip(), audio_filename, recorded_at, profile_id),
+                )
+        except BaseException:
+            if restore is not None:
+                restore()
+            raise
+        finally:
+            with contextlib.suppress(OSError):
+                os.remove(staged_path)
+        finalize()
+        # A re-record may change the extension; drop the superseded file now
+        # that nothing references it.
+        if old and old != audio_filename:
+            old_path = _voices_path(old)
+            if old_path:
+                with contextlib.suppress(OSError):
+                    os.remove(old_path)
     event_bus.emit("profiles", {"action": "consent_recorded", "id": profile_id})
     return {
         "id": profile_id,
@@ -939,19 +1018,44 @@ def revoke_consent(profile_id: str):
 
 @router.delete("/profiles/{profile_id}")
 def delete_profile(profile_id: str):
+    paths = []
     with db_conn() as conn:
         row = conn.execute("SELECT ref_audio_path, locked_audio_path, consent_audio_path FROM voice_profiles WHERE id=?", (profile_id,)).fetchone()
         if row:
             for col in ["ref_audio_path", "locked_audio_path", "consent_audio_path"]:
                 if row[col]:
                     path = _voices_path(row[col])
-                    if path and os.path.exists(path):
-                        os.remove(path)
+                    if path:
+                        paths.append(path)
         portrait_path = _voices_path(f"{profile_id}.portrait.jpg")
         if portrait_path and os.path.isfile(portrait_path):
-            os.remove(portrait_path)
-        # Prevent FOREIGN KEY constraint failure
+            paths.append(portrait_path)
+        # Commit the database change before removing assets: a failed write or
+        # commit must leave the rolled-back profile's files usable.
         conn.execute("UPDATE generation_history SET profile_id = NULL WHERE profile_id=?", (profile_id,))
         conn.execute("DELETE FROM voice_profiles WHERE id=?", (profile_id,))
+    failed_assets = []
+    for path in dict.fromkeys(paths):
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            continue  # already gone: nothing to clean up
+        except OSError:
+            # A cleanup failure cannot roll back the committed deletion, and
+            # must not prevent cleanup of the profile's remaining assets.
+            try:
+                failed_assets.append(os.path.relpath(
+                    resolve_within(VOICES_DIR, path), os.path.realpath(VOICES_DIR)
+                ))
+            except (UnsafePath, OSError, ValueError):
+                failed_assets.append("asset location unavailable (consult local backend log)")
+            logger.warning("Deleted profile asset cleanup failed: %s", scrub_text(path))
     event_bus.emit("profiles", {"action": "deleted", "id": profile_id})
+    if failed_assets:
+        raise HTTPException(status_code=500, detail=(
+            "The profile record was deleted, but asset cleanup is incomplete for: "
+            + ", ".join(failed_assets)
+            + ". Paths are relative to the voices folder; remove the files manually. "
+            "Consult the local backend log if an asset location is unavailable."
+        ))
     return {"deleted": profile_id}
