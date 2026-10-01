@@ -9,6 +9,7 @@ metadata and the backend fallback mirror it.
 ## [Unreleased]
 
 **Highlights**
+- Reserve migration snapshot counters atomically (#2453) — thanks @rudycelekli!
 - Ask VoiceStudio Agent adds chat, harness selection, feature presets, read-only planning and autopilot app actions without a source checkout (#2407)
 - Home credits contributors with over 10 commits in three responsive rows of round avatars stacked from right to left with an All contributors link, with GitHub and X links on Palash's hover card (#2407)
 - The VoiceStudio.sh Open Source title opens a website preview below the clicked item, within the right content area, with navigation and external-browser controls (#2407)
@@ -86,6 +87,8 @@ metadata and the backend fallback mirror it.
 - The Twilio guide and integration directory describe the guided setup and in-app integration pages (#2304)
 
 ### Fixed
+
+- Count interrupted sidecar installs and report unreadable engine scans in Storage usage (#2479) — thanks @rudycelekli!
 - Dub assembly, cached segments and audio tools can read generated WAV files when TorchCodec is missing or cannot load (#2379) — thanks @tokutei58301-boop!
 - Remote API-key and share-PIN clients can record and read export history while native filesystem operations stay local (#2383, #2384) — thanks @sedatdagg!
 - Concurrent job events receive unique sequence numbers (#2384) — thanks @sedatdagg!
