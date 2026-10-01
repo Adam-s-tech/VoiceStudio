@@ -225,6 +225,40 @@ def test_preflight_nvidia_driver_below_min_flags_fail():
     assert any("driver" in n.lower() for n in info["notes"])
 
 
+@pytest.mark.parametrize(
+    "platform_, driver, flagged",
+    [
+        ("linux", "524.99", True),
+        ("linux", "525.60.13", False),
+        ("linux", "550.54.14", False),
+        ("win32", "527.56", True),   # 527 < 528.33 Windows floor (#2489)
+        ("win32", "528.33", False),
+        ("win32", "551.23", False),
+    ],
+)
+def test_nvidia_driver_floor_is_cuda12_minor_compat(monkeypatch, platform_, driver, flagged):
+    """525 (Linux) / 528.33 (Windows) is enough for the bundled CUDA 12.8 runtime."""
+    from api.routers.setup import wizard as setup_mod
+
+    monkeypatch.setattr(
+        setup_mod, "_min_nvidia_driver",
+        lambda platform=None, _f=setup_mod._min_nvidia_driver: _f(platform_),
+    )
+
+    def fake_run_cmd(args, timeout=2.0):
+        if args and args[0] == "nvidia-smi":
+            return 0, f"{driver}, NVIDIA GeForce RTX 3090\n"
+        return -1, ""
+
+    monkeypatch.setattr(setup_mod, "_run_cmd", fake_run_cmd)
+    import platform as _p
+    if sys.platform == "darwin" and _p.machine() == "arm64":
+        pytest.skip("apple-silicon branch returns before nvidia-smi")
+    info = setup_mod._detect_gpu()
+    assert info["vendor"] == "nvidia"
+    assert any("driver" in n.lower() for n in info["notes"]) is flagged
+
+
 def test_preflight_amd_flags_warn_when_no_rocm_torch():
     """AMD GPU + torch without HIP → warn with ROCm install instructions."""
     import platform as _p

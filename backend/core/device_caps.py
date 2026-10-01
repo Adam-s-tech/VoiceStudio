@@ -49,7 +49,7 @@ KERNEL_RISK_MARKER = "may fail at kernel launch"
 # router reads this marker to explain the neutral badge instead of "no GPU".
 DIRECTML_MARKER = "DirectML device present"
 
-# NOTE: the NVIDIA driver-version check (min R555 for the bundled CUDA runtime)
+# NOTE: the NVIDIA driver-version check (CUDA 12.x minor-compat floor: R525.60.13 Linux / R528.33 Windows)
 # is intentionally NOT done here — it requires shelling to ``nvidia-smi``, which
 # would put a subprocess on the cold-start probe path. That check stays in
 # ``wizard._detect_gpu`` (preflight), which already runs it. The probe only

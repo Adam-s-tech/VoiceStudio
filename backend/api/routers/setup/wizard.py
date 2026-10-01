@@ -60,7 +60,23 @@ def setup_status():
 
 # ── Pre-flight System Check ───────────────────────────────────────────────
 
-_MIN_NVIDIA_DRIVER = 525
+# CUDA 12.x minor-version compatibility floor (the bundled cu128 runtime runs on
+# any 12.x-capable driver): R525.60.13 on Linux, R528.33 on Windows — see
+# https://docs.nvidia.com/deploy/cuda-compatibility/minor-version-compatibility.html
+# Compared as full versions: a Windows 527.x driver is NOT enough (#2489).
+_MIN_NVIDIA_DRIVER_LINUX = (525, 60, 13)
+_MIN_NVIDIA_DRIVER_WINDOWS = (528, 33)
+
+
+def _min_nvidia_driver(platform: str | None = None) -> tuple[int, ...]:
+    return (
+        _MIN_NVIDIA_DRIVER_WINDOWS if (platform or sys.platform) == "win32"
+        else _MIN_NVIDIA_DRIVER_LINUX
+    )
+
+
+def _driver_tuple(driver: str | None) -> tuple[int, ...]:
+    return tuple(int(p) for p in (driver or "0").strip().split(".") if p.isdigit())
 _RAM_FAIL_GB = 8
 _RAM_WARN_GB = 12
 # Installed DIMMs never fully reach the OS: firmware, integrated graphics and
@@ -120,10 +136,11 @@ def _detect_gpu() -> dict:
         except Exception:
             pass
         try:
-            major = int((driver or "0").split(".")[0])
-            if major < _MIN_NVIDIA_DRIVER:
+            floor = _min_nvidia_driver()  # per host OS
+            if _driver_tuple(driver) < floor:
                 info["notes"].append(
-                    f"NVIDIA driver {driver} below {_MIN_NVIDIA_DRIVER} required "
+                    f"NVIDIA driver {driver} below "
+                    f"{'.'.join(map(str, floor))} required "
                     f"by the bundled CUDA 12.8 runtime — GPU will fail to launch "
                     f"kernels. Update drivers before dubbing."
                 )
