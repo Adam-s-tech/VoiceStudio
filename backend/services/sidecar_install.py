@@ -57,7 +57,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, NamedTuple, Optional
+from typing import Callable, Iterable, NamedTuple, Optional
 
 from core.config import DATA_DIR
 from core.contained_subprocess import OwnedPopen, WindowsJobPopen, spawn_owned
@@ -939,6 +939,35 @@ def _job_step(job: dict, step_id: str) -> dict:
     return next(s for s in job["steps"] if s["id"] == step_id)
 
 
+_DISK_FULL_REMEDIATION = (
+    "The disk is full. Free up space (or move VoiceStudio's data directory to a "
+    "larger volume), then re-run the install — it resumes from where it stopped."
+)
+
+
+def _redact(exc: BaseException) -> str:
+    """Exception text with home-directory paths and tokens scrubbed, since a
+    step error is persisted in the job record and log."""
+    from core.failure import sanitize
+
+    return sanitize(str(exc))
+
+
+def _is_disk_full(exc: BaseException) -> bool:
+    from core.failure import is_disk_full_error
+
+    return is_disk_full_error(exc)
+
+
+def _output_shows_disk_full(lines: Iterable[str]) -> bool:
+    """uv reports a full volume only as output text with a bare non-zero exit.
+    Pass the failing process's own output, never the shared job log: an earlier
+    step's recovered "No space left" line must not relabel a later failure."""
+    from core.failure import is_disk_full_error
+
+    return is_disk_full_error("\n".join(lines))
+
+
 def _log(job: dict, line: str) -> None:
     line = line.rstrip()
     if line:
@@ -950,7 +979,7 @@ def _log(job: dict, line: str) -> None:
 def _serialize_job(job: Optional[dict]) -> Optional[dict]:
     if job is None:
         return None
-    out = dict(job)
+    out = {k: v for k, v in job.items() if not k.startswith("_")}
     with _log_lock:
         out["log"] = list(job["log"])
     out["steps"] = [dict(s) for s in job["steps"]]
@@ -1163,8 +1192,10 @@ def _run_install(spec: SidecarSpec, job: dict) -> None:
                 raise
             except Exception as exc:  # noqa: BLE001 — surfaced into the job
                 step["state"] = "error"
+                if _is_disk_full(exc):
+                    raise _StepError(f"{type(exc).__name__}: {_redact(exc)}", _DISK_FULL_REMEDIATION) from exc
                 raise _StepError(
-                    f"{type(exc).__name__}: {exc}",
+                    f"{type(exc).__name__}: {_redact(exc)}",
                     "Re-run the install — it resumes from where it stopped. If it "
                     f"keeps failing, see {spec.docs_path} for the manual steps.",
                 ) from exc
@@ -1505,6 +1536,7 @@ def _step_install_deps(spec: SidecarSpec, job: dict) -> None:
         target += list(UV_PIP_CU128_ARGS)
     # Always `--python <this engine's venv>`: the install can only ever land in
     # the venv this engine owns, never the app's interpreter.
+    job.pop("_last_run_output", None)
     rc = _run_logged(
         job,
         [uv, "pip", "install", "--python", str(py), *target],
@@ -1512,6 +1544,9 @@ def _step_install_deps(spec: SidecarSpec, job: dict) -> None:
         env=uv_subprocess_env(Path(DATA_DIR) / "engines"),
     )
     if rc != 0:
+        if _output_shows_disk_full(job.get("_last_run_output") or ()):
+            raise _StepError(f"uv pip install failed (exit {rc}): no space left on device.",
+                             _DISK_FULL_REMEDIATION)
         hint = (
             "Usually a network hiccup — re-run the install to resume. Behind a "
             "proxy, set HTTPS_PROXY in Settings → Environment first."
@@ -1681,8 +1716,10 @@ def _step_fetch_weights(spec: SidecarSpec, job: dict) -> None:
         try:
             snapshot_download(**kwargs)  # nosec B615 — deliberate default-branch policy, see above
         except Exception as exc:
+            if _is_disk_full(exc):
+                raise _StepError(f"Model weight download failed: {_redact(exc)}", _DISK_FULL_REMEDIATION) from exc
             raise _StepError(
-                f"Model weight download failed: {exc}",
+                f"Model weight download failed: {_redact(exc)}",
                 "Re-run the install — the download resumes where it stopped. "
                 "Check Settings → Network (HF endpoint / proxy) if it keeps failing.",
             ) from exc
@@ -1727,6 +1764,9 @@ def _run_logged(job: dict, argv: list[str], *, timeout: float,
     Returns the exit code; -1 on timeout (process tree killed) or spawn
     failure. argv-list only — never a shell string — so paths with spaces
     are safe on every platform. ``env=None`` inherits the parent environment.
+    This process's own lines are also kept in ``job["_last_run_output"]`` (reset
+    per call, hidden from the status payload) so a caller can diagnose its own
+    failure without reading earlier steps' log output.
 
     The stdout drain runs on its own daemon thread and the main flow blocks
     on ``proc.wait(timeout=…)``. That bounds the step even when a grandchild
@@ -1738,6 +1778,8 @@ def _run_logged(job: dict, argv: list[str], *, timeout: float,
     # starts. POSIX links it to backend death through a control pipe; Windows
     # retains a kill-on-close Job handle in this backend process.
     popen_kwargs = _install_containment_kwargs()
+    tail: deque[str] = deque(maxlen=60)
+    job["_last_run_output"] = tail
     try:
         proc = spawn_owned(
             argv,
@@ -1758,6 +1800,7 @@ def _run_logged(job: dict, argv: list[str], *, timeout: float,
             assert proc.stdout is not None
             for line in proc.stdout:
                 _log(job, line)
+                tail.append(line)
         except (OSError, ValueError):
             pass  # pipe closed by the timeout kill — nothing left to read
 
