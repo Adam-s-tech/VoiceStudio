@@ -386,9 +386,9 @@ on CPU until you opt into the ROCm variant.
 > **Running in Docker or Podman instead?** There's a prebuilt ROCm image —
 > `ghcr.io/debpalash/voicestudio:rocm` — with GPU acceleration out of the
 > box; see [docker.md](docker.md#pull-and-run-amd-gpu--rocm). The rest of this
-> section is about source/desktop installs. (On Windows there is no ROCm path
-at all — PyTorch publishes no Windows ROCm wheels; see
-[windows.md](windows.md#gpu-support).)
+> section is about source/desktop installs. (VoiceStudio has no ROCm path on
+Windows; see [windows.md](windows.md#gpu-support) for what a Radeon card can
+do there.)
 
 Three ways to opt in, in order of preference:
 

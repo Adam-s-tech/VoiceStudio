@@ -328,6 +328,48 @@ def test_report_reasons_are_scrubbed(monkeypatch):
     assert "alice" not in (rep["engines"][0]["reason"] or "")
 
 
+def _fake_venv(tmp_path, version_py: str):
+    site = tmp_path / ".venv" / "lib" / "python3.11" / "site-packages" / "torch"
+    site.mkdir(parents=True, exist_ok=True)
+    (site / "version.py").write_text(version_py)
+    (tmp_path / ".venv" / "bin").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".venv" / "bin" / "python").write_text("")
+
+
+def test_indextts_does_not_claim_rocm_when_its_venv_holds_a_cuda_torch(tmp_path, monkeypatch):
+    """PR #2423 review: gpu_compat claims ROCm because the installer provisions a
+    ROCm torch - but a venv that predates that (or a user-managed clone) still
+    has the CUDA wheel, which sees no AMD GPU. Routing must not report
+    acceleration for it."""
+    from engines.indextts import IndexTTS2Backend, bootstrap
+
+    rocm_caps = HostCaps(family="rocm", available_families=("rocm", "cpu"), device_name="RX 6800 XT")
+    monkeypatch.setenv("OMNIVOICE_INDEXTTS_DIR", str(tmp_path))
+    monkeypatch.setattr(bootstrap, "_resolved_python", None)
+
+    _fake_venv(tmp_path, "__version__ = '2.8.0+cu128'\ncuda = '12.8'\nhip = None\n")
+    cuda_only = IndexTTS2Backend.runtime_compute_profile(rocm_caps)
+    assert cuda_only["routing_status"] == "cpu_fallback"
+    assert "rocm" not in cuda_only["gpu_compat"]
+
+    _fake_venv(tmp_path, "__version__ = '2.8.0+rocm6.4'\ncuda = None\nhip = '6.4.43482'\n")
+    rocm = IndexTTS2Backend.runtime_compute_profile(rocm_caps)
+    assert rocm["routing_status"] == "accelerated"
+    assert rocm["effective_device"] == "rocm"
+
+
+def test_indextts_keeps_its_claim_when_the_venv_cannot_be_inspected(tmp_path, monkeypatch):
+    from engines.indextts import IndexTTS2Backend, bootstrap
+
+    monkeypatch.setenv("OMNIVOICE_INDEXTTS_DIR", str(tmp_path))  # no .venv at all
+    monkeypatch.setattr(bootstrap, "_resolved_python", None)
+    rocm_caps = HostCaps(family="rocm", available_families=("rocm", "cpu"))
+    assert IndexTTS2Backend.runtime_compute_profile(rocm_caps)["routing_status"] == "accelerated"
+    # Never narrowed off a ROCm host either.
+    cuda_caps = HostCaps(family="cuda", available_families=("cuda", "cpu"))
+    assert IndexTTS2Backend.runtime_compute_profile(cuda_caps)["routing_status"] == "accelerated"
+
+
 def test_self_check_names_the_card_instead_of_saying_no_gpu(monkeypatch):
     from core import diagnose
 

@@ -309,6 +309,23 @@ def _rocm_pin_args() -> list[str]:
     return ["--no-sources", *(f"{pin}{tag}" for pin in ROCM_TORCH_PINS), *idx_args]
 
 
+def venv_torch_hip(venv_dir: Path) -> Optional[bool]:
+    """``True``/``False`` when the venv's torch is/isn't a ROCm build, ``None``
+    when that cannot be told (no torch wheel found, unreadable file).
+
+    Reads the wheel's generated ``version.py`` instead of importing torch, so it
+    is safe on every engine-list refresh."""
+    matches = sorted((venv_dir / "lib").glob("python*/site-packages/torch/version.py"))
+    if not matches:
+        return None
+    try:
+        text = matches[0].read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    hip_set = re.search(r"^hip(?:\s*:[^=]*)?\s*=\s*['\"][^'\"]+['\"]", text, re.M)
+    return bool(hip_set) or "+rocm" in text
+
+
 def _venv_torch_is_rocm(venv_dir: Path) -> bool:
     """True when the venv's installed torch is a ROCm build.
 
@@ -318,15 +335,7 @@ def _venv_torch_is_rocm(venv_dir: Path) -> bool:
     seconds the completion marker exists to avoid (see
     ``_install_marker_valid``). Missing file = no torch = not ROCm, so a
     broken deps step is offered the repair too."""
-    matches = sorted((venv_dir / "lib").glob("python*/site-packages/torch/version.py"))
-    if not matches:
-        return False
-    try:
-        text = matches[0].read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return False
-    hip_set = re.search(r"^hip(?:\s*:[^=]*)?\s*=\s*['\"][^'\"]+['\"]", text, re.M)
-    return bool(hip_set) or "+rocm" in text
+    return bool(venv_torch_hip(venv_dir))
 
 
 def _moss_host() -> tuple[bool, str]:

@@ -41,8 +41,13 @@ Before touching any knob, check these — they account for most slowness reports
    - **Model Catalogue** shows a routing badge per engine — "GPU active",
      "CPU fallback", or "CPU" — with the *reason* shown as small text under
      the badge (full text on hover).
-   Note: **GPU acceleration on Windows is NVIDIA/CUDA-only** — AMD and Intel
-   GPUs run CPU-only there (see [Windows install notes](install/windows.md)).
+   Note: **PyTorch GPU acceleration on Windows is NVIDIA/CUDA-only** — AMD and
+   Intel GPUs run PyTorch engines on the CPU there (audio.cpp can still use a
+   Radeon through Vulkan; see [Windows install notes](install/windows.md)).
+   **Settings → Performance → GPU acceleration** (`GET /api/settings/gpu-report`)
+   lists, per engine, whether it uses the GPU on this machine and why not
+   otherwise — including "your Radeon was found but this PyTorch build is
+   NVIDIA-only".
 5. **You aborted a dub earlier (fixed in v0.3.23).** Dubbing moves the TTS
    model to CPU to free VRAM for the ASR model, then moves it back when the
    transcription finishes. Before v0.3.23 that move-back only ran on the fully
