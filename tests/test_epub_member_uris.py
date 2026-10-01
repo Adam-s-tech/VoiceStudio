@@ -4,8 +4,6 @@ import zipfile
 
 import pytest
 
-from services.longform_import import epub_to_chapter_script
-
 
 @pytest.mark.parametrize('filename,href', [
     ('chapter one.xhtml', 'chapter%20one.xhtml'),
@@ -14,6 +12,8 @@ from services.longform_import import epub_to_chapter_script
     ('chapter+one.xhtml', 'chapter+one.xhtml'),
 ])
 def test_spine_and_navigation_resolve_uri_paths(filename, href):
+    from services.longform_import import epub_to_chapter_script
+
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, 'w') as archive:
         archive.writestr('META-INF/container.xml',
