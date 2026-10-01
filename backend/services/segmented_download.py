@@ -243,11 +243,26 @@ async def _stream_single(client, url, token, part, on_bytes, cancelled) -> None:
                     on_bytes(len(chunk))
 
 
+def _invalidate_done(part: str) -> None:
+    try:
+        os.remove(_manifest_path(part))
+    except FileNotFoundError:
+        pass
+
+
 def _preallocate(part: str, size: int) -> None:
-    # Resize the file to `size` so restarted downloads cannot retain excess bytes.
-    with open(part, "a+b") as fh:
+    # A checkpoint only certifies the original bytes, not a resized replacement.
+    try:
+        fh = open(part, "r+b")
+    except FileNotFoundError:
+        # Invalidate before creating a missing partial, too: an unlink failure
+        # must leave both the original partial state and destination untouched.
+        _invalidate_done(part)
+        fh = open(part, "a+b")
+    with fh:
         fh.seek(0, os.SEEK_END)
         if fh.tell() != size:
+            _invalidate_done(part)
             fh.truncate(size)
 
 
