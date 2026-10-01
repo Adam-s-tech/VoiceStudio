@@ -617,8 +617,8 @@ def _phase_a_build_inner() -> None:
     # again on nearly every call — ~18 s per new BigVGAN input shape on an
     # RX 6800 XT, which is what made IndexTTS sidecar chunks take 17–24 s
     # (#2373). FAST answers in well under a second with a near-optimal kernel.
-    # Read only by MIOpen, i.e. only in ROCm builds — inert on CUDA/MPS/CPU
-    # and on Windows/macOS. It lands here, after restore_env, so an exported
+    # Read only by MIOpen, i.e. only in ROCm builds (Linux or Windows HIP) —
+    # inert on CUDA/MPS/CPU. It lands here, after restore_env, so an exported
     # MIOPEN_FIND_MODE (shell, `.env`, Docker) still wins; `setdefault` is
     # load-bearing, never an assignment.
     os.environ.setdefault("MIOPEN_FIND_MODE", "FAST")
