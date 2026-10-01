@@ -2034,17 +2034,18 @@ if __name__ == "__main__":
     def _fail_port_denied(exc: "OSError | None") -> None:
         """The OS refused the bind (EACCES / WSAEACCES 10013), not "in use".
 
-        On Windows this is almost always a TCP excluded port range reserved by
-        Hyper-V, WSL, Docker or WinNAT: nothing is listening, so quitting
-        other apps does not help. Reported through stderr so the desktop
+        On Windows a possible cause is a TCP excluded port range reserved by
+        Hyper-V, WSL, Docker or WinNAT (an exclusive listener gives the same
+        error), so the message stays hedged. Reported through stderr so the desktop
         shell's "Last output" shows it instead of a bare exit code.
         """
         print(
             f"FATAL: the operating system refused to let VoiceStudio listen on "
-            f"port {_port} (permission denied). On Windows the port is "
-            f"probably inside a reserved range -- check "
-            f"`netsh interface ipv4 show excludedportrange protocol=tcp` -- "
-            f"and on macOS/Linux ports below 1024 need elevated rights. "
+            f"port {_port} (permission denied). On Windows a possible cause is "
+            f"a reserved port range (check "
+            f"`netsh interface ipv4 show excludedportrange protocol=tcp`) or "
+            f"another program holding the port exclusively; on macOS/Linux "
+            f"ports below 1024 need elevated rights. "
             f"Choose another port by setting OMNIVOICE_PORT to a free one."
             + (f" Underlying error: {exc}" if exc else ""),
             file=sys.stderr,

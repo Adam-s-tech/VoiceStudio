@@ -1,10 +1,12 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { apiJson } from '@/lib/api/client';
 import {
+  cancelDub,
   cleanupDubSegments,
   clearDubEditHistory,
   dubSession,
   mirrorDubSourceDelivery,
+  translateDub,
   undoDubEdit,
   type DubSegment,
 } from './dub-session';
@@ -139,4 +141,40 @@ it('applies the cleaned segments that Clean Up reports', async () => {
     { id: 'a', start: 0, end: 2, text: 'a b', text_original: 'a b' },
   ]);
   expect(dubSession.state.phase).toBe('editing');
+});
+
+it('discards a Mirror response that arrives after the run was cancelled', async () => {
+  editing([segment('a', 0)]);
+  let settle: (value: unknown) => void = () => {};
+  vi.mocked(apiJson).mockImplementation((path: string) =>
+    path.startsWith('/dub/prosody-mirror/')
+      ? new Promise((resolve) => {
+          settle = resolve;
+        })
+      : Promise.resolve({}),
+  );
+
+  const pending = mirrorDubSourceDelivery();
+  await Promise.resolve();
+  await cancelDub();
+  settle({ source: 'vocals', segments: [{ id: 'a', direction: 'calm', measured: true }] });
+
+  await expect(pending).resolves.toBeNull();
+  expect(dubSession.state.segments[0].direction).toBeUndefined();
+});
+
+it('sends each line\'s direction, mirrored or typed, with the translation request', async () => {
+  editing([segment('a', 0, { direction: ' urgent, quick ' }), segment('b', 1)]);
+  vi.mocked(apiJson).mockImplementation((path: string) =>
+    Promise.resolve(path === '/dub/translate' ? { translated: [] } : []),
+  );
+
+  await translateDub('es', 'google');
+
+  const call = vi.mocked(apiJson).mock.calls.find(([path]) => path === '/dub/translate');
+  const body = JSON.parse(String(call?.[1]?.body));
+  expect(body.segments.map((row: { direction?: string }) => row.direction)).toEqual([
+    'urgent, quick',
+    undefined,
+  ]);
 });

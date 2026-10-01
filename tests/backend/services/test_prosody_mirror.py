@@ -79,6 +79,18 @@ def test_sample_rate_and_channels_do_not_change_measurement(sr):
 
 # ── Baseline + taxonomy mapping ─────────────────────────────────────────────
 
+def test_out_of_phase_stereo_is_not_cancelled_to_silence():
+    mono = _line()
+    expected = pm.extract_features(mono, SR)
+    stereo = np.stack([mono, -mono], axis=1)
+    got = pm.extract_features(stereo, SR)
+    assert got is not None and expected is not None
+    assert got.loudness_db == pytest.approx(expected.loudness_db, abs=0.5)
+    # In-phase stereo keeps its plain average.
+    in_phase = pm.extract_features(np.stack([mono, mono], axis=1), SR)
+    assert in_phase.loudness_db == pytest.approx(expected.loudness_db, abs=0.5)
+
+
 def test_baseline_spread_is_floored():
     rows = [_features()] * 5
     base = pm.build_baseline(rows, pitch_comparable=True)

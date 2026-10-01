@@ -1268,6 +1268,7 @@ export async function translateDub(
           segments: requestedSegments.map((segment) => ({
             id: segment.id,
             text: segment.text_original || segment.text,
+            direction: segment.direction?.trim() || undefined,
             start: segment.start,
             end: segment.end,
             slot_seconds: segment.end - segment.start,
@@ -1966,7 +1967,7 @@ export async function mirrorDubSourceDelivery(): Promise<ProsodyMirrorOutcome | 
   const returnPhase = snapshot.phase;
   const response: { value?: ProsodyMirrorResponse } = {};
   const completed = await run('mirroring', async (signal) => {
-    response.value = await apiJson<ProsodyMirrorResponse>(
+    const result = await apiJson<ProsodyMirrorResponse>(
       '/dub/prosody-mirror/' + encodeURIComponent(snapshot.jobId!),
       {
         method: 'POST',
@@ -1983,6 +1984,10 @@ export async function mirrorDubSourceDelivery(): Promise<ProsodyMirrorOutcome | 
       },
     );
     patch({ phase: returnPhase });
+    // `cancelDub` can release its guard before this independent request
+    // settles; a cancelled run must not edit the segments afterwards.
+    if (signal.aborted) return;
+    response.value = result;
   });
   if (!completed) restoreActionPhase(snapshot.jobId, returnPhase);
   const result = response.value;

@@ -5,8 +5,6 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from services.audio_quality import analyze_audio
-
 SR = 16000
 
 
@@ -18,6 +16,14 @@ def _tone(seconds: float, amp: float = 0.2) -> np.ndarray:
 def _write(path, data, sr=SR, subtype="FLOAT"):
     sf.write(str(path), data, sr, subtype=subtype)
     return path
+
+
+def analyze_audio(*args, **kwargs):
+    # Resolved per call so a test that swaps ``services.audio_quality`` in
+    # ``sys.modules`` cannot leave this file holding a stale function.
+    from services.audio_quality import analyze_audio as current
+
+    return current(*args, **kwargs)
 
 
 def _kinds(report):
