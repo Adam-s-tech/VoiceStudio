@@ -2,6 +2,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryKey,
   type QueryClient,
   type UseMutationResult,
   type UseQueryResult,
@@ -114,7 +115,10 @@ export function useDeleteProfile(): UseMutationResult<void, Error, string> {
       // The managed profiles query resumes when the backend becomes ready.
       const originalQuery = queryClient
         .getQueryCache()
-        .build(queryClient, queryClient.defaultQueryOptions({ queryKey: queryKeys.profiles }));
+        .build(
+          queryClient,
+          queryClient.defaultQueryOptions({ queryKey: queryKeys.profiles as QueryKey }),
+        );
       const previous = deletionConfirmations.get(queryClient) ?? Promise.resolve();
       // A later batch deletion must not cancel an earlier confirmation.
       const confirmation = previous.then(async () => {
