@@ -939,19 +939,30 @@ def revoke_consent(profile_id: str):
 
 @router.delete("/profiles/{profile_id}")
 def delete_profile(profile_id: str):
+    paths = []
     with db_conn() as conn:
         row = conn.execute("SELECT ref_audio_path, locked_audio_path, consent_audio_path FROM voice_profiles WHERE id=?", (profile_id,)).fetchone()
         if row:
             for col in ["ref_audio_path", "locked_audio_path", "consent_audio_path"]:
                 if row[col]:
                     path = _voices_path(row[col])
-                    if path and os.path.exists(path):
-                        os.remove(path)
+                    if path:
+                        paths.append(path)
         portrait_path = _voices_path(f"{profile_id}.portrait.jpg")
         if portrait_path and os.path.isfile(portrait_path):
-            os.remove(portrait_path)
-        # Prevent FOREIGN KEY constraint failure
+            paths.append(portrait_path)
+        # Commit the database change before removing assets: a failed write or
+        # commit must leave the rolled-back profile's files usable.
         conn.execute("UPDATE generation_history SET profile_id = NULL WHERE profile_id=?", (profile_id,))
         conn.execute("DELETE FROM voice_profiles WHERE id=?", (profile_id,))
+    for path in dict.fromkeys(paths):
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
+        except OSError:
+            # A cleanup failure cannot roll back the committed deletion, and
+            # must not prevent cleanup of the profile's remaining assets.
+            logger.warning("Deleted profile asset cleanup failed")
     event_bus.emit("profiles", {"action": "deleted", "id": profile_id})
     return {"deleted": profile_id}

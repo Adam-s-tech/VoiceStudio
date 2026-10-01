@@ -120,3 +120,5 @@ Script import supports TXT, Markdown, DOC, DOCX, PDF and EPUB (text documents,
 not scanned-image OCR). Paste inserts at the caret; Replace script offers Undo.
 Clicking in the script shows the expression picker near the caret without taking
 typing focus. The voice chooser and save-profile form share the editor width.
+
+Deleting a saved voice commits the profile and history changes before removing its reference, locked take, consent recording and portrait. A failed database transaction leaves those assets available. Cleanup after a successful deletion is best effort; one unavailable asset does not prevent cleanup of the others.
