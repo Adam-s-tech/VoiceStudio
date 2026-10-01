@@ -41,9 +41,8 @@ _TIMING_RE = re.compile(rf"^{_H}{_TS}{_H}-->{_H}{_TS}.*$", re.MULTILINE)
 
 
 def _ts_to_seconds(h: str, m: str, s: str, ms: str) -> float:
-    # Pad ms to 3 digits so "5" -> 0.005, "50" -> 0.050.
-    ms_padded = (ms + "000")[:3]
-    return int(h or 0) * 3600 + int(m) * 60 + int(s) + int(ms_padded) / 1000.0
+    # The final field is a millisecond count: "5" -> 0.005, "50" -> 0.050.
+    return int(h or 0) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000.0
 
 
 def _is_index_line(line: str) -> bool:
@@ -91,11 +90,14 @@ def parse_srt(content: str) -> SrtParseResult:
             lines = block.strip().split("\n")
             first = lines[0].strip()
             # WebVTT's block parser gives a timing line in position two
-            # precedence over the identifier (including STYLE/REGION/NOTE).
-            # https://www.w3.org/TR/webvtt1/#file-parsing
+            # precedence over the identifier, so STYLE/REGION can name a real
+            # cue (https://www.w3.org/TR/webvtt1/#file-parsing). A NOTE block
+            # is a private comment, never speech: a commented-out cue under
+            # it must not be dubbed.
             identifies_cue = len(lines) > 1 and _TIMING_RE.match(lines[1])
-            metadata = first in {"STYLE", "REGION"} or re.match(r"NOTE(?:[ \t]|$)", first)
-            if metadata and not identifies_cue:
+            if re.match(r"NOTE(?:[ \t]|$)", first):
+                continue
+            if first in {"STYLE", "REGION"} and not identifies_cue:
                 continue
             blocks.append(block)
         text = "\n\n".join(blocks)

@@ -84,7 +84,7 @@ def _boundary_suffix(key: str) -> str:
 
 
 def _compile(lexicon: dict[str, str]) -> tuple[Optional[re.Pattern], dict[str, str]]:
-    """Build the single alternation regex + a casefold→respelling lookup.
+    """Build the single alternation regex + matched-group→respelling lookup.
 
     Keys are sorted longest-first so an overlapping longer key (``Dr. Smith``)
     is tried before a shorter one (``Dr``). Each alternative carries its own
@@ -92,13 +92,17 @@ def _compile(lexicon: dict[str, str]) -> tuple[Optional[re.Pattern], dict[str, s
     punctuation-edged key (``Dr.``) matchable while still protecting a
     letter-edged key (``cat``) from partial hits inside ``category``.
     """
-    keys = sorted(lexicon.keys(), key=len, reverse=True)
+    # Equal-length case variants retain the existing last-entry precedence.
+    keys = sorted(reversed(lexicon), key=len, reverse=True)
     if not keys:
         return None, {}
-    # casefold (not lower) for robust Unicode case-insensitive lookup.
-    lookup = {k.casefold(): lexicon[k] for k in keys}
-    alts = [f"{_boundary_prefix(k)}{re.escape(k)}{_boundary_suffix(k)}" for k in keys]
-    # No capturing groups, no nested quantifiers — pure literal alternation.
+    # IGNORECASE and casefold have different Unicode equivalence classes:
+    # e.g. 'i' matches dotless 'ı', while Straße/STRASSE do not regex-match.
+    # Bind each literal to its replacement rather than folding matched text.
+    lookup = {f"term_{i}": lexicon[k] for i, k in enumerate(keys)}
+    alts = [f"(?P<term_{i}>{_boundary_prefix(k)}{re.escape(k)}{_boundary_suffix(k)})"
+            for i, k in enumerate(keys)]
+    # No nested quantifiers — pure literal alternation.
     pattern = re.compile("(?:" + "|".join(alts) + ")", re.IGNORECASE)
     return pattern, lookup
 
@@ -122,7 +126,7 @@ def apply_lexicon(text: str, lexicon: Optional[dict]) -> str:
         return text
 
     def _repl(m: re.Match) -> str:
-        return lookup.get(m.group(0).casefold(), m.group(0))
+        return lookup[m.lastgroup]
 
     return pattern.sub(_repl, text)
 

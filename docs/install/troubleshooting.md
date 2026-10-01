@@ -492,6 +492,14 @@ If a running install ever reports "Media engine unavailable":
    `sudo apt install ffmpeg`, `winget install ffmpeg`) also works — press
    **Use system copy** afterwards.
 
+Transcription tells these apart from other failures. If a dub transcription
+reports that it needs ffmpeg, follow the steps above; VoiceStudio also exposes
+its resolved FFmpeg under the bare name `ffmpeg` to the engines it launches, so
+a library that runs plain `ffmpeg` no longer fails with `[Errno 2] No such file
+or directory: 'ffmpeg'`. A "lost its output pipe" (`[Errno 32] Broken pipe`)
+reply means the app that launched the backend closed or relaunched; restart
+VoiceStudio.
+
 The same panel updates **yt-dlp** (video imports): site support changes
 faster than app releases, so when video-URL imports start failing, press
 **Update** there — the new version survives app updates, and **Restore tested
@@ -1266,7 +1274,7 @@ VoiceStudio pins pedalboard to `>=0.9.14,<0.9.21` while [upstream portable-wheel
 
 ### TorchCodec unavailable
 
-When torchaudio requires an unavailable TorchCodec installation, VoiceStudio writes through soundfile and reads reference audio through its FFmpeg fallback. Reference amplitude is normalized using the decoded sample representation, including 8-, 24-, and 32-bit PCM.
+When torchaudio requires an unavailable TorchCodec installation, VoiceStudio writes through soundfile and reads audio (reference clips, dub segments, cached-segment headers) through soundfile or its FFmpeg fallback, so dub assembly works on torchaudio 2.9 without TorchCodec. Reference amplitude is normalized using the decoded sample representation, including 8-, 24-, and 32-bit PCM.
 
 ### Isolated engine timeouts
 
