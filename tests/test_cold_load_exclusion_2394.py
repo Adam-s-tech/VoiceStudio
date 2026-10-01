@@ -456,3 +456,58 @@ def test_a_caller_queued_behind_another_load_does_not_brand_it_abandoned(mm, mon
         release.set()
         monkeypatch.setattr(mm, "model", None, raising=False)
         pool.shutdown(wait=False)
+
+
+def test_a_queued_caller_hears_about_an_abandonment_that_happens_while_it_waits(
+    mm, monkeypatch
+):
+    """Review (Greptile P1): a generate that began waiting behind a healthy
+    preload had already passed the up-front abandonment check. When the preload
+    is then abandoned it must fail promptly, not sit out its whole own budget."""
+    in_native, release = threading.Event(), threading.Event()
+
+    def _loader():
+        in_native.set()
+        release.wait(30)
+        return object()
+
+    monkeypatch.setattr(mm, "model", None, raising=False)
+    monkeypatch.setattr(mm, "_model_load_thread_lock", threading.RLock(), raising=False)
+    monkeypatch.setattr(mm, "_load_model_sync", _loader, raising=False)
+    monkeypatch.setattr(mm, "_make_room_before_tts_load", lambda: None, raising=False)
+    mm._load_abandoned.clear()
+
+    holder = threading.Thread(target=lambda: mm._load_model_exclusive(60.0), daemon=True)
+    holder.start()
+    assert in_native.wait(10)
+
+    outcome: dict[str, object] = {}
+    waiting = threading.Event()
+    real_acquire = mm._acquire_load_lock
+
+    def _observed(deadline):
+        waiting.set()  # the caller is past the up-front check and is queueing
+        return real_acquire(deadline)
+
+    monkeypatch.setattr(mm, "_acquire_load_lock", _observed)
+
+    def _queued():
+        try:
+            mm._load_model_exclusive(60.0)
+        except BaseException as exc:  # noqa: BLE001 - the failure IS the subject
+            outcome["error"] = exc
+
+    queued = threading.Thread(target=_queued, daemon=True)
+    try:
+        queued.start()
+        assert waiting.wait(10)
+        mm._load_abandoned.set()  # the preload times out and is given up on
+        queued.join(timeout=10)
+        assert not queued.is_alive(), "the queued caller kept waiting its whole budget"
+        assert isinstance(outcome.get("error"), mm.ModelLoadAbandoned), outcome
+        assert "restart" in str(outcome["error"]).lower()
+    finally:
+        release.set()
+        holder.join(timeout=10)
+        mm._load_abandoned.clear()
+        monkeypatch.setattr(mm, "model", None, raising=False)

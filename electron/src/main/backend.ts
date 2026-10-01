@@ -43,6 +43,7 @@ import {
   type RemoteSession,
 } from './remote-backend';
 import { SetupProgressTracker, cleanProcessLine } from './setup-progress';
+import { scrubText } from '../shared/utils/scrub';
 
 const DEFAULT_PORT = 3900;
 const DEFAULT_BUDGET_S = 300;
@@ -1055,7 +1056,10 @@ export class BackendSupervisor extends EventEmitter<{
   }
 
   private pushLog(stream: 'out' | 'err', line: string, fromChild = false): void {
-    line = cleanProcessLine(line);
+    // Backend output can carry a token or a home directory (and with it the
+    // user's name). It is quoted in failure messages, shown in the log tail and
+    // forwarded to repair agents, so it is scrubbed once, here, at the source.
+    line = scrubText(cleanProcessLine(line));
     if (!line) return;
     if (stream === 'err') this.crashes.captureLine(line);
     this.log.push(line);

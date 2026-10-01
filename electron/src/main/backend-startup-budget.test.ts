@@ -398,3 +398,30 @@ it('doubles the default budget on a small host', async () => {
   expect(defaultStartupBudgetS(16, 8 * GiB)).toBe(600);
   expect(defaultStartupBudgetS(2, 4 * GiB)).toBe(600);
 });
+
+// Review (Greptile P1, security): the last backend line is quoted in the failure
+// message, which the Fix action forwards to a repair-agent CLI.
+it('scrubs credentials and home directories from the quoted backend output', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+  stubEnv();
+  stubBackend(() => false);
+  const { child, stdout } = fakeChild();
+  mocks.spawn.mockReturnValue(child);
+  const supervisor = new BackendSupervisor();
+  try {
+    await supervisor.start();
+    stdout.emit(
+      'data',
+      `auth failed with hf_${'A'.repeat(34)} reading C:\\Users\\alice\\AppData\\model.bin\r\n`,
+    );
+    await vi.advanceTimersByTimeAsync(11_000);
+    expect(supervisor.status.stage).toBe('failed');
+    expect(supervisor.status.message).toContain('Last output: auth failed');
+    expect(supervisor.status.message).not.toContain('hf_AAAA');
+    expect(supervisor.status.message).not.toContain('alice');
+    expect(supervisor.status.logTail.join('\n')).not.toContain('alice');
+  } finally {
+    (supervisor as unknown as { child: null }).child = null;
+    await supervisor.shutdown();
+  }
+});

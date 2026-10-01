@@ -530,6 +530,10 @@ _HOST_OOM_SIGNATURES = (
     # small for this operation to complete") has its own, more specific remedy
     # and must keep it.
     "not enough memory to continue the execution of the program",
+    # The same condition by its number, which survives a localized OS message
+    # (ERROR_NOT_ENOUGH_MEMORY = 8, "Not enough memory resources are available
+    # to process this command"). Bracketed so WinError 80/87/1455 never match.
+    "[winerror 8]",
 )
 
 
@@ -550,6 +554,9 @@ def is_host_oom(error: BaseException | str) -> bool:
             continue
         seen.add(id(current))
         if type(current).__name__ == "MemoryError":
+            return True
+        # OSError.winerror carries the number even when the text is localized.
+        if getattr(current, "winerror", None) == 8:
             return True
         if any(signature in str(current).lower() for signature in _HOST_OOM_SIGNATURES):
             return True

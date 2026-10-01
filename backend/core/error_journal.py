@@ -73,6 +73,7 @@ _CLASS_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
         "cannot allocate memory",
         "std::bad_alloc",
         "not enough memory to continue the execution of the program",
+        "[winerror 8]",
     )),
     ("PYANNOTE_LICENSE_REQUIRED", (
         "pyannote",  # only meaningful combined with an auth marker — see classify()
@@ -157,6 +158,10 @@ def classify_exception(exc: BaseException, trace: str = "") -> str:
             # torch's `OutOfMemoryError`, since it ends in the same letters,
             # telling a GPU host to free system RAM. Exact type, exact intent.
             if type(exc).__name__ == "MemoryError":
+                return cls
+            # WinError 8 by number: a localized OS message carries no English
+            # signature, but the errno-style attribute is language-neutral.
+            if getattr(exc, "winerror", None) == 8:
                 return cls
         if any(n in blob for n in needles):
             return cls

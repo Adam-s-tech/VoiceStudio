@@ -334,9 +334,23 @@ def test_generation_emits_heartbeats_so_a_slow_render_is_not_killed(monkeypatch)
     monkeypatch.setattr(sidecar, "_HEARTBEAT_S", 0.01)
     model = sidecar._load_model(io.BytesIO())
     real_generate = type(model).generate
+    real_send = sidecar._send
+    two_heartbeats = threading.Event()
+    seen = []
+
+    def observing_send(stream, obj):
+        real_send(stream, obj)
+        if obj.get("stage") == "generating":
+            seen.append(obj)
+            if len(seen) >= 2:
+                two_heartbeats.set()
+
+    monkeypatch.setattr(sidecar, "_send", observing_send)
 
     def generate(self, **kw):
-        threading.Event().wait(0.2)  # a render that outlasts several heartbeats
+        # Held until the heartbeat thread has demonstrably emitted two frames;
+        # the timeout only bounds a failure, it is never the synchronisation.
+        assert two_heartbeats.wait(30), "no heartbeats while generating"
         return real_generate(self, **kw)
 
     monkeypatch.setattr(type(model), "generate", generate)

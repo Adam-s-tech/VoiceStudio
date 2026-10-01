@@ -346,3 +346,34 @@ def test_nothing_else_is_misread_as_ram_exhaustion(message, diagnosis):
     the wrong cause sends the user somewhere useless. Disk-full, the paging
     file, timeouts and the device class all share vocabulary with RAM."""
     assert diagnosis.classify(message) != "HOST_MEMORY_EXHAUSTED"
+
+
+class _LocalizedWinError8(OSError):
+    """An OS error 8 whose message is localized: no English signature at all."""
+
+    def __init__(self) -> None:
+        super().__init__(8, "Nicht genügend Arbeitsspeicher verfügbar")
+        self.winerror = 8
+
+
+def test_windows_error_8_is_recognised_by_number_without_the_english_text(diagnosis):
+    """Review (CodeRabbit): a localized or reworded OS message still carries the
+    errno-style number, so the host-memory topic must not depend on English."""
+    err = _LocalizedWinError8()
+    assert diagnosis.is_host_oom(err)
+    assert diagnosis.is_host_oom("[WinError 8] Nicht genügend Arbeitsspeicher")
+    assert diagnosis.classify(err) == "HOST_MEMORY_EXHAUSTED"
+    assert diagnosis.journal_classify(err) == "HOST_MEMORY_EXHAUSTED"
+    # Wrapped, as the generation router re-raises it.
+    try:
+        try:
+            raise _LocalizedWinError8()
+        except OSError as inner:
+            raise RuntimeError("generation failed") from inner
+    except RuntimeError as wrapped:
+        assert diagnosis.classify(wrapped) == "HOST_MEMORY_EXHAUSTED"
+
+
+def test_other_windows_error_numbers_are_not_claimed_as_host_memory(diagnosis):
+    for text in ("[WinError 80] file exists", "[WinError 87] bad parameter", "[WinError 1455] paging"):
+        assert not diagnosis.is_host_oom(text), text

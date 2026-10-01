@@ -2901,6 +2901,40 @@ def _reset_gpu_pool() -> None:
         _gpu_pool_singleton.reset()
 
 
+_LOAD_WAIT_SLICE_S = 0.25
+
+
+def _raise_if_load_abandoned() -> None:
+    """Refuse promptly while a given-up-on loader still owns the load lock."""
+    if _load_abandoned.is_set():
+        # A loader was given up on and is still inside the native call. It will
+        # clear the flag itself when it exits, so this is not permanent.
+        raise ModelLoadAbandoned(
+            "A previous model load is stuck and cannot be interrupted, so it is "
+            "still holding the model in memory. Restart the backend (Settings → "
+            "Logs → Restart backend), then try again."
+        )
+
+
+def _acquire_load_lock(deadline: float) -> bool:
+    """Take the load lock, re-checking abandonment while queued.
+
+    A caller that starts waiting while a healthy load runs has already passed
+    the up-front abandonment check. If that load is then given up on, waiting
+    out this caller's own deadline would strand it for the full load budget
+    before it hears "restart the backend". Waiting in short slices lets a
+    queued caller notice the verdict within a fraction of a second.
+    """
+    end = time.monotonic() + max(0.0, deadline)
+    while True:
+        remaining = end - time.monotonic()
+        if _model_load_thread_lock.acquire(timeout=max(0.0, min(_LOAD_WAIT_SLICE_S, remaining))):
+            return True
+        _raise_if_load_abandoned()
+        if remaining <= _LOAD_WAIT_SLICE_S:
+            return False
+
+
 def _load_model_exclusive(
     timeout: float | None = None, ticket: _LoadTicket | None = None
 ):
@@ -2949,16 +2983,9 @@ def _load_model_exclusive(
     load alongside it.
     """
     global model
-    if _load_abandoned.is_set():
-        # A loader was given up on and is still inside the native call. It will
-        # clear the flag itself if it ever finishes, so this is not permanent.
-        raise ModelLoadAbandoned(
-            "A previous model load is stuck and cannot be interrupted, so it is "
-            "still holding the model in memory. Restart the backend (Settings → "
-            "Logs → Restart backend), then try again."
-        )
+    _raise_if_load_abandoned()
     deadline = _model_load_timeout() if timeout is None else timeout
-    if not _model_load_thread_lock.acquire(timeout=max(0.0, deadline)):
+    if not _acquire_load_lock(deadline):
         # The holder is still going, but it was never abandoned (its own
         # deadline has not passed), so waiting was correct and simply ran out
         # here. Name that honestly rather than implying a restart.
