@@ -1056,6 +1056,7 @@ async def _render_longform_sse(
     job_id: str | None = None,
     resume: bool = False,
     is_disconnected: Callable[[], Awaitable[bool]] | None = None,
+    on_checkpoint: Callable[[], None] | None = None,
 ):
     """Shared chapterized-render SSE generator for Audiobook *and* Stories.
 
@@ -1091,7 +1092,7 @@ async def _render_longform_sse(
     # can be resumed later even without the original script. Best-effort.
     title = (metadata or {}).get("title") or (plan.chapters[0].title if plan.chapters else "")
     try:
-        longform_resume.write_manifest(longform_resume.build_manifest(
+        checkpoint_path = longform_resume.write_manifest(longform_resume.build_manifest(
             job_id=job_id, job_type=job_type, title=title,
             plan_chapters=[
                 {"title": c.title, "spans": [s.to_dict() for s in c.spans]}
@@ -1110,6 +1111,8 @@ async def _render_longform_sse(
                 "voice_map": voice_map,
             },
         ))
+        if checkpoint_path is not None and on_checkpoint is not None:
+            on_checkpoint()
     except Exception:  # resume durability is an enhancement; never block the render
         logger.debug("[%s] resume manifest write skipped", job_id, exc_info=True)
 
@@ -1513,7 +1516,7 @@ async def resume_longform(job_id: str, request: Request = None):
     """Resume an interrupted longform render from its persisted manifest. The
     already-rendered chapters are content-addressed in the shared cache, so they
     return instantly — only the unrendered chapters synthesize again. Streams the
-    same SSE event shape as the original render, under the original job_id."""
+    same SSE event shape as the original render, under a fresh job_id."""
     from services.audiobook import AudiobookPlan, Chapter, Span
 
     # Find the requested job among the trusted filesystem scan (every path there
@@ -1536,9 +1539,10 @@ async def resume_longform(job_id: str, request: Request = None):
     ]
     plan = AudiobookPlan(chapters=chapters)
     p = manifest.get("params", {})
-    # Retire the interrupted job's manifest (trusted scan path) so it stops
-    # showing as resumable once we've kicked off the fresh-id resume.
-    longform_resume.discard_manifest_file(entry["manifest_path"])
+    # The response generator is lazy and may never run. Keep the old plan until
+    # the fresh render has atomically published its own durable checkpoint.
+    def retire_checkpoint():
+        longform_resume.discard_manifest_file(entry["manifest_path"])
     # Resume under a FRESH job id (job_id=None → a server uuid in the renderer).
     # The chapter cache is content-addressed (keyed by chapter content, not the
     # job id), so the already-rendered chapters still hit instantly — only the
@@ -1553,6 +1557,7 @@ async def resume_longform(job_id: str, request: Request = None):
             opts=ExpressiveOptions.from_manifest(p.get("expressive")),
             voice_map=p.get("voice_map"),
             job_type=entry["job_type"],
+            on_checkpoint=retire_checkpoint,
             is_disconnected=request.is_disconnected if request is not None else None,
         ),
         media_type="text/event-stream",
