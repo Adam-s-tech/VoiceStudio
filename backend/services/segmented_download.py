@@ -244,10 +244,10 @@ async def _stream_single(client, url, token, part, on_bytes, cancelled) -> None:
 
 
 def _preallocate(part: str, size: int) -> None:
-    # Create/extend the file to `size` so segment writes can seek to offsets.
+    # Resize the file to `size` so restarted downloads cannot retain excess bytes.
     with open(part, "a+b") as fh:
         fh.seek(0, os.SEEK_END)
-        if fh.tell() < size:
+        if fh.tell() != size:
             fh.truncate(size)
 
 
