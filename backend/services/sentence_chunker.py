@@ -218,8 +218,14 @@ def _split_sentences(
     """Split text into sentences using regex marker replacement.
 
     Returns a list of (sentence, start_pos, end_pos) tuples.
-    The text must not contain literal ``<prd>`` or ``<stop>`` substrings.
+    Internal markers are chosen outside the input so literal marker text survives.
     """
+    prd, stop = "<prd>", "<stop>"
+    while prd in text:
+        prd = prd[:-1] + "_>"
+    while stop in text:
+        stop = stop[:-1] + "_>"
+
     alphabets = r"([A-Za-z])"
     # Title/honorific prefixes that take a trailing period. Sourced from the
     # union of every language list in ``HONORIFICS_BY_LANGUAGE`` (en / it /
@@ -244,37 +250,37 @@ def _split_sentences(
 
     text = text.replace("\n", " ")
 
-    text = re.sub(prefixes, r"\1<prd>", text)
-    text = re.sub(websites, r"<prd>\1", text)
-    text = re.sub(digits + r"[.]" + digits, r"\1<prd>\2", text)
-    text = re.sub(multiple_dots, lambda m: "<prd>" * len(m.group(0)), text)
+    text = re.sub(prefixes, rf"\1{prd}", text)
+    text = re.sub(websites, rf"{prd}\1", text)
+    text = re.sub(digits + r"[.]" + digits, rf"\1{prd}\2", text)
+    text = re.sub(multiple_dots, lambda m: prd * len(m.group(0)), text)
 
     if "Ph.D" in text:
-        text = text.replace("Ph.D.", "Ph<prd>D<prd>")
+        text = text.replace("Ph.D.", f"Ph{prd}D{prd}")
 
-    text = re.sub(r"\s" + alphabets + r"[.] ", r" \1<prd> ", text)
-    text = re.sub(acronyms + r" " + starters, r"\1<stop> \2", text)
+    text = re.sub(r"\s" + alphabets + r"[.] ", rf" \1{prd} ", text)
+    text = re.sub(acronyms + r" " + starters, rf"\1{stop} \2", text)
     text = re.sub(
         alphabets + r"[.]" + alphabets + r"[.]" + alphabets + r"[.]",
-        r"\1<prd>\2<prd>\3<prd>",
+        rf"\1{prd}\2{prd}\3{prd}",
         text,
     )
-    text = re.sub(alphabets + r"[.]" + alphabets + r"[.]", r"\1<prd>\2<prd>", text)
+    text = re.sub(alphabets + r"[.]" + alphabets + r"[.]", rf"\1{prd}\2{prd}", text)
     # Preserve the period of the suffix abbreviation when it precedes a starter,
     # e.g. "Patter Inc. He left" → keep "Inc." in the emitted sentence.
-    text = re.sub(r" " + suffixes + r"[.] " + starters, r" \1.<stop> \2", text)
-    text = re.sub(r" " + suffixes + r"[.]", r" \1<prd>", text)
-    text = re.sub(r" " + alphabets + r"[.]", r" \1<prd>", text)
+    text = re.sub(r" " + suffixes + r"[.] " + starters, rf" \1.{stop} \2", text)
+    text = re.sub(r" " + suffixes + r"[.]", rf" \1{prd}", text)
+    text = re.sub(r" " + alphabets + r"[.]", rf" \1{prd}", text)
 
     # Mark sentence-ending punctuation (Latin + CJK + non-Latin scripts).
-    text = re.sub(rf"([{_TERMINATOR_REGEX_CLASS}])([\"\u201d])", r"\1\2<stop>", text)
-    text = re.sub(rf"([{_TERMINATOR_REGEX_CLASS}])(?![\"\u201d])", r"\1<stop>", text)
+    text = re.sub(rf"([{_TERMINATOR_REGEX_CLASS}])([\"\u201d])", rf"\1\2{stop}", text)
+    text = re.sub(rf"([{_TERMINATOR_REGEX_CLASS}])(?![\"\u201d])", rf"\1{stop}", text)
 
     # Restore periods
-    text = text.replace("<prd>", ".")
+    text = text.replace(prd, ".")
 
-    splitted = text.split("<stop>")
-    text = text.replace("<stop>", "")
+    splitted = text.split(stop)
+    text = text.replace(stop, "")
 
     sentences: list[tuple[str, int, int]] = []
     buff = ""
