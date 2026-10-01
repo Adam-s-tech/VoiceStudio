@@ -1177,11 +1177,6 @@ export class BackendSupervisor extends EventEmitter<{
         // suppress the one diagnostic that matters — a managed backend that
         // died silently — and would let an attach-only wait blame output from
         // a backend this attempt never started.
-        // killChild() nulls this.child, so record whether this launch owned a
-        // process *before* tearing it down. Checking afterwards would
-        // suppress the one diagnostic that matters — a managed backend that
-        // died silently — and would let an attach-only wait blame output from
-        // a backend this attempt never started.
         const owned = this.child !== null;
         await this.killChild();
         const lastLine = owned ? this.childLog.at(-1) : undefined;
