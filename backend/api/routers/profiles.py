@@ -798,14 +798,24 @@ async def lock_profile(
         locked_path = _voices_path(locked_filename)
         if locked_path is None:
             raise HTTPException(status_code=400, detail="Invalid profile id")
-        shutil.copy2(str(src_path), locked_path)
+        # Stage the copy beside the target and swap it in only after the row
+        # commits: a failed copy/update must never leave a truncated or
+        # half-switched locked take behind the profile's live reference.
+        staged_path = f"{locked_path}.part"
+        try:
+            shutil.copy2(str(src_path), staged_path)
 
-        ref_text = history["text"][:100] if history["text"] else ""
+            ref_text = history["text"][:100] if history["text"] else ""
 
-        conn.execute(
-            "UPDATE voice_profiles SET locked_audio_path=?, seed=?, is_locked=1, ref_text=? WHERE id=?",
-            (locked_filename, seed, ref_text, profile_id)
-        )
+            conn.execute(
+                "UPDATE voice_profiles SET locked_audio_path=?, seed=?, is_locked=1, ref_text=? WHERE id=?",
+                (locked_filename, seed, ref_text, profile_id)
+            )
+            conn.commit()
+            os.replace(staged_path, locked_path)
+        finally:
+            with contextlib.suppress(OSError):
+                os.remove(staged_path)
     event_bus.emit("profiles", {"action": "locked", "id": profile_id})
     return {"locked": True, "profile_id": profile_id, "locked_audio_path": locked_filename}
 
@@ -819,15 +829,18 @@ async def unlock_profile(profile_id: str):
                 detail="Voice profile not found. It may have been deleted from another window — refresh the sidebar to see the current list.",
             )
 
-        if profile["locked_audio_path"]:
-            locked_path = _voices_path(profile["locked_audio_path"])
-            if locked_path and os.path.exists(locked_path):
-                os.remove(locked_path)
-
+        locked_path = (
+            _voices_path(profile["locked_audio_path"]) if profile["locked_audio_path"] else None
+        )
         conn.execute(
             "UPDATE voice_profiles SET locked_audio_path='', seed=NULL, is_locked=0 WHERE id=?",
             (profile_id,)
         )
+    # Unlink only after the row change committed (a rolled-back unlock must
+    # keep its locked take); the file is superseded, so a leftover is harmless.
+    if locked_path:
+        with contextlib.suppress(OSError):
+            os.remove(locked_path)
     event_bus.emit("profiles", {"action": "unlocked", "id": profile_id})
     return {"unlocked": True, "profile_id": profile_id}
 
@@ -887,28 +900,39 @@ async def record_consent(
     audio_path = _voices_path(audio_filename)
     if audio_path is None:  # profile_id is server-generated; this is belt+braces
         raise HTTPException(status_code=400, detail="Invalid profile id")
-    with open(audio_path, "wb") as f:
-        f.write(data)
-
-    # A re-record may change the extension; drop the superseded file.
+    # Stage the upload; the previous consent recording must survive until the
+    # new one is committed (a failed write/update used to lose both).
     old = row["consent_audio_path"]
-    if old and old != audio_filename:
-        old_path = _voices_path(old)
-        if old_path and os.path.exists(old_path):
-            os.remove(old_path)
-
+    same_name = old == audio_filename
+    staged_path = f"{audio_path}.part"
     recorded_at = time.time()
     try:
+        with open(staged_path, "wb") as f:
+            f.write(data)
+        if not same_name:
+            os.replace(staged_path, audio_path)  # not referenced until commit
         with db_conn() as conn:
             conn.execute(
                 "UPDATE voice_profiles SET verified_own_voice=1, consent_text=?, "
                 "consent_audio_path=?, consent_recorded_at=? WHERE id=?",
                 (consent_text.strip(), audio_filename, recorded_at, profile_id),
             )
-    except Exception:
-        if os.path.exists(audio_path):
-            os.remove(audio_path)
+        if same_name:  # overwriting the live file: swap only after the commit
+            os.replace(staged_path, audio_path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.remove(staged_path)
+        if not same_name:
+            with contextlib.suppress(OSError):
+                os.remove(audio_path)
         raise
+    # A re-record may change the extension; drop the superseded file now that
+    # nothing references it.
+    if old and not same_name:
+        old_path = _voices_path(old)
+        if old_path:
+            with contextlib.suppress(OSError):
+                os.remove(old_path)
     event_bus.emit("profiles", {"action": "consent_recorded", "id": profile_id})
     return {
         "id": profile_id,
