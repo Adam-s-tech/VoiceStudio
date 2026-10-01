@@ -132,6 +132,10 @@ def test_cleanup_log_redacts_home_prefix_and_keeps_asset_suffix(profile, monkeyp
     for name in names:
         (root / name).rename(voices / name)
     monkeypatch.setattr(profiles, "VOICES_DIR", str(voices))
+    # Treat this real temporary directory as the process home on every OS.
+    # A nested Users component alone is not a Windows home-directory shape.
+    real_expanduser = profiles.os.path.expanduser
+    monkeypatch.setattr(profiles.os.path, "expanduser", lambda path: str(voices.parent) if path == "~" else real_expanduser(path))
     real_remove = profiles.os.remove
     def remove(path):
         if str(path) == str(voices / "ref.wav"):
@@ -141,5 +145,6 @@ def test_cleanup_log_redacts_home_prefix_and_keeps_asset_suffix(profile, monkeyp
     app = FastAPI()
     app.include_router(profiles.router)
     assert TestClient(app).delete("/profiles/voice").status_code == 500
-    assert "Users/cleanup-test" not in caplog.text
-    assert "voices/ref.wav" in caplog.text
+    logged = caplog.text.replace("\\", "/")
+    assert "Users/cleanup-test" not in logged
+    assert "voices/ref.wav" in logged

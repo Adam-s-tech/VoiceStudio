@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Profile } from '@/lib/api/types';
@@ -20,7 +20,7 @@ vi.mock('@/lib/api/profiles', () => ({
   replaceProfileAudio: mock.replace,
 }));
 vi.mock('./use-backend-status', () => ({ useBackendStatus: () => ({ stage: 'ready' }) }));
-import { useDeleteProfile, useReplaceProfileAudio } from './use-profiles';
+import { useDeleteProfile, useProfiles, useReplaceProfileAudio } from './use-profiles';
 import { readDraft, writeDraft } from '@/features/design/design-draft';
 
 vi.mock('sonner', () => ({ toast: { error: mock.error, success: mock.success } }));
@@ -154,4 +154,65 @@ it('clears selected voices after an ordinary successful deletion', async () => {
   expect(readDraft().profileId).toBeNull();
   expect(mock.success).toHaveBeenCalled();
   expect(mock.error).not.toHaveBeenCalled();
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+it('does not overwrite a newer query refresh with an older deletion-error list', async () => {
+  const stale = deferred<Profile[]>();
+  mock.remove.mockRejectedValue(new Error('cleanup incomplete'));
+  mock.list.mockReturnValueOnce(stale.promise);
+  patchCloneSettings({ selectedProfileId: 'v1' });
+  writeDraft({ ...readDraft(), profileId: 'v1' });
+  const { client, result } = setupDelete();
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  renderHook(() => useProfiles(), { wrapper });
+  let deletion!: Promise<unknown>;
+  await act(async () => {
+    deletion = result.current.mutateAsync('v1').catch((error) => error);
+    await Promise.resolve();
+  });
+  await waitFor(() => expect(mock.list).toHaveBeenCalledTimes(1));
+  const updated = profile({ id: 'v2', name: 'Updated voice' });
+  const created = profile({ id: 'v3', name: 'New voice' });
+  mock.list.mockResolvedValueOnce([updated, created]);
+  await act(() => client.invalidateQueries({ queryKey: queryKeys.profiles }));
+  expect(client.getQueryData<Profile[]>(queryKeys.profiles)).toEqual([updated, created]);
+  await act(async () => {
+    stale.resolve([profile({ id: 'v2' })]);
+    await deletion;
+  });
+  expect(client.getQueryData<Profile[]>(queryKeys.profiles)).toEqual([updated, created]);
+  expect(cloneSettingsStore.state.selectedProfileId).toBeNull();
+  expect(readDraft().profileId).toBeNull();
+});
+
+it('cancels an older profile query before confirming deletion after an error', async () => {
+  const stale = deferred<Profile[]>();
+  mock.list.mockReturnValueOnce(stale.promise).mockResolvedValueOnce([profile({ id: 'v2' })]);
+  mock.remove.mockRejectedValue(new Error('cleanup incomplete'));
+  patchCloneSettings({ selectedProfileId: 'v1' });
+  writeDraft({ ...readDraft(), profileId: 'v1' });
+  const { client, result } = setupDelete();
+  const older = client
+    .fetchQuery({ queryKey: queryKeys.profiles, queryFn: mock.list, staleTime: 0 })
+    .catch((error) => error);
+  await act(async () => {
+    await expect(result.current.mutateAsync('v1')).rejects.toThrow('cleanup incomplete');
+  });
+  expect(cloneSettingsStore.state.selectedProfileId).toBeNull();
+  expect(readDraft().profileId).toBeNull();
+  await act(async () => {
+    stale.resolve([profile({}), profile({ id: 'v2' })]);
+    await older;
+  });
+  expect(client.getQueryData<Profile[]>(queryKeys.profiles)?.map((p) => p.id)).toEqual(['v2']);
 });
