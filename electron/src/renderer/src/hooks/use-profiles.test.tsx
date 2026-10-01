@@ -249,3 +249,89 @@ it('settles a deletion error while the native backend is offline and preserves s
     });
   }
 });
+
+it.each(['deleted', 'rollback', 'unreachable'])(
+  'reconciles a deletion error after backend readiness without assuming deletion: %s',
+  async (serverOutcome) => {
+    mock.remove.mockImplementation(async () => {
+      onlineManager.setOnline(false);
+      throw new Error('backend stopped after DELETE');
+    });
+    if (serverOutcome === 'deleted') mock.list.mockResolvedValue([profile({ id: 'v2' })]);
+    else if (serverOutcome === 'rollback') {
+      mock.list.mockResolvedValue([profile({}), profile({ id: 'v2' })]);
+    } else mock.list.mockRejectedValue(new Error('backend still unavailable'));
+    patchCloneSettings({ selectedProfileId: 'v1' });
+    writeDraft({ ...readDraft(), profileId: 'v1' });
+    const { client, result } = setupDelete();
+    try {
+      await act(async () => {
+        await expect(result.current.mutateAsync('v1')).rejects.toThrow(
+          'backend stopped after DELETE',
+        );
+      });
+      await waitFor(() => expect(result.current.isPending).toBe(false));
+      expect(mock.list).not.toHaveBeenCalled();
+      expect(cloneSettingsStore.state.selectedProfileId).toBe('v1');
+      expect(readDraft().profileId).toBe('v1');
+
+      await act(async () => {
+        onlineManager.setOnline(true);
+      });
+      await waitFor(() => expect(mock.list).toHaveBeenCalledTimes(1));
+      await waitFor(() =>
+        expect(client.getQueryState(queryKeys.profiles)?.fetchStatus).toBe('idle'),
+      );
+      const expectedSelection = serverOutcome === 'deleted' ? null : 'v1';
+      expect(cloneSettingsStore.state.selectedProfileId).toBe(expectedSelection);
+      expect(readDraft().profileId).toBe(expectedSelection);
+      expect(client.getQueryData<Profile[]>(queryKeys.profiles)?.map((p) => p.id)).toEqual(
+        serverOutcome === 'deleted' ? ['v2'] : ['v1', 'v2'],
+      );
+    } finally {
+      client.clear();
+    }
+  },
+);
+
+it.each(['paused', 'fetching'])(
+  'cancels managed confirmation on query-client clear without applying a stale result after remount: %s',
+  async (confirmationState) => {
+    const stale = deferred<Profile[]>();
+    mock.remove.mockImplementation(async () => {
+      if (confirmationState === 'paused') onlineManager.setOnline(false);
+      throw new Error('cleanup incomplete');
+    });
+    mock.list.mockReturnValue(stale.promise);
+    patchCloneSettings({ selectedProfileId: 'v1' });
+    writeDraft({ ...readDraft(), profileId: 'v1' });
+    const { client, result, unmount } = setupDelete();
+    await act(async () => {
+      await expect(result.current.mutateAsync('v1')).rejects.toThrow('cleanup incomplete');
+    });
+    await waitFor(() =>
+      expect(client.getQueryState(queryKeys.profiles)?.fetchStatus).toBe(confirmationState),
+    );
+    unmount();
+    client.clear();
+    const currentProfiles = [profile({}), profile({ id: 'v2', name: 'Fresh cached voice' })];
+    client.setQueryData(queryKeys.profiles, currentProfiles);
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const remounted = renderHook(() => useProfiles(), { wrapper });
+    try {
+      await act(async () => {
+        onlineManager.setOnline(true);
+        stale.resolve([profile({ id: 'v2', name: 'Stale deletion result' })]);
+      });
+      expect(mock.list).toHaveBeenCalledTimes(confirmationState === 'paused' ? 0 : 1);
+      expect(client.getQueryData(queryKeys.profiles)).toEqual(currentProfiles);
+      expect(cloneSettingsStore.state.selectedProfileId).toBe('v1');
+      expect(readDraft().profileId).toBe('v1');
+    } finally {
+      remounted.unmount();
+      client.clear();
+    }
+  },
+);

@@ -1,5 +1,4 @@
 import {
-  onlineManager,
   useMutation,
   useQuery,
   useQueryClient,
@@ -106,24 +105,26 @@ export function useDeleteProfile(): UseMutationResult<void, Error, string> {
       toast.success(tr('clone.profile_deleted'));
       void queryClient.invalidateQueries({ queryKey: queryKeys.profiles });
     },
-    onError: async (err, id) => {
+    onError: (err, id) => {
       toast.error(tr('clone.delete_profile_failed', { message: describeError(err) }));
-      if (!onlineManager.isOnline()) return;
-      try {
-        // Asset cleanup can fail after the profile deletion has committed.
-        // Confirm absence before clearing state; a rollback or unreachable
-        // backend must preserve the user's selected voice.
-        await queryClient.cancelQueries({ queryKey: queryKeys.profiles });
-        if (!onlineManager.isOnline()) return;
-        const profiles = await queryClient.fetchQuery({
-          queryKey: queryKeys.profiles,
-          queryFn: listProfiles,
-          staleTime: 0,
-        });
-        if (!profiles.some((profile) => profile.id === id)) forgetProfile(id);
-      } catch {
-        // The original error is already shown; absence is still unconfirmed.
-      }
+      // Let the deletion error settle even if confirmation is paused offline.
+      // The managed profiles query resumes when the backend becomes ready.
+      void (async () => {
+        try {
+          // Asset cleanup can fail after the profile deletion has committed.
+          // Confirm absence before clearing state; a rollback or unreachable
+          // backend must preserve the user's selected voice.
+          await queryClient.cancelQueries({ queryKey: queryKeys.profiles });
+          const profiles = await queryClient.fetchQuery({
+            queryKey: queryKeys.profiles,
+            queryFn: listProfiles,
+            staleTime: 0,
+          });
+          if (!profiles.some((profile) => profile.id === id)) forgetProfile(id);
+        } catch {
+          // The original error is already shown; absence is still unconfirmed.
+        }
+      })();
     },
   });
 }
