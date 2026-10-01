@@ -102,11 +102,11 @@ def test_import_endpoint_chapter_titles_across_line_endings(newline):
     lines = ["Chapter 1", "Once upon a time, the story began.", "", "Chapter 2", "The story ended."]
     app = FastAPI()
     app.include_router(router)
-    with TestClient(app) as client:
-        response = client.post(
-            "/audiobook/import",
-            files={"file": ("book.txt", newline.join(lines).encode(), "text/plain")},
-        )
+    client = TestClient(app)
+    response = client.post(
+        "/audiobook/import",
+        files={"file": ("book.txt", newline.join(lines).encode(), "text/plain")},
+    )
     assert response.status_code == 200
     result = response.json()
     assert result["chapters"] == 2
