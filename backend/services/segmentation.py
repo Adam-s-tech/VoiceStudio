@@ -377,10 +377,9 @@ def _merge_short(segments: List[Segment]) -> List[Segment]:
                     target = prev if prev_gap <= next_gap else nxt
                 else:
                     target = prev or nxt
-            elif prev:
-                target = prev
-            elif nxt:
-                target = nxt
+            # A genuine short turn with no same-speaker neighbour must stay
+            # attributed to its speaker; only ultra-short stray tokens above
+            # have permission to cross a known speaker boundary.
 
             if target is None:
                 i += 1
