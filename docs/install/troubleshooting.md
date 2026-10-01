@@ -1315,3 +1315,7 @@ prove that torch and torchvision versions are mismatched. Save the diagnostic
 bundle and check package versions in the environment running the backend before
 reinstalling anything. Faster Whisper is an alternative when only transcription
 is affected; it does not diagnose or repair the original environment.
+
+## Concurrent migration backups
+
+Concurrent pre-migration database snapshots reserve distinct backup counters before copying. Reservation files are not recovery backups. A reservation left by an interrupted writer is skipped by subsequent snapshots rather than reused.

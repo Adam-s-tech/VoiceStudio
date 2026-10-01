@@ -114,6 +114,29 @@ def _next_counter(db_path: str, safe_version: str) -> int:
     return highest + 1
 
 
+def _reserve_snapshot(db_path: str, safe_version: str) -> tuple[str, str]:
+    """Claim a counter atomically across threads/processes before copying.
+
+    Reservations are not backup files. An abandoned reservation consumes one
+    counter but never gets offered as recovery data or overwritten by a retry.
+    """
+    counter = _next_counter(db_path, safe_version)
+    while True:
+        target = f"{db_path}.backup-{safe_version}-{counter}"
+        reservation = target + ".reserve"
+        try:
+            fd = os.open(reservation, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            counter += 1
+            continue
+        os.close(fd)
+        if os.path.exists(target):
+            os.unlink(reservation)
+            counter += 1
+            continue
+        return target, reservation
+
+
 def stale_partial_backups(db_path: str) -> list[str]:
     """``<db>.backup-<version>-<n>.part-<pid>`` files whose writer is gone.
 
@@ -195,32 +218,38 @@ def snapshot_before_migration(db_path: str, version: str) -> str | None:
         return None
 
     safe_version = _sanitize_version(version)
-    target = f"{db_path}.backup-{safe_version}-{_next_counter(db_path, safe_version)}"
+    target, reservation = _reserve_snapshot(db_path, safe_version)
     tmp = f"{target}.part-{os.getpid()}"
-    src = sqlite3.connect(db_path)
     try:
-        dst = sqlite3.connect(tmp)
+        src = sqlite3.connect(db_path)
         try:
-            # Online backup: consistent snapshot including WAL contents.
-            src.backup(dst)
-            dst.commit()
+            dst = sqlite3.connect(tmp)
+            try:
+                # Online backup: consistent snapshot including WAL contents.
+                src.backup(dst)
+                dst.commit()
+            finally:
+                dst.close()
+        except BaseException:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
         finally:
-            dst.close()
-    except BaseException:
+            src.close()
+        os.replace(tmp, target)
+        # A same-second rotation must still rank the new file newest.
         try:
-            os.remove(tmp)
+            now = time.time()
+            os.utime(target, (now, now))
         except OSError:
             pass
-        raise
+        logger.info("Pre-migration DB backup written: %s (%.1f MB)", target, size / (1024 * 1024))
+        prune_backups(db_path)
+        return target
     finally:
-        src.close()
-    os.replace(tmp, target)
-    # A same-second rotation must still rank the new file newest.
-    try:
-        now = time.time()
-        os.utime(target, (now, now))
-    except OSError:
-        pass
-    logger.info("Pre-migration DB backup written: %s (%.1f MB)", target, size / (1024 * 1024))
-    prune_backups(db_path)
-    return target
+        try:
+            os.unlink(reservation)
+        except OSError:
+            pass
