@@ -475,7 +475,7 @@ def _expand_abbreviations(text: str, lang: str) -> str:
 _TIME_RE = re.compile(r"(?<![\w:.,/$%+-])([01]?\d|2[0-3]):([0-5]\d)(?![\w:/%+-])(?![.,]\d)")
 
 # EN-only ordinal, suffix verified in the callback ("2th" stays as-is).
-_ORDINAL_RE = re.compile(r"(?<![\w.,:/$%+-])(\d{1,4})(st|nd|rd|th)\b")
+_ORDINAL_RE = re.compile(r"(?<![\w.,:/$%+-])(\d{1,4})(st|nd|rd|th)(?![\w:/%+-])(?![.,]\d)")
 
 # EN-only dollars: $N or $N.CC. "$1,000" and "$5.5" are blocked by the
 # lookahead; a period or comma that ends the sentence or clause is not, the
