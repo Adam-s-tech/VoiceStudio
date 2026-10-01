@@ -137,6 +137,33 @@ def _reserve_snapshot(db_path: str, safe_version: str) -> tuple[str, str]:
         return target, reservation
 
 
+#: A reservation older than this with no finished backup belongs to a dead writer.
+_RESERVATION_MAX_AGE_S = 24 * 3600
+
+
+def stale_reservations(db_path: str) -> list[str]:
+    """``.reserve`` markers left by a crashed writer (or whose snapshot already
+    landed). Fresh ones may belong to a live snapshot and are never listed."""
+    directory = os.path.dirname(os.path.abspath(db_path)) or "."
+    base = os.path.basename(db_path)
+    try:
+        names = os.listdir(directory)
+    except OSError:
+        return []
+    stale = []
+    now = time.time()
+    for name in names:
+        if not (name.startswith(base + ".backup-") and name.endswith(".reserve")):
+            continue
+        target = name[: -len(".reserve")]
+        if not _BACKUP_SUFFIX_RE.fullmatch(target[len(base):]):
+            continue
+        path = os.path.join(directory, name)
+        if os.path.exists(os.path.join(directory, target)) or now - _mtime(path) > _RESERVATION_MAX_AGE_S:
+            stale.append(path)
+    return stale
+
+
 def stale_partial_backups(db_path: str) -> list[str]:
     """``<db>.backup-<version>-<n>.part-<pid>`` files whose writer is gone.
 
@@ -181,13 +208,13 @@ def prune_backups(db_path: str, keep: int = KEEP_BACKUPS) -> list[str]:
     """Delete all but the ``keep`` newest backups, plus torn partial
     snapshots from earlier runs. Returns deleted paths."""
     deleted = []
-    for path in stale_partial_backups(db_path):
+    for path in stale_partial_backups(db_path) + stale_reservations(db_path):
         try:
             os.remove(path)
             deleted.append(path)
-            logger.info("Removed torn partial DB backup %s", path)
+            logger.info("Removed stale DB backup leftover %s", path)
         except OSError as exc:
-            logger.warning("Could not remove partial DB backup %s: %s", path, exc)
+            logger.warning("Could not remove DB backup leftover %s: %s", path, exc)
     for path in list_backups(db_path)[keep:]:
         try:
             os.remove(path)

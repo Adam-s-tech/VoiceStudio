@@ -61,3 +61,24 @@ def test_failed_copy_releases_its_reservation(tmp_path, monkeypatch):
         db_backup.snapshot_before_migration(str(path), '1.0')
     assert not list(tmp_path.glob('*.reserve'))
     assert db_backup.list_backups(str(path)) == []
+
+
+def test_abandoned_reservations_are_pruned_but_live_ones_kept(tmp_path):
+    import os
+    import time
+
+    path = tmp_path / 'voices.db'
+    path.write_bytes(b'')
+    base = f'{path}.backup-1.0-'
+    done = tmp_path / 'voices.db.backup-1.0-1'
+    done.write_bytes(b'x')
+    (tmp_path / 'voices.db.backup-1.0-1.reserve').write_bytes(b'')       # snapshot landed
+    old = tmp_path / 'voices.db.backup-1.0-2.reserve'                    # dead writer
+    old.write_bytes(b'')
+    past = time.time() - 48 * 3600
+    os.utime(old, (past, past))
+    live = tmp_path / 'voices.db.backup-1.0-3.reserve'                   # in flight
+    live.write_bytes(b'')
+    db_backup.prune_backups(str(path))
+    assert sorted(p.name for p in tmp_path.iterdir() if p.name.endswith('.reserve')) == [live.name]
+    assert done.exists() and base
