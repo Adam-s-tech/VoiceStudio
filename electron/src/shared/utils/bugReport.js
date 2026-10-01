@@ -184,7 +184,7 @@ async function captureContext(fresh) {
     const active = j?.tts?.active;
     if (active) lines.push(`**Active TTS engine:** \`${active}\``);
     const asrActive = j?.asr?.active;
-    if (asrActive) lines.push(`**Active ASR engine:** \`${asrActive}\``);
+    if (asrActive) lines.push(`**Active ASR engine:** \`${scrubText(String(asrActive))}\``);
   } catch {
     /* noop */
   }

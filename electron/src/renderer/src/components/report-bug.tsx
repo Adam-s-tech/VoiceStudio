@@ -141,7 +141,7 @@ export function ReportBug({ error }: { error?: Error | string }) {
       if (engines.status === 'fulfilled' && engines.value.tts?.active)
         context.push('TTS: ' + engines.value.tts.active);
       if (engines.status === 'fulfilled' && engines.value.asr?.active)
-        context.push('ASR: ' + engines.value.asr.active);
+        context.push('ASR: ' + scrubText(String(engines.value.asr.active)));
       const failure = backend && ['failed', 'crashed', 'port_in_use'].includes(backend.stage);
       const crashSection = failure
         ? [
