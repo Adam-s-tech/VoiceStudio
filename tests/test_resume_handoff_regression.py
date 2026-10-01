@@ -162,3 +162,35 @@ def test_sync_syscall_failure_does_not_retire_original(checkpoint, monkeypatch, 
     asyncio.run(run())
     assert "fsync" in calls
     assert longform_resume.load_manifest_file(str(path)) == manifest
+
+
+def test_partial_completed_resume_retains_original_when_checkpoint_save_fails(checkpoint, monkeypatch):
+    from api.routers import audiobook
+    from services import longform_resume, ffmpeg_utils, gpu_gateway
+    path, manifest = checkpoint
+    manifest["plan"].append({"title": "Failed chapter", "spans": [{"voice_id": "v", "text": "Missing prose", "pause_ms_after": 0, "speed": None}]})
+    manifest["total_chapters"] = 2
+    assert longform_resume.write_manifest(manifest) == str(path)
+    # Manifest persistence uses real files; model execution and mux are isolated.
+    def replace(*_args):
+        raise OSError("checkpoint disk full")
+    monkeypatch.setattr(longform_resume.os, "replace", replace)
+    monkeypatch.setattr(ffmpeg_utils, "find_ffmpeg", lambda: "ffmpeg")
+    monkeypatch.setattr(audiobook, "_resolve_default_language", lambda *_args: "en")
+    monkeypatch.setattr(gpu_gateway, "decide", lambda *_args: object())
+    async def chapter(chapter, **_kwargs):
+        if chapter.title == "Failed chapter":
+            raise RuntimeError("isolated chapter failure")
+        audio = path.parent / "cached.wav"
+        audio.write_bytes(b"existing chapter")
+        return str(audio), 1.0, True, None
+    async def mux(command, **_kwargs):
+        Path(command[-1]).write_bytes(b"partial output")
+    monkeypatch.setattr(audiobook, "_run_chapter", chapter)
+    monkeypatch.setattr(ffmpeg_utils, "run_ffmpeg", mux)
+    async def run():
+        response = await audiobook.resume_longform("old")
+        return [event async for event in response.body_iterator]
+    events = asyncio.run(run())
+    assert any('"type": "done"' in event and '"failed_chapters": [1]' in event for event in events)
+    assert longform_resume.load_manifest_file(str(path)) == manifest

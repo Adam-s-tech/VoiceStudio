@@ -1324,7 +1324,8 @@ async def _render_longform_sse(
         # The render finished — drop the resume manifest so this job is no longer
         # offered for resume.
         longform_resume.clear_manifest(job_type, job_id)
-        if on_completed is not None:
+        # A partial output still needs the original plan for failed chapters.
+        if on_completed is not None and not failed:
             try:
                 on_completed()
             except Exception:
