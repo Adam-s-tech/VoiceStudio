@@ -86,11 +86,9 @@ metadata and the backend fallback mirror it.
 - The Twilio guide and integration directory describe the guided setup and in-app integration pages (#2304)
 
 ### Fixed
-- A generation that fails because the machine ran out of memory now says so and what to free, instead of only "Generation failed. Check the selected engine and try again." (#2462) — thanks @dubeypankaj11-spec!
 - Dub assembly, cached segments and audio tools can read generated WAV files when TorchCodec is missing or cannot load (#2379) — thanks @tokutei58301-boop!
 - Remote API-key and share-PIN clients can record and read export history while native filesystem operations stay local (#2383, #2384) — thanks @sedatdagg!
 - Concurrent job events receive unique sequence numbers (#2384) — thanks @sedatdagg!
-- A generate can no longer crash the backend with a Windows access violation while the startup model preload is still running (#2394) — thanks @manoooo202020!
 - Streaming reuses warm engines, follows model changes and protects active streams during eviction (#2391, #2400) — thanks @DeepanshuPal and @Kishore-MR!
 - VoxCPM2 performs one complete generation attempt with the requested sampling effort and enough time for CPU and MPS inference (#2412) — thanks @strauss-visuals!
 - Voice Clone explains when the selected model cannot clone instead of silently ignoring the reference (#2419)
