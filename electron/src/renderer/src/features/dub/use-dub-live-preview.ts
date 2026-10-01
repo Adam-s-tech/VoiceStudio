@@ -122,8 +122,8 @@ export function useDubLivePreview({ enabled, language }: { enabled: boolean; lan
           if (message.type === 'start' && Number.isFinite(message.sample_rate)) {
             active.player = createStreamingPreview(message.sample_rate!, 0, () => {
               if (session.current !== active) return;
-              session.current = null;
-              setLiveSegmentId(null);
+              // Playback can end before the stream (global stop or another preview).
+              stop();
             });
           } else if (message.type === 'done') {
             active.socket = null;
