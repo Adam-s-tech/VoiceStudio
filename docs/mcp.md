@@ -92,6 +92,23 @@ http_headers = { "X-OmniVoice-Client-Id" = "codex-cli" }
 This follows the [Codex MCP configuration](https://developers.openai.com/codex/mcp):
 a `url` key selects Streamable HTTP and `http_headers` adds static headers.
 
+**Hermes Agent** ([Nous Research](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp))
+connects with no extra VoiceStudio setup. Add the server to
+`~/.hermes/config.yaml` and restart Hermes:
+
+```yaml
+mcp_servers:
+  voicestudio:
+    url: "http://127.0.0.1:3900/mcp/"
+    headers:
+      X-OmniVoice-Client-Id: "hermes"
+```
+
+Any MCP client that speaks Streamable HTTP works the same way; the desktop app
+has no Hermes-specific card because the generic **Model Context Protocol** card
+already covers it. Bind the `hermes` client id to a saved voice under
+[per-agent voices](#per-agent-voices).
+
 To bind this agent to a specific voice, send an
 `X-OmniVoice-Client-Id` header (e.g. `claude-code`). See
 [per-agent voices](#per-agent-voices).
