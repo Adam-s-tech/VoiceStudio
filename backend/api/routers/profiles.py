@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from core.db import db_conn
 from core.config import VOICES_DIR, OUTPUTS_DIR
 from core import event_bus
+from core.scrub import scrub_text
 from core.personalities import get_personalities
 from omnivoice.utils.voice_design import heal_design_instruct, sanitize_instruct
 from core.path_security import UnsafePath, resolve_within
@@ -939,19 +940,44 @@ def revoke_consent(profile_id: str):
 
 @router.delete("/profiles/{profile_id}")
 def delete_profile(profile_id: str):
+    paths = []
     with db_conn() as conn:
         row = conn.execute("SELECT ref_audio_path, locked_audio_path, consent_audio_path FROM voice_profiles WHERE id=?", (profile_id,)).fetchone()
         if row:
             for col in ["ref_audio_path", "locked_audio_path", "consent_audio_path"]:
                 if row[col]:
                     path = _voices_path(row[col])
-                    if path and os.path.exists(path):
-                        os.remove(path)
+                    if path:
+                        paths.append(path)
         portrait_path = _voices_path(f"{profile_id}.portrait.jpg")
         if portrait_path and os.path.isfile(portrait_path):
-            os.remove(portrait_path)
-        # Prevent FOREIGN KEY constraint failure
+            paths.append(portrait_path)
+        # Commit the database change before removing assets: a failed write or
+        # commit must leave the rolled-back profile's files usable.
         conn.execute("UPDATE generation_history SET profile_id = NULL WHERE profile_id=?", (profile_id,))
         conn.execute("DELETE FROM voice_profiles WHERE id=?", (profile_id,))
+    failed_assets = []
+    for path in dict.fromkeys(paths):
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
+        except OSError:
+            # A cleanup failure cannot roll back the committed deletion, and
+            # must not prevent cleanup of the profile's remaining assets.
+            try:
+                failed_assets.append(os.path.relpath(
+                    resolve_within(VOICES_DIR, path), os.path.realpath(VOICES_DIR)
+                ))
+            except (UnsafePath, OSError, ValueError):
+                failed_assets.append("asset location unavailable (consult local backend log)")
+            logger.warning("Deleted profile asset cleanup failed: %s", scrub_text(path))
     event_bus.emit("profiles", {"action": "deleted", "id": profile_id})
+    if failed_assets:
+        raise HTTPException(status_code=500, detail=(
+            "The profile record was deleted, but asset cleanup is incomplete for: "
+            + ", ".join(failed_assets)
+            + ". Paths are relative to the voices folder; remove the files manually. "
+            "Consult the local backend log if an asset location is unavailable."
+        ))
     return {"deleted": profile_id}
