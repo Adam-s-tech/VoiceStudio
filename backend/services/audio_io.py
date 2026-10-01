@@ -49,6 +49,7 @@ from __future__ import annotations
 
 import io
 import logging
+from dataclasses import dataclass
 
 from core.render_trace import timed as _render_timed
 import os
@@ -143,6 +144,61 @@ def load_audio(source: PathOrBuf) -> tuple[torch.Tensor, int]:
                 if temporary is not None:
                     os.unlink(temporary)
         return torch.from_numpy(samples.T), sample_rate
+
+@dataclass(frozen=True)
+class AudioInfo:
+    """Header facts about an audio file; field names mirror ``torchaudio.info``."""
+
+    sample_rate: int
+    num_frames: int
+    num_channels: int
+    bits_per_sample: int  # 0 when the format has no fixed width (compressed)
+
+
+_SUBTYPE_BITS = {
+    "PCM_S8": 8, "PCM_U8": 8, "PCM_16": 16, "PCM_24": 24, "PCM_32": 32,
+    "FLOAT": 32, "DOUBLE": 64,
+}
+
+
+def audio_info(source: PathOrBuf) -> AudioInfo:
+    """Read an audio header without ``torchaudio.info``.
+
+    torchaudio 2.9 removed ``info`` (and routes ``load`` through TorchCodec), so
+    every caller of it died with ``AttributeError`` — which the dub cache checks
+    swallow, silently treating each cached segment as missing and re-rendering
+    the whole job (#2378). libsndfile reads the header of every WAV/FLAC/OGG the
+    app writes; anything else falls back to a full :func:`load_audio` decode.
+    Raises whatever the underlying reader raises for an unreadable file.
+    """
+    import wave
+
+    import soundfile as sf
+
+    position = source.tell() if hasattr(source, "tell") and getattr(source, "seekable", lambda: False)() else None
+    try:
+        # Integer-PCM WAV: report what the header DECLARES, as torchaudio.info
+        # did. libsndfile clamps the frame count to the bytes actually present,
+        # which would hide a truncated cache from the dub fast-path integrity
+        # check (_cached_payload_intact) that compares the two.
+        with wave.open(os.fspath(source) if isinstance(source, os.PathLike) else source) as header:
+            return AudioInfo(
+                int(header.getframerate()), int(header.getnframes()),
+                int(header.getnchannels()), int(header.getsampwidth()) * 8,
+            )
+    except (wave.Error, EOFError):
+        if position is not None:
+            source.seek(position)
+    try:
+        meta = sf.info(source)
+    except RuntimeError:  # LibsndfileError subclasses it
+        wav, rate = load_audio(source)
+        return AudioInfo(int(rate), int(wav.shape[-1]), int(wav.shape[0]), 0)
+    return AudioInfo(
+        int(meta.samplerate), int(meta.frames), int(meta.channels),
+        _SUBTYPE_BITS.get(meta.subtype, 0),
+    )
+
 
 # Opus is carried in Ogg for both .opus and .ogg filenames.
 OPUS_CODEC_ARGS = ["-c:a", "libopus", "-b:a", "64k"]
