@@ -81,7 +81,8 @@ working VoiceStudio install on Windows 10 / 11 (x64).
 - **Windows 10 (21H2 or newer) or Windows 11**, x64.
 - **~10 GB free disk** for the app, its Python environment, and model weights.
 - Optional: an **NVIDIA GPU + driver** for CUDA acceleration — see
-  [GPU support on Windows](#gpu-support). AMD GPUs run CPU-only on Windows.
+  [GPU support on Windows](#gpu-support). AMD GPUs do not accelerate PyTorch
+  engines on Windows (audio.cpp can use them via Vulkan).
 
 That's it — Python, FFmpeg, and the model weights are bundled or bootstrapped
 by the app itself on first launch. No toolchain needed.
@@ -109,16 +110,38 @@ Everything above, plus the toolchain:
 
 <a id="gpu-support"></a>
 
-**GPU acceleration on Windows is NVIDIA/CUDA-only.** The Windows install
+**PyTorch GPU acceleration on Windows is NVIDIA/CUDA-only.** The Windows install
 ships the CUDA build of PyTorch; with an NVIDIA GPU and a regular NVIDIA
 driver it's picked up automatically (no CUDA Toolkit install needed).
 
-**AMD GPUs — including Ryzen / Ryzen AI integrated Radeon graphics — run
-CPU-only on Windows.** ROCm is not supported on Windows: PyTorch publishes no
-Windows ROCm wheels, and VoiceStudio's ROCm option is Linux-only. (The Ryzen AI
-NPU is likewise not used.) Everything still works on CPU, just slower. If you
-have an AMD GPU and want GPU acceleration, run VoiceStudio on Linux instead —
-see [linux.md — AMD GPU (ROCm)](linux.md#amd-gpu-rocm).
+**AMD GPUs — including Ryzen / Ryzen AI integrated Radeon graphics — do not
+accelerate PyTorch engines on Windows.** The runtime has PyTorch 2.8 as either
+the NVIDIA CUDA build or (with no NVIDIA driver present) the CPU-only build;
+neither can drive a Radeon card, so those engines run on the CPU. pytorch.org publishes no Windows ROCm wheels, and VoiceStudio's ROCm
+option (`OMNIVOICE_TORCH_VARIANT=rocm`) is Linux-only — it is ignored on Windows
+rather than failing setup. (The Ryzen AI NPU is likewise not used.) Everything
+still works on CPU, just slower. What you can do today:
+
+- **Use an engine with its own GPU runtime.** [audio.cpp](../engines/audio-cpp.md)
+  (Breeze-TTS-2) ships a Vulkan build that runs on Radeon GPUs: install the
+  runtime from **Settings → Models**. VoiceStudio picks the discrete GPU
+  automatically.
+- **Run on Linux** (native, or the ROCm Docker image) for ROCm acceleration of
+  the PyTorch engines — see [linux.md — AMD GPU (ROCm)](linux.md#amd-gpu-rocm).
+- **Advanced / unsupported: AMD's own Windows ROCm wheels.** AMD publishes
+  PyTorch ROCm wheels for Windows (`https://repo.amd.com/rocm/whl-multi-arch/`,
+  Python 3.11–3.14, RDNA 3 / RDNA 4 cards such as the RX 7000 and RX 9000 series).
+  They are PyTorch 2.9 or newer, not the 2.8 the engines here are validated
+  against, and faster-whisper (CTranslate2) needs its own separate HIP build for
+  the GPU, so expect parts of the app (WhisperX is a reported example) to break. VoiceStudio does not install them, and no engine
+  parity is claimed. DirectML is not an option either: `torch-directml` needs
+  PyTorch 2.4.
+
+**Settings → Performance → GPU acceleration** shows exactly what applies to your
+machine: the GPUs Windows reports, which PyTorch build is installed, and a
+verdict for every engine (uses the GPU, runs on the CPU and why, or CPU by
+design). **Settings → About → Run self-check** names the card instead of just
+saying "no GPU acceleration detected".
 
 ## Install (from source)
 

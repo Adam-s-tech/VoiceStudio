@@ -60,7 +60,29 @@ def setup_status():
 
 # ── Pre-flight System Check ───────────────────────────────────────────────
 
-_MIN_NVIDIA_DRIVER = 555
+# CUDA 12.x minor-version compatibility floor (the bundled cu128 runtime runs on
+# any 12.x-capable driver): R525.60.13 on Linux, R528.33 on Windows — see
+# https://docs.nvidia.com/deploy/cuda-compatibility/minor-version-compatibility.html
+# Compared as full versions: a Windows 527.x driver is NOT enough (#2489).
+_MIN_NVIDIA_DRIVER_LINUX = (525, 60, 13)
+_MIN_NVIDIA_DRIVER_WINDOWS = (528, 33)
+
+
+def _min_nvidia_driver(platform: str | None = None) -> tuple[int, ...]:
+    return (
+        _MIN_NVIDIA_DRIVER_WINDOWS if (platform or sys.platform) == "win32"
+        else _MIN_NVIDIA_DRIVER_LINUX
+    )
+
+
+def _driver_tuple(driver: str | None) -> tuple[int, ...] | None:
+    """Parsed driver version, or ``None`` when the metadata is missing or not a
+    dotted number ("N/A", "[Not Supported]") - the floor check is skipped then
+    rather than failing a working GPU."""
+    parts = (driver or "").strip().split(".")
+    if not parts or not all(p.isdigit() for p in parts):
+        return None
+    return tuple(int(p) for p in parts)
 _RAM_FAIL_GB = 8
 _RAM_WARN_GB = 12
 # Installed DIMMs never fully reach the OS: firmware, integrated graphics and
@@ -80,6 +102,23 @@ def _run_cmd(args: list[str], timeout: float = 2.0) -> tuple[int, str]:
         return out.returncode, out.stdout
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         return -1, ""
+
+
+def _amd_unusable_note() -> str:
+    """Why an AMD card sits idle, per OS - and only options that really exist."""
+    if sys.platform == "win32":
+        return (
+            "AMD GPU detected, but this install's PyTorch (the NVIDIA CUDA or "
+            "CPU-only build) cannot drive it, and no ROCm build of the PyTorch "
+            "version VoiceStudio ships exists for Windows. PyTorch "
+            "engines run on the CPU; audio.cpp (Vulkan) can use the GPU - see "
+            "Settings > Performance for the per-engine list."
+        )
+    return (
+        "AMD GPU detected but torch was installed with CUDA wheels. Set "
+        "OMNIVOICE_TORCH_VARIANT=rocm and re-run setup to install the ROCm "
+        "build of PyTorch (docs/install/linux.md#amd-gpu-rocm)."
+    )
 
 
 def _detect_gpu() -> dict:
@@ -120,10 +159,12 @@ def _detect_gpu() -> dict:
         except Exception:
             pass
         try:
-            major = int((driver or "0").split(".")[0])
-            if major < _MIN_NVIDIA_DRIVER:
+            floor = _min_nvidia_driver()  # per host OS
+            parsed = _driver_tuple(driver)
+            if parsed is not None and parsed < floor:
                 info["notes"].append(
-                    f"NVIDIA driver {driver} below {_MIN_NVIDIA_DRIVER} required "
+                    f"NVIDIA driver {driver} below "
+                    f"{'.'.join(map(str, floor))} required "
                     f"by the bundled CUDA 12.8 runtime — GPU will fail to launch "
                     f"kernels. Update drivers before dubbing."
                 )
@@ -132,11 +173,22 @@ def _detect_gpu() -> dict:
             pass
         return info
 
-    # AMD
+    # AMD. rocm-smi only exists where a ROCm userspace is installed - never on
+    # a stock Windows box - so fall back to the OS adapter inventory (registry /
+    # sysfs, no subprocess), which sees a Radeon whatever PyTorch can do with it.
     rc, out = _run_cmd(["rocm-smi", "--showproductname"])
-    if rc == 0 and out.strip():
+    amd_name = out.strip().splitlines()[0][:120] if rc == 0 and out.strip() else None
+    if amd_name is None:
+        try:
+            from core.gpu_inventory import detect_host_gpus
+
+            amd_gpu = next((g for g in detect_host_gpus() if g.vendor == "amd"), None)
+        except Exception:
+            amd_gpu = None
+        amd_name = amd_gpu.name[:120] if amd_gpu else None
+    if amd_name is not None:
         info["vendor"] = "amd"
-        info["device_name"] = out.strip().splitlines()[0][:120]
+        info["device_name"] = amd_name
         try:
             import torch
             has_hip = getattr(torch.version, "hip", None) is not None
@@ -145,11 +197,7 @@ def _detect_gpu() -> dict:
                 info["available"] = True
             else:
                 info["backend"] = "cpu"
-                info["notes"].append(
-                    "AMD GPU detected but torch was installed with CUDA wheels. "
-                    "Re-run `uv sync --index-url https://download.pytorch.org/whl/rocm6.1` "
-                    "to enable ROCm acceleration."
-                )
+                info["notes"].append(_amd_unusable_note())
         except Exception:
             info["notes"].append("AMD GPU detected but torch not importable.")
         return info
@@ -502,7 +550,7 @@ def preflight():
             f"(driver {gpu['driver']}). " + " ".join(gpu["notes"])
         )
         gpu_fix = (
-            f"Update NVIDIA drivers to ≥ R{_MIN_NVIDIA_DRIVER} "
+            f"Update NVIDIA drivers to ≥ R{'.'.join(map(str, _min_nvidia_driver()))} "
             "(https://www.nvidia.com/Download/index.aspx). Or run CPU-only "
             "by continuing past this step — dubbing will be ~10× slower."
         )
@@ -514,9 +562,8 @@ def preflight():
         )
         gpu_fix = (
             None if gpu["available"] else
-            "AMD support is experimental. Re-run `uv sync --index-url "
-            "https://download.pytorch.org/whl/rocm6.1` to enable. App works "
-            "on CPU otherwise (slower)."
+            " ".join(gpu["notes"] or [_amd_unusable_note()])
+            + " The app works on CPU otherwise (slower)."
         )
     elif gpu["available"]:
         # Fallback: torch.cuda works but nvidia-smi/rocm-smi absent (e.g. Docker)

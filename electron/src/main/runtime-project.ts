@@ -34,6 +34,27 @@ export const ROCM_TORCH_PINS = [
   'torchvision==0.23.0',
 ] as const;
 /**
+ * Whether this OS can have the ROCm torch stack at all.
+ *
+ * PyTorch's ROCm index (`ROCM_TORCH_INDEX`) publishes Linux wheels only. On
+ * Windows `uv pip install --index-url <rocm6.4> torch==2.8.0` finds nothing and
+ * the whole runtime bootstrap fails, leaving the app unusable instead of merely
+ * CPU-bound - so the opt-in is ignored there and the host resolves like any
+ * other (Settings > Performance explains which engines can still use a Radeon).
+ * Windows ROCm needs AMD's own wheels and a validated engine matrix; it is
+ * deliberately not wired into this recipe.
+ */
+export function rocmTorchApplies(platform: NodeJS.Platform = process.platform): boolean {
+  return platform !== 'win32' && platform !== 'darwin';
+}
+/** The user explicitly asked for ROCm torch AND this OS can have it. */
+export function rocmTorchOptIn(platform: NodeJS.Platform = process.platform): boolean {
+  return (
+    process.env.OMNIVOICE_TORCH_VARIANT?.trim().toLowerCase() === 'rocm' &&
+    rocmTorchApplies(platform)
+  );
+}
+/**
  * CPU-only PyTorch for hosts without an NVIDIA driver. The lock pins the
  * `+cu128` build on Linux/Windows x64, whose wheels (plus ~15 `nvidia-*`
  * packages on Linux) are several GB a CPU-only machine can never use. These
@@ -187,7 +208,9 @@ export function resolveTorchVariant(
   hasNvidia: () => boolean = () => nvidiaDriverPresent(platform),
 ): TorchChoice {
   const raw = env.OMNIVOICE_TORCH_VARIANT?.trim().toLowerCase() ?? '';
-  if (raw === 'rocm') return { variant: 'rocm', explicit: true };
+  // ROCm wheels exist for Linux only; elsewhere the opt-in is ignored (the
+  // host is resolved like any other, never a failed bootstrap).
+  if (raw === 'rocm' && rocmTorchApplies(platform)) return { variant: 'rocm', explicit: true };
   if (raw === 'cuda' || raw === 'default') return { variant: 'default', explicit: true };
   if (raw === 'cpu') {
     return { variant: cpuTorchApplies(platform, arch) ? 'cpu' : 'default', explicit: true };
