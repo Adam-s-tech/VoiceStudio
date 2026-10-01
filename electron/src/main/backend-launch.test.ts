@@ -158,10 +158,12 @@ it('keeps a plain spawn failure message free of install advice', () => {
 
 it('says what the launch did in a startup-budget failure', () => {
   const budget = 'Backend did not answer on port 3900 within 300 s (OMNIVOICE_STARTUP_BUDGET_S).';
-  expect(startupTimeoutMessage(3900, 300_000, { owned: true, lastOutput: 'INFO: loading model' })).toBe(
-    `${budget} Last output: INFO: loading model`,
+  expect(
+    startupTimeoutMessage(3900, 300_000, { owned: true, lastOutput: 'INFO: loading model' }),
+  ).toBe(`${budget} Last output: INFO: loading model`);
+  expect(startupTimeoutMessage(3900, 300_000, { owned: true })).toBe(
+    `${budget} It printed no output.`,
   );
-  expect(startupTimeoutMessage(3900, 300_000, { owned: true })).toBe(`${budget} It printed no output.`);
   expect(startupTimeoutMessage(3900, 300_000, { owned: false })).toBe(
     `${budget} Nothing was spawned for this attempt.`,
   );

@@ -320,3 +320,81 @@ it('does not quote the installer after a completed runtime setup', async () => {
     await supervisor.shutdown();
   }
 });
+
+/**
+ * #2445 - a slow host (no dedicated GPU, few cores, a scanner touching every
+ * native library) can still be booting well past the nominal budget. A backend
+ * that is demonstrably alive and printing is not stalled, so it keeps its place
+ * until it goes quiet - but never past three budgets in total.
+ */
+it('keeps waiting for a backend that is still printing past the budget', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+  stubEnv();
+  let ready = false;
+  stubBackend(() => ready);
+  const { child, stdout } = fakeChild();
+  mocks.spawn.mockReturnValue(child);
+  const supervisor = new BackendSupervisor();
+  try {
+    await supervisor.start();
+    for (const at of [4_000, 8_000, 12_000]) {
+      await vi.advanceTimersByTimeAsync(4_000);
+      stdout.emit('data', `INFO: still migrating at ${at}\r\n`);
+    }
+    // 12 s is past the 10 s budget, yet the backend spoke a moment ago.
+    expect(supervisor.status.stage).toBe('starting');
+    ready = true;
+    await vi.advanceTimersByTimeAsync(500);
+    expect(supervisor.status.stage).toBe('ready');
+  } finally {
+    (supervisor as unknown as { child: null }).child = null;
+    await supervisor.shutdown();
+  }
+});
+
+it('fails a backend that printed once and then went quiet, at the plain budget', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+  stubEnv();
+  stubBackend(() => false);
+  const { child, stdout } = fakeChild();
+  mocks.spawn.mockReturnValue(child);
+  const supervisor = new BackendSupervisor();
+  try {
+    await supervisor.start();
+    stdout.emit('data', 'INFO: loading\r\n');
+    await vi.advanceTimersByTimeAsync(11_000);
+    expect(supervisor.status.stage).toBe('failed');
+  } finally {
+    (supervisor as unknown as { child: null }).child = null;
+    await supervisor.shutdown();
+  }
+});
+
+it('never extends a chatty backend past three budgets', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+  stubEnv();
+  stubBackend(() => false);
+  const { child, stdout } = fakeChild();
+  mocks.spawn.mockReturnValue(child);
+  const supervisor = new BackendSupervisor();
+  try {
+    await supervisor.start();
+    for (let t = 0; t < 40_000 && supervisor.status.stage === 'starting'; t += 1_000) {
+      stdout.emit('data', 'INFO: chatter\r\n');
+      await vi.advanceTimersByTimeAsync(1_000);
+    }
+    expect(supervisor.status.stage).toBe('failed');
+  } finally {
+    (supervisor as unknown as { child: null }).child = null;
+    await supervisor.shutdown();
+  }
+});
+
+it('doubles the default budget on a small host', async () => {
+  const { defaultStartupBudgetS } = await import('./backend');
+  const GiB = 1024 ** 3;
+  expect(defaultStartupBudgetS(16, 32 * GiB)).toBe(300);
+  expect(defaultStartupBudgetS(4, 32 * GiB)).toBe(600);
+  expect(defaultStartupBudgetS(16, 8 * GiB)).toBe(600);
+  expect(defaultStartupBudgetS(2, 4 * GiB)).toBe(600);
+});

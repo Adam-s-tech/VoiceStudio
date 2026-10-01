@@ -25,7 +25,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { rm } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { cpus, homedir, totalmem } from 'node:os';
 import { basename, delimiter, dirname, isAbsolute, join, resolve } from 'node:path';
 import { app } from 'electron';
 import type {
@@ -111,9 +111,49 @@ export function resolvePort(): number {
   return Number.isInteger(raw) && raw > 0 && raw < 65536 ? raw : DEFAULT_PORT;
 }
 
+/** Hosts at or below this are "low-spec": a cold backend import is disk/CPU-bound. */
+const LOW_SPEC_CORES = 4;
+const LOW_SPEC_MEMORY_BYTES = 8 * 1024 ** 3;
+const LOW_SPEC_BUDGET_FACTOR = 2;
+/** A backend that keeps talking may be given at most this many budgets in total. */
+const MAX_BUDGET_EXTENSIONS = 3;
+
+/**
+ * The default readiness budget, doubled on a small host (#2445). A machine with
+ * no dedicated GPU is usually also short on cores and RAM, and its first start
+ * after an install is the slowest: antivirus scans the freshly written native
+ * libraries while a handful of cores import torch and the whole backend. That
+ * is slow, not broken, so it must not be failed at the budget sized for a
+ * workstation. An explicit `OMNIVOICE_STARTUP_BUDGET_S` always wins. This only
+ * stretches a timeout - it never changes what a feature does - so it is not a
+ * cross-platform behavior difference.
+ */
+export function defaultStartupBudgetS(cores = cpus().length, memoryBytes = totalmem()): number {
+  const small = cores <= LOW_SPEC_CORES || memoryBytes <= LOW_SPEC_MEMORY_BYTES;
+  return small ? DEFAULT_BUDGET_S * LOW_SPEC_BUDGET_FACTOR : DEFAULT_BUDGET_S;
+}
+
 function startupBudgetMs(): number {
   const raw = Number(process.env.OMNIVOICE_STARTUP_BUDGET_S);
-  return (Number.isFinite(raw) && raw >= 0 ? raw : DEFAULT_BUDGET_S) * 1000;
+  return (Number.isFinite(raw) && raw >= 0 ? raw : defaultStartupBudgetS()) * 1000;
+}
+
+/**
+ * When the readiness wait should give up. `base` is the plain budget; a backend
+ * that has printed something within the last half-budget is alive and
+ * progressing (migrations, model-directory scans), so the deadline slides to
+ * stay half a budget past its last output, never beyond `MAX_BUDGET_EXTENSIONS`
+ * budgets in total. A silent or wedged backend still fails at `base`.
+ */
+export function readinessDeadline(
+  startedAt: number,
+  budgetMs: number,
+  lastOutputAt: number,
+): number {
+  const base = startedAt + budgetMs;
+  if (lastOutputAt <= 0) return base;
+  const ceiling = startedAt + budgetMs * MAX_BUDGET_EXTENSIONS;
+  return Math.max(base, Math.min(ceiling, lastOutputAt + budgetMs / 2));
 }
 
 /**
@@ -457,6 +497,8 @@ export class BackendSupervisor extends EventEmitter<{
   private readonly log: string[] = [];
   /** Only the spawned process's own output, for quoting back in failure messages. */
   private readonly childLog: string[] = [];
+  /** When the spawned process last printed a line (0 = nothing yet this launch). */
+  private lastChildOutputAt = 0;
   /** Bumped on every start/shutdown so stale poll loops and exit handlers no-op. */
   private generation = 0;
   /** A generation owns at most one health loop, even if readiness is observed twice. */
@@ -554,6 +596,7 @@ export class BackendSupervisor extends EventEmitter<{
     // quote the backend it just killed, and a completed runtime install must
     // not quote the installer — setupRuntime's uv children share this ring.
     this.childLog.length = 0;
+    this.lastChildOutputAt = 0;
     this.setStage('attaching', { managed: false, message: undefined });
     try {
       if (await this.probe()) {
@@ -1022,6 +1065,7 @@ export class BackendSupervisor extends EventEmitter<{
     // lines, so taking its tail would report a launch banner as the backend's
     // last word — exactly the evidence a startup failure needs.
     if (fromChild) {
+      this.lastChildOutputAt = Date.now();
       this.childLog.push(line);
       if (this.childLog.length > LOG_RING_LINES)
         this.childLog.splice(0, this.childLog.length - LOG_RING_LINES);
@@ -1206,7 +1250,7 @@ export class BackendSupervisor extends EventEmitter<{
     // candidates. Once that pre-spawn work outlasted the budget, this loop
     // failed on its very first probe — killing a backend that had been alive
     // for a second and reporting "did not answer within 300 s".
-    const deadline = Date.now() + budgetMs;
+    const pollStartedAt = Date.now();
     const waitingStage = this.stage;
     while (gen === this.generation && this.stage === waitingStage) {
       const ready = await this.probe();
@@ -1221,7 +1265,7 @@ export class BackendSupervisor extends EventEmitter<{
       if (gen !== this.generation || (this.stage !== 'starting' && this.stage !== 'attaching')) {
         return;
       }
-      if (Date.now() > deadline) {
+      if (Date.now() > readinessDeadline(pollStartedAt, budgetMs, this.lastChildOutputAt)) {
         this.generation++;
         // killChild() nulls this.child, so record whether this launch owned a
         // process *before* tearing it down. Checking afterwards would
