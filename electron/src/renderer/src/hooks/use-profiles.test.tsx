@@ -357,11 +357,9 @@ it('settles a deletion error while the native backend is offline and preserves s
       deletion = result.current.mutateAsync('v1').catch((error) => error);
       await Promise.resolve();
     });
-    const settled = await Promise.race([
-      deletion.then(() => true),
-      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 100)),
-    ]);
-    expect(settled).toBe(true);
+    // Must settle while offline; a hang surfaces as the test timeout rather
+    // than a wall-clock race that a slow runner could lose.
+    await deletion;
     await waitFor(() => expect(result.current.isPending).toBe(false));
     expect(cloneSettingsStore.state.selectedProfileId).toBe('v1');
     expect(readDraft().profileId).toBe('v1');

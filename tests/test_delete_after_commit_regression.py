@@ -172,3 +172,55 @@ def test_lock_failure_keeps_previous_locked_take(profile, monkeypatch):
         asyncio.run(profiles.lock_profile("voice", history_id="h", seed=1))
     assert (profile / "voice_locked.wav").read_bytes() == b"old-locked"
     assert not (profile / "voice_locked.wav.part").exists()
+
+
+def test_first_lock_failure_leaves_no_orphan_take(profile, monkeypatch):
+    import asyncio
+    from core import db
+    from api.routers import profiles
+
+    (profile / "voice_locked.wav").unlink()
+    outputs = profile / "outputs"
+    outputs.mkdir()
+    (outputs / "take.wav").write_bytes(b"new-take")
+    monkeypatch.setattr(profiles, "OUTPUTS_DIR", str(outputs))
+    with db.db_conn() as conn:
+        conn.execute(
+            "INSERT INTO generation_history(id, text, audio_path) VALUES('h','t','take.wav')"
+        )
+    with pytest.raises(sqlite3.IntegrityError, match="test write failure"):
+        asyncio.run(profiles.lock_profile("voice", history_id="h", seed=1))
+    assert sorted(p.name for p in profile.iterdir() if "locked" in p.name) == []
+
+
+def test_successful_relock_installs_new_take_and_drops_backup(profile, monkeypatch):
+    import asyncio
+    from core import db
+    from api.routers import profiles
+
+    outputs = profile / "outputs"
+    outputs.mkdir()
+    (outputs / "take.wav").write_bytes(b"new-take")
+    monkeypatch.setattr(profiles, "OUTPUTS_DIR", str(outputs))
+    with db.db_conn() as conn:
+        conn.execute("DROP TRIGGER reject_update")
+        conn.execute(
+            "INSERT INTO generation_history(id, text, audio_path) VALUES('h','t','take.wav')"
+        )
+    asyncio.run(profiles.lock_profile("voice", history_id="h", seed=1))
+    assert (profile / "voice_locked.wav").read_bytes() == b"new-take"
+    assert sorted(p.name for p in profile.iterdir() if "locked" in p.name) == ["voice_locked.wav"]
+
+
+def test_install_staged_restores_previous_file(tmp_path):
+    from api.routers import profiles
+
+    target = tmp_path / "a.wav"
+    target.write_bytes(b"old")
+    staged = tmp_path / "a.wav.part"
+    staged.write_bytes(b"new")
+    restore, finalize = profiles._install_staged(str(staged), str(target))
+    assert target.read_bytes() == b"new"
+    restore()
+    assert target.read_bytes() == b"old"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["a.wav"]
