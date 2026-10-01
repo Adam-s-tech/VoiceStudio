@@ -5,11 +5,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from services.segmented_download import segmented_download
-
 
 @pytest.mark.parametrize('mode', ['wrong_start', 'wrong_total', 'ignored_range', 'valid', 'valid_unknown_total'])
 def test_wrong_range_response_never_commits_model(tmp_path, mode):
+    from services.segmented_download import segmented_download
+
     content = b'A' * (4 * 1024 * 1024) + b'B' * (4 * 1024 * 1024)
 
     class Handler(BaseHTTPRequestHandler):
