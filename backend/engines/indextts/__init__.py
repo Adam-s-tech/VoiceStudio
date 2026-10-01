@@ -130,9 +130,11 @@ class IndexTTS2Backend(SubprocessBackend):
     _DEFAULT_SAMPLE_RATE = 24000
     # Explicit so IndexTTS2 stops advertising the inherited CPU-only default:
     # the sidecar runs the IndexTTS PyTorch model on CUDA when present, else
-    # CPU. ROCm left unclaimed (the sidecar's own venv would need a ROCm torch);
-    # a ROCm host honestly resolves to cpu_fallback.
-    gpu_compat = ("cuda", "cpu")
+    # CPU. ROCm is claimed since the one-click installer puts a ROCm torch in
+    # the sidecar venv on ROCm hosts (sidecar_install.uses_rocm_index, #2371),
+    # which `torch.cuda.is_available()` satisfies; a user-managed environment
+    # must supply its own ROCm torch to benefit.
+    gpu_compat = ("cuda", "rocm", "cpu")
 
     @classmethod
     def is_available(cls) -> tuple[bool, str]:
