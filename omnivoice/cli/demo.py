@@ -32,6 +32,7 @@ import numpy as np
 import torch
 
 from omnivoice import OmniVoice, OmniVoiceGenerationConfig
+from omnivoice.utils.dtype import tts_dtype_name
 from omnivoice.utils.lang_map import LANG_NAMES, lang_display_name
 
 
@@ -522,8 +523,7 @@ def main(argv=None) -> int:
     model = OmniVoice.from_pretrained(
         checkpoint,
         device_map=device,
-        # fp16 has no fast CPU GEMM; CPU-only hosts must load float32.
-        dtype=torch.float32 if str(device) == "cpu" else torch.float16,
+        dtype=getattr(torch, tts_dtype_name(device)),
         load_asr=not args.no_asr,
     )
     print("Model loaded.")

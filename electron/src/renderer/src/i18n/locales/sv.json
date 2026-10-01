@@ -2083,7 +2083,7 @@
     "setup_required": "Installera lokal körmiljö",
     "setup_hint": "Hämta Python och appens beroenden (flera GB). Röstmodeller installeras separat när du väljer dem.",
     "installing": "Installerar…",
-    "setup_space": "Frigör minst 9 GiB på appens disk och försök igen.",
+    "setup_space": "Frigör minst {{gib}} GiB på appens disk och försök igen.",
     "setup_access": "Tillåt skrivåtkomst till appens datamapp och försök igen.",
     "setup_unsupported_platform": "Den här Intel-Macen kan inte köra den lokala AI-backendservern — PyTorch saknar macOS Intel-hjul. Anslut en fjärrbackend nedan istället; ingen lokal installation behövs.",
     "retry": "Försök igen",
@@ -2295,7 +2295,10 @@
     "still_needed": "Behövs fortfarande:",
     "back": "Tillbaka",
     "enter_studio": "Gå in i studion",
-    "continue_ok": "Allt bra - fortsätt"
+    "continue_ok": "Allt bra - fortsätt",
+    "check_arch_label": "Windows på ARM",
+    "check_arch_detail": "Windows-dator med ARM64: AI-backend körs som x64 under Windows-emulering, endast på CPU (ingen GPU-/NPU-acceleration).",
+    "check_arch_fix": "Röstgenerering fungerar men är långsammare. Välj en lätt röstmotor (KittenTTS, Supertonic-3, PocketTTS) och en liten Whisper-modell."
   },
   "consent": {
     "title": "Hjälpa till att förbättra VoiceStudio?",

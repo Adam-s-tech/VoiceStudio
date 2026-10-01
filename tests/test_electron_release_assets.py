@@ -131,3 +131,18 @@ def test_half_published_windows_arm64_fails_closed(tmp_path: Path):
     (tmp_path / "electron-preview-win32-arm64.yml").unlink()
     with pytest.raises(ReleaseContractError, match="missing downloaded manifest"):
         verify_release(release, tmp_path, channel="preview", version="0.5.3-144")
+
+
+@pytest.mark.parametrize("suffix", ["", ".blockmap"])
+def test_windows_arm64_payload_without_a_manifest_is_rejected(tmp_path: Path, suffix: str):
+    """An ARM64 installer/blockmap published with no manifest must not be waved through."""
+    release = _release(tmp_path)
+    release["assets"].append(
+        {
+            "name": f"VoiceStudio-Electron-0.5.3-144-win-arm64.exe{suffix}",
+            "size": 10,
+            "digest": "sha256:payload",
+        }
+    )
+    with pytest.raises(ReleaseContractError, match="missing downloaded manifest"):
+        verify_release(release, tmp_path, channel="preview", version="0.5.3-144")

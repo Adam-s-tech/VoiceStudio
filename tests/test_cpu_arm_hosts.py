@@ -8,6 +8,7 @@ electron/src/main/runtime-torch-variant.test.ts.
 """
 from __future__ import annotations
 
+import importlib
 import re
 import sys
 import types
@@ -15,9 +16,17 @@ from pathlib import Path
 
 import pytest
 
-from core import device_caps
-
 REPO = Path(__file__).resolve().parent.parent
+
+
+# Resolved per call: other tests pop and re-import ``core.*`` / ``omnivoice.*``,
+# so a module-level import would patch a stale module object.
+def _device_caps():
+    return importlib.import_module("core.device_caps")
+
+
+def _dtype():
+    return importlib.import_module("omnivoice.utils.dtype")
 
 
 # ── precision follows the device ─────────────────────────────────────────────
@@ -25,24 +34,24 @@ REPO = Path(__file__).resolve().parent.parent
 @pytest.mark.parametrize("device", ["cuda", "xpu", "mps", "privateuseone:0", "CUDA"])
 def test_accelerators_keep_half_precision(device, monkeypatch):
     monkeypatch.delenv("OMNIVOICE_CPU_DTYPE", raising=False)
-    assert device_caps.tts_dtype_name(device) == "float16"
+    assert _dtype().tts_dtype_name(device) == "float16"
 
 
 @pytest.mark.parametrize("device", ["cpu", "CPU", " cpu ", "", None])
 def test_cpu_loads_float32(device, monkeypatch):
     # fp16 has no fast CPU GEMM — the old hard-coded float16 made CPU hosts crawl.
     monkeypatch.delenv("OMNIVOICE_CPU_DTYPE", raising=False)
-    assert device_caps.tts_dtype_name(device) == "float32"
+    assert _dtype().tts_dtype_name(device) == "float32"
 
 
 def test_cpu_dtype_override_is_validated(monkeypatch):
     monkeypatch.setenv("OMNIVOICE_CPU_DTYPE", "bfloat16")
-    assert device_caps.tts_dtype_name("cpu") == "bfloat16"
+    assert _dtype().tts_dtype_name("cpu") == "bfloat16"
     monkeypatch.setenv("OMNIVOICE_CPU_DTYPE", "int4")
-    assert device_caps.tts_dtype_name("cpu") == "float32"
+    assert _dtype().tts_dtype_name("cpu") == "float32"
     # The override never downgrades an accelerator.
     monkeypatch.setenv("OMNIVOICE_CPU_DTYPE", "bfloat16")
-    assert device_caps.tts_dtype_name("cuda") == "float16"
+    assert _dtype().tts_dtype_name("cuda") == "float16"
 
 
 class _Stop(Exception):
@@ -104,6 +113,20 @@ def test_sidecar_loader_matches_the_in_process_loader(monkeypatch, device, expec
     assert seen["dtype"] == expected
 
 
+def test_every_loader_goes_through_the_shared_dtype_policy():
+    """The CLIs honour OMNIVOICE_CPU_DTYPE too, not just the backend loaders."""
+    for rel in (
+        "backend/services/model_manager.py",
+        "backend/engines/omnivoice_subprocess/main.py",
+        "omnivoice/cli/infer.py",
+        "omnivoice/cli/demo.py",
+        "omnivoice/cli/infer_batch.py",
+    ):
+        text = (REPO / rel).read_text(encoding="utf-8")
+        assert "from omnivoice.utils.dtype import tts_dtype_name" in text, rel
+        assert "tts_dtype_name(" in text, rel
+
+
 def test_no_hardcoded_fp16_model_loads_remain():
     """Every OmniVoice.from_pretrained call site must be device-aware."""
     offenders = []
@@ -124,7 +147,7 @@ def test_no_hardcoded_fp16_model_loads_remain():
 
 def _host(monkeypatch, platform, machine, env=None):
     monkeypatch.setattr(sys, "platform", platform)
-    monkeypatch.setattr(device_caps._platform, "machine", lambda: machine)
+    monkeypatch.setattr(_device_caps()._platform, "machine", lambda: machine)
     for key in ("PROCESSOR_ARCHITEW6432", "PROCESSOR_ARCHITECTURE"):
         monkeypatch.delenv(key, raising=False)
     for key, value in (env or {}).items():
@@ -136,22 +159,22 @@ def test_x64_python_under_arm_emulation_is_detected(monkeypatch):
     _host(monkeypatch, "win32", "AMD64", {
         "PROCESSOR_ARCHITECTURE": "AMD64", "PROCESSOR_ARCHITEW6432": "ARM64",
     })
-    assert device_caps.is_windows_on_arm() is True
+    assert _device_caps().is_windows_on_arm() is True
 
 
 def test_native_arm64_python_is_detected(monkeypatch):
     _host(monkeypatch, "win32", "ARM64", {"PROCESSOR_ARCHITECTURE": "ARM64"})
-    assert device_caps.is_windows_on_arm() is True
+    assert _device_caps().is_windows_on_arm() is True
 
 
 def test_ordinary_x64_windows_and_other_platforms_are_not_arm(monkeypatch):
     _host(monkeypatch, "win32", "AMD64", {"PROCESSOR_ARCHITECTURE": "AMD64"})
-    assert device_caps.is_windows_on_arm() is False
+    assert _device_caps().is_windows_on_arm() is False
     # Apple Silicon / Linux arm64 are not "Windows on ARM", whatever the env says.
     _host(monkeypatch, "darwin", "arm64", {"PROCESSOR_ARCHITECTURE": "ARM64"})
-    assert device_caps.is_windows_on_arm() is False
+    assert _device_caps().is_windows_on_arm() is False
     _host(monkeypatch, "linux", "aarch64")
-    assert device_caps.is_windows_on_arm() is False
+    assert _device_caps().is_windows_on_arm() is False
 
 
 def _preflight(monkeypatch):

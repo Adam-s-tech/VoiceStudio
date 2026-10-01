@@ -2083,7 +2083,7 @@
     "setup_required": "ローカル実行環境をインストール",
     "setup_hint": "Pythonとアプリの依存関係（数GB）をダウンロードします。音声モデルは選択時に個別にインストールされます。",
     "installing": "依存関係のインストール中…",
-    "setup_space": "アプリのドライブに9 GiB以上の空き容量を確保して、再試行してください。",
+    "setup_space": "アプリのドライブに{{gib}} GiB以上の空き容量を確保して、再試行してください。",
     "setup_access": "アプリのデータフォルダーへの書き込みを許可して、再試行してください。",
     "setup_unsupported_platform": "このIntel MacではローカルAIバックエンドを実行できません — PyTorchにmacOS Intel用wheelがありません。代わりに下でリモートバックエンドに接続してください。ローカルインストールは不要です。",
     "ready": "エンジン準備完了",
@@ -2295,7 +2295,10 @@
     "still_needed": "まだ必要なもの:",
     "back": "戻る",
     "enter_studio": "スタジオに入る",
-    "continue_ok": "大丈夫です — 続けてください"
+    "continue_ok": "大丈夫です — 続けてください",
+    "check_arch_label": "ARM 版 Windows",
+    "check_arch_detail": "ARM64 の Windows PC です。AI バックエンドは Windows のエミュレーション上で x64 として動作し、CPU のみを使用します（GPU/NPU による高速化はありません）。",
+    "check_arch_fix": "音声生成は動作しますが、速度は遅くなります。軽量な音声エンジン（KittenTTS、Supertonic-3、PocketTTS）と小さな Whisper モデルをおすすめします。"
   },
   "consent": {
     "title": "VoiceStudio の改善に協力しますか？",

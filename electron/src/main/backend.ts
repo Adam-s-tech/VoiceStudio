@@ -157,10 +157,7 @@ export function bundledUvPath(resourcesPath: string, platform = process.platform
  * before any install is offered — never after a multi-GB failure.
  * Testable via parameters following bundledUvPath's precedent.
  */
-export function isUnsupportedPlatform(
-  platform = process.platform,
-  arch = process.arch,
-): boolean {
+export function isUnsupportedPlatform(platform = process.platform, arch = process.arch): boolean {
   return platform === 'darwin' && arch === 'x64';
 }
 
@@ -421,6 +418,7 @@ export class BackendSupervisor extends EventEmitter<{
   private supervisingGeneration: number | null = null;
   private shuttingDown = false;
   private setupIssue: BackendStatus['setupIssue'];
+  private setupRequiredGib: number | undefined;
   private runtimeInterrupted = false;
   private setupPhase: BackendStatus['setupPhase'] = 'checking';
   private readonly setupProgress = new SetupProgressTracker();
@@ -476,6 +474,8 @@ export class BackendSupervisor extends EventEmitter<{
         : {}),
     };
     if (this.stage === 'setup_required' && this.setupIssue) status.setupIssue = this.setupIssue;
+    if (this.stage === 'setup_required' && this.setupIssue === 'space' && this.setupRequiredGib)
+      status.setupRequiredGib = this.setupRequiredGib;
     if (this.stage === 'setup_required' && this.runtimeInterrupted)
       status.runtimeInterrupted = true;
     if (this.stage === 'installing') {
@@ -632,6 +632,7 @@ export class BackendSupervisor extends EventEmitter<{
     this.startedAt = Date.now();
     this.log.length = 0;
     this.setupIssue = undefined;
+    this.setupRequiredGib = undefined;
     this.runtimeInterrupted = false;
     this.setupPhase = 'checking';
     this.setupProgress.reset();
@@ -733,10 +734,12 @@ export class BackendSupervisor extends EventEmitter<{
           code === 'INTEL_MAC_UNSUPPORTED'
             ? 'unsupported_platform'
             : code === 'ENOSPC'
-            ? 'space'
-            : ['EACCES', 'EPERM', 'EROFS'].includes(code || '')
-              ? 'access'
-              : undefined;
+              ? 'space'
+              : ['EACCES', 'EPERM', 'EROFS'].includes(code || '')
+                ? 'access'
+                : undefined;
+        this.setupRequiredGib =
+          code === 'ENOSPC' ? (error as { requiredGib?: number }).requiredGib : undefined;
         this.runtimeInterrupted = await runtimeInstallInterrupted(project);
         this.pushLog('err', errorMessage(error));
         this.setStage('setup_required', { message: errorMessage(error) });
@@ -788,6 +791,7 @@ export class BackendSupervisor extends EventEmitter<{
     }
     if (gen !== this.generation) return;
     this.setupIssue = undefined;
+    this.setupRequiredGib = undefined;
     this.runtimeInterrupted = false;
     this.setupPhase = 'checking';
     this.message = undefined;

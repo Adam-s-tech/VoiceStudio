@@ -22,7 +22,7 @@ Download the installer matching your PC from the
 | PC | Installer |
 |---|---|
 | Intel / AMD (x64) | `VoiceStudio-Electron-<version>-win-x64.exe` |
-| Windows on ARM (Snapdragon X etc.) | `VoiceStudio-Electron-<version>-win-arm64.exe` (releases without it: the x64 installer also works, under emulation) |
+| Windows on ARM (Snapdragon X etc., experimental) | `VoiceStudio-Electron-<version>-win-arm64.exe` (releases without it: the x64 installer also works, under emulation) |
 
 `irm https://voicestudio.sh/install | iex` picks the right one automatically.
 
@@ -41,10 +41,15 @@ setup screen lists them as its CPU preset. Set `OMNIVOICE_TORCH_VARIANT=cuda`
 
 ### Windows on ARM (Snapdragon X etc.)
 
+> [!NOTE]
+> **Experimental.** The ARM64 installer and the emulated runtime are built by
+> CI but have not yet passed an end-to-end validation on real hardware. Expect
+> rough edges and please report them.
+
 The app shell is native ARM64. PyTorch has no ARM64 Windows wheels for
 torchaudio/torchvision, so the AI backend runs as an **x64 Python under
 Windows' built-in emulation, on the CPU only** (no GPU or NPU acceleration).
-Everything works but expect it to be slower than on an x64 PC; Windows 11 24H2
+It is designed to work but will be slower than on an x64 PC; Windows 11 24H2
 or newer gives the emulator the AVX2 support PyTorch benefits from. Setup shows
 a "Windows on ARM" notice and applies the same light-engine advice as above.
 

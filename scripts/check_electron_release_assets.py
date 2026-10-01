@@ -76,12 +76,13 @@ def verify_release(
     }.items():
         manifest_name = f"electron-{channel}-{manifest_target}.yml"
         manifest_path = manifest_dir / manifest_name
-        if (
-            target in OPTIONAL_TARGETS
-            and not manifest_path.is_file()
-            and manifest_name not in assets
-        ):
-            continue
+        if target in OPTIONAL_TARGETS:
+            # Skip only when NOTHING of this target is published: an installer
+            # or blockmap without its manifest is an incomplete release.
+            payload = f"VoiceStudio-Electron-{version}-{os_token}-{arch}{extension}"
+            traces = (manifest_name, payload, f"{payload}.blockmap")
+            if not manifest_path.is_file() and not any(name in assets for name in traces):
+                continue
         if not manifest_path.is_file():
             raise ReleaseContractError(f"missing downloaded manifest: {manifest_name}")
         manifest_asset = assets.get(manifest_name)

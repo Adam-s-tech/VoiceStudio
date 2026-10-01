@@ -166,7 +166,7 @@ def _load_model(stdout):
     OmniVoice = _lazy_omnivoice()
     checkpoint = resolve_omnivoice_checkpoint()
     device = get_best_device()
-    from core.device_caps import tts_dtype_name
+    from omnivoice.utils.dtype import tts_dtype_name
 
     preload_asr = should_preload_tts_asr()
 

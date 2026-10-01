@@ -2085,7 +2085,7 @@
     "setup_required": "Installer l’environnement local",
     "setup_hint": "Téléchargez Python et les dépendances de l’application (plusieurs Go). Les modèles vocaux sont installés séparément lorsque vous les choisissez.",
     "installing": "Installation…",
-    "setup_space": "Libérez au moins 9 Gio sur le disque de l’application, puis réessayez.",
+    "setup_space": "Libérez au moins {{gib}} Gio sur le disque de l’application, puis réessayez.",
     "setup_access": "Autorisez l’écriture dans le dossier de données de l’application, puis réessayez.",
     "setup_unsupported_platform": "Ce Mac Intel ne peut pas exécuter le backend IA local — PyTorch ne fournit pas de wheels macOS Intel. Connectez plutôt un backend distant ci-dessous ; aucune installation locale n'est nécessaire.",
     "ready": "Moteur prêt",
@@ -2297,7 +2297,10 @@
     "still_needed": "Encore nécessaire :",
     "back": "Retour",
     "enter_studio": "Entrez dans l'atelier",
-    "continue_ok": "Tout va bien - continuez"
+    "continue_ok": "Tout va bien - continuez",
+    "check_arch_label": "Windows sur ARM",
+    "check_arch_detail": "PC Windows ARM64 : le backend IA s’exécute en x64 sous l’émulation Windows, sur CPU uniquement (sans accélération GPU/NPU).",
+    "check_arch_fix": "La génération vocale fonctionne mais est plus lente. Privilégiez un moteur vocal léger (KittenTTS, Supertonic-3, PocketTTS) et un petit modèle Whisper."
   },
   "consent": {
     "title": "Aider à améliorer VoiceStudio ?",

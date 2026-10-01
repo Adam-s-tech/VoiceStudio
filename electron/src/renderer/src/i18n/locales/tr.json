@@ -2083,7 +2083,7 @@
     "setup_required": "Yerel çalışma ortamını yükle",
     "setup_hint": "Python ve uygulama bağımlılıklarını indirin (birkaç GB). Ses modelleri seçtiğinizde ayrı olarak yüklenir.",
     "installing": "Bağımlılıklar…",
-    "setup_space": "Uygulamanın sürücüsünde en az 9 GiB alan açıp yeniden deneyin.",
+    "setup_space": "Uygulamanın sürücüsünde en az {{gib}} GiB alan açıp yeniden deneyin.",
     "setup_access": "Uygulamanın veri klasörüne yazma izni verip yeniden deneyin.",
     "setup_unsupported_platform": "Bu Intel Mac, yerel yapay zekâ arka ucunu çalıştıramaz — PyTorch'ta macOS Intel wheel'leri yok. Bunun yerine aşağıdan bir uzak arka uca bağlanın; yerel kurulum gerekmez.",
     "ready": "Motor hazır",
@@ -2295,7 +2295,10 @@
     "still_needed": "Hala ihtiyaç var:",
     "back": "Geri",
     "enter_studio": "Stüdyoya girin",
-    "continue_ok": "Her şey yolunda - devam et"
+    "continue_ok": "Her şey yolunda - devam et",
+    "check_arch_label": "ARM üzerinde Windows",
+    "check_arch_detail": "ARM64 Windows bilgisayar — yapay zekâ arka ucu Windows emülasyonu altında x64 olarak ve yalnızca CPU ile çalışır (GPU/NPU hızlandırması yok).",
+    "check_arch_fix": "Ses üretimi çalışır ancak daha yavaştır. Hafif bir ses motoru (KittenTTS, Supertonic-3, PocketTTS) ve küçük bir Whisper modeli tercih edin."
   },
   "consent": {
     "title": "VoiceStudio'un gelişmesine yardım eder misiniz?",

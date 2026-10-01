@@ -706,6 +706,16 @@ def recommendations():
         if _model_curated(m, tags) and _model_supported(m)
     ]
 
+    if not (is_mac_arm or has_cuda or has_rocm):
+        # CPU-only preset: lead with the light Whisper (small) so a user working
+        # down the list meets the cheap download before large-v3 / Turbo. Only
+        # the ASR slots are reordered (smallest first); every other entry keeps
+        # its catalog position.
+        asr_slots = [i for i, m in enumerate(curated) if m.get("role") == "ASR"]
+        ordered = sorted((curated[i] for i in asr_slots), key=lambda m: m.get("size_gb") or 0)
+        for slot, model in zip(asr_slots, ordered):
+            curated[slot] = model
+
     if is_mac_arm:
         rationale = (
             "Apple Silicon preset: VoiceStudio (required) covers multilingual TTS + "

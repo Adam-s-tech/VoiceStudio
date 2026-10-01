@@ -534,7 +534,7 @@ export async function installRuntime(
       new Error(
         `Runtime setup needs at least ${requiredBytes / 1024 ** 3} GiB of free disk space.`,
       ),
-      { code: 'ENOSPC' },
+      { code: 'ENOSPC', requiredGib: requiredBytes / 1024 ** 3 },
     );
   }
   const probe = join(project, `.write-probe-${randomUUID()}`);

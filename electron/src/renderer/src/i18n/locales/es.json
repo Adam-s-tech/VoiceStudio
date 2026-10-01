@@ -2085,7 +2085,7 @@
     "setup_required": "Instalar entorno local",
     "setup_hint": "Descarga Python y las dependencias de la aplicación (varios GB). Los modelos de voz se instalan por separado cuando los eliges.",
     "installing": "Instalando…",
-    "setup_space": "Libera al menos 9 GiB en la unidad de la aplicación y vuelve a intentarlo.",
+    "setup_space": "Libera al menos {{gib}} GiB en la unidad de la aplicación y vuelve a intentarlo.",
     "setup_access": "Permite escribir en la carpeta de datos de la aplicación y vuelve a intentarlo.",
     "setup_unsupported_platform": "Este Mac Intel no puede ejecutar el backend de IA local — PyTorch no ofrece wheels para macOS Intel. Conecta un backend remoto abajo; no se necesita instalación local.",
     "ready": "Motor listo",
@@ -2297,7 +2297,10 @@
     "still_needed": "Todavía se necesita:",
     "back": "Atrás",
     "enter_studio": "entrar al estudio",
-    "continue_ok": "Todo bien - continúa"
+    "continue_ok": "Todo bien - continúa",
+    "check_arch_label": "Windows en ARM",
+    "check_arch_detail": "PC con Windows ARM64: el backend de IA se ejecuta como x64 bajo la emulación de Windows, solo en CPU (sin aceleración de GPU/NPU).",
+    "check_arch_fix": "La generación de voz funciona, pero es más lenta. Prefiere un motor de voz ligero (KittenTTS, Supertonic-3, PocketTTS) y un modelo Whisper pequeño."
   },
   "consent": {
     "title": "¿Ayudar a mejorar VoiceStudio?",

@@ -27,6 +27,7 @@ import torchaudio
 
 from omnivoice.models.omnivoice import OmniVoice
 from omnivoice.utils.common import str2bool
+from omnivoice.utils.dtype import tts_dtype_name
 
 
 def get_best_device():
@@ -129,8 +130,7 @@ def main():
     model = OmniVoice.from_pretrained(
         args.model,
         device_map=device,
-        # fp16 has no fast CPU GEMM; CPU-only hosts must load float32.
-        dtype=torch.float32 if str(device) == "cpu" else torch.float16,
+        dtype=getattr(torch, tts_dtype_name(device)),
     )
 
     logging.info(f"Generating audio for: {args.text[:80]}...")

@@ -222,7 +222,7 @@ describe('CPU-only runtime install', () => {
     const run = vi.fn();
     await expect(
       installRuntime(bundle, project, 'uv', run, new AbortController().signal),
-    ).rejects.toThrow('5 GiB');
+    ).rejects.toMatchObject({ code: 'ENOSPC', requiredGib: 5 });
     expect(run).not.toHaveBeenCalled();
 
     vi.mocked(statfs).mockResolvedValueOnce({ bavail: 6 * 1024 ** 3, bsize: 1 } as Awaited<

@@ -2435,7 +2435,7 @@ def _load_model_sync():
         torch = _lazy_torch()
         VoiceStudio = _lazy_omnivoice()
         device = get_best_device()
-        from core.device_caps import tts_dtype_name
+        from omnivoice.utils.dtype import tts_dtype_name
 
         checkpoint = resolve_omnivoice_checkpoint()
         _set_loading("loading_weights", f"Loading TTS weights on {device}…")
