@@ -320,7 +320,9 @@ def _chat(client, *, system: str, user: str) -> str:
                     {"role": "user", "content": user},
                 ],
             )
-            return (res.choices[0].message.content or "").strip()
+            from services.llm_backend import _strip_reasoning
+            return _strip_reasoning(res.choices[0].message.content or "",
+                                    prompt=f"{system}\n{user}")
         except Exception as e:  # noqa: BLE001 — re-raised unless a retryable 429
             wait = _retry_after_seconds(e)
             if wait is None or attempts >= 1:

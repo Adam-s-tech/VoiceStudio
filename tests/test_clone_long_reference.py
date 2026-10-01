@@ -226,6 +226,66 @@ def test_long_reference_without_installed_asr_uses_model_passage(
     assert counting.calls == 2
 
 
+def _no_cached_reference_asr(monkeypatch):
+    """The model's own Whisper snapshot is not installed (offline, empty cache)."""
+    import huggingface_hub
+    from huggingface_hub.errors import LocalEntryNotFoundError
+
+    def _missing(*_args, **_kwargs):
+        raise LocalEntryNotFoundError("not cached")
+
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", _missing)
+
+
+def test_over_limit_reference_without_asr_names_the_length_limit(
+    tmp_path, monkeypatch
+):
+    """#2442: a saved 35 s voice whose recognizer found nothing said only
+    "needs an installed speech-to-text model", although a typed transcript is
+    dropped for it and the real problem is the reference length."""
+    _no_cached_reference_asr(monkeypatch)
+    model = _omnivoice_stub()
+    model._asr_pipe = None
+
+    with pytest.raises(ValueError) as caught:
+        model.create_voice_clone_prompt(_wav(tmp_path / "long.wav", 35), None)
+
+    message = str(caught.value)
+    assert "35.0" in message
+    assert "20 seconds" in message
+    assert "3-10 second" in message
+
+
+def test_unrelated_asr_load_error_is_not_reported_as_length(
+    tmp_path, monkeypatch
+):
+    """Only the missing-snapshot case maps to [clone_ref_too_long]."""
+    model = _omnivoice_stub()
+    model._asr_pipe = None
+
+    def _broken(*_args, **_kwargs):
+        raise ValueError("corrupt ASR weights")
+
+    monkeypatch.setattr(model, "_load_cached_reference_asr", _broken)
+
+    with pytest.raises(ValueError, match="corrupt ASR weights") as caught:
+        model.create_voice_clone_prompt(_wav(tmp_path / "long.wav", 35), None)
+
+    assert "[clone_ref_too_long]" not in str(caught.value)
+
+
+def test_reference_within_transcript_limit_keeps_the_asr_hint(
+    tmp_path, monkeypatch
+):
+    """A 18 s clip can take a transcript, so the transcript advice stays."""
+    _no_cached_reference_asr(monkeypatch)
+    model = _omnivoice_stub()
+    model._asr_pipe = None
+
+    with pytest.raises(ValueError, match="installed speech-to-text model"):
+        model.create_voice_clone_prompt(_wav(tmp_path / "mid.wav", 18), None)
+
+
 def test_stored_whole_clip_transcript_on_long_reference_still_clones(
     tmp_path, monkeypatch, no_prompt_disk_cache
 ):
