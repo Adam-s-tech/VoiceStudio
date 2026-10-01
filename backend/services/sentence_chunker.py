@@ -220,11 +220,13 @@ def _split_sentences(
     Returns a list of (sentence, start_pos, end_pos) tuples.
     Internal markers are chosen outside the input so literal marker text survives.
     """
-    prd, stop = "<prd>", "<stop>"
-    while prd in text:
-        prd = prd[:-1] + "_>"
-    while stop in text:
-        stop = stop[:-1] + "_>"
+    # Collect literal marker IDs once; membership checks then stay in this set.
+    # At most one more ID than the number present is needed to find a free pair.
+    marker_ids = {match.group(1) for match in re.finditer(r"<(?:prd|stop)_(\d+)>", text)}
+    marker_id = 0
+    while str(marker_id) in marker_ids:
+        marker_id += 1
+    prd, stop = f"<prd_{marker_id}>", f"<stop_{marker_id}>"
 
     alphabets = r"([A-Za-z])"
     # Title/honorific prefixes that take a trailing period. Sourced from the
