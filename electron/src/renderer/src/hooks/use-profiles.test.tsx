@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -44,6 +44,7 @@ function setup() {
 }
 
 afterEach(() => {
+  onlineManager.setOnline(true);
   vi.clearAllMocks();
   patchCloneSettings({ selectedProfileId: null, refText: '' });
   localStorage.clear();
@@ -215,4 +216,36 @@ it('cancels an older profile query before confirming deletion after an error', a
     await older;
   });
   expect(client.getQueryData<Profile[]>(queryKeys.profiles)?.map((p) => p.id)).toEqual(['v2']);
+});
+
+it('settles a deletion error while the native backend is offline and preserves selections', async () => {
+  mock.remove.mockImplementation(async () => {
+    onlineManager.setOnline(false);
+    throw new Error('backend offline');
+  });
+  mock.list.mockRejectedValue(new Error('backend offline'));
+  patchCloneSettings({ selectedProfileId: 'v1' });
+  writeDraft({ ...readDraft(), profileId: 'v1' });
+  const { result } = setupDelete();
+  let deletion!: Promise<unknown>;
+  try {
+    await act(async () => {
+      deletion = result.current.mutateAsync('v1').catch((error) => error);
+      await Promise.resolve();
+    });
+    const settled = await Promise.race([
+      deletion.then(() => true),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 100)),
+    ]);
+    expect(settled).toBe(true);
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    expect(cloneSettingsStore.state.selectedProfileId).toBe('v1');
+    expect(readDraft().profileId).toBe('v1');
+    expect(mock.list).not.toHaveBeenCalled();
+  } finally {
+    onlineManager.setOnline(true);
+    await act(async () => {
+      await deletion;
+    });
+  }
 });

@@ -1,4 +1,5 @@
 import {
+  onlineManager,
   useMutation,
   useQuery,
   useQueryClient,
@@ -107,11 +108,13 @@ export function useDeleteProfile(): UseMutationResult<void, Error, string> {
     },
     onError: async (err, id) => {
       toast.error(tr('clone.delete_profile_failed', { message: describeError(err) }));
+      if (!onlineManager.isOnline()) return;
       try {
         // Asset cleanup can fail after the profile deletion has committed.
         // Confirm absence before clearing state; a rollback or unreachable
         // backend must preserve the user's selected voice.
         await queryClient.cancelQueries({ queryKey: queryKeys.profiles });
+        if (!onlineManager.isOnline()) return;
         const profiles = await queryClient.fetchQuery({
           queryKey: queryKeys.profiles,
           queryFn: listProfiles,
