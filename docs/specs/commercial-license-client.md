@@ -58,6 +58,11 @@ Each endorsement that passes adds `kid → public_key` to the trusted key set. A
 
 Verify the endorsement at the same `now` as the certificate. vssaas never issues a certificate whose `hard_exp` passes its key's endorsement, so a cached endorsement covers the certificate's whole life. The client should also take `now` from a non-decreasing clock: the larger of the system time and the latest time it has already seen, such as the refresh response's `server_time`. Otherwise, setting the clock back extends a certificate.
 
+**Checks the application must add around the verifier.** `verifyCertificate` / `verify_certificate` and the CLI wrappers below prove only that vssaas signed the certificate. They are a reference and a test harness, not the whole gate. The client must also do both of these before it turns Pro on:
+
+- **Bind to this installation.** Compare the verified `inst` claim with this installation's own licensing identifier, the 32 bytes it sent as `installation_id_hash` at claim time ([§3.1](#31-what-is-recorded-today)). On a mismatch, treat the certificate as invalid and do not enable Pro. Without this, a valid certificate copied to another machine would work offline until its `hard_exp` without owning a seat.
+- **Persist a time floor.** Store the highest `now` the client has accepted (system time or a refresh response's `server_time`, whichever is larger) and use `max(system time, stored floor)` as `now` on every start. The CLIs take `now` from the command line or the system clock for testing only. Production code that restarts and reads the raw clock would let a rolled-back clock stretch the 44-day offline limit ([§2.4](#24-the-offline-limit)).
+
 ### 1.2 Where the root keys come from
 
 Trust starts from one or two **root public keys compiled into the client build**, one set per environment. They are public values, so they can be committed or injected by CI. A good format mirrors vssaas `LICENSE_ROOT_PUBLIC_KEYS`: comma-separated unpadded base64url, 32 bytes each, supplied through a build-time define such as `VOICESTUDIO_LICENSE_ROOT_PUBLIC_KEYS`, next to the existing `VOICESTUDIO_PRO_*` defines in `electron/electron.vite.config.ts`.
