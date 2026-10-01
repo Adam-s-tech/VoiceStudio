@@ -72,3 +72,33 @@ def test_auto_extract_scrubs_provider_error(monkeypatch):
     assert secret not in detail
     assert home not in detail
     assert "***REDACTED***" in detail
+
+
+def test_auto_extract_ignores_terms_inside_reasoning(monkeypatch):
+    """A reasoning model drafts candidate pairs in its monologue; only the
+    answer after </think> may become glossary rows."""
+    from api.routers import glossary
+    from services import llm_skills
+    from core.db import ensure_schema
+
+    ensure_schema()
+    body = (
+        "Candidates:\nMarcus || WRONG || draft\n</think>\n"
+        "Marcus || Marcus || character name\n"
+    )
+
+    class _Completions:
+        def create(self, **kw):
+            msg = type("M", (), {"content": body})
+            return type("R", (), {"choices": [type("C", (), {"message": msg})]})
+
+    class _Handle:
+        client = type("Client", (), {"chat": type("Chat", (), {"completions": _Completions()})()})()
+        model = "m"
+        timeout = 1.0
+
+    monkeypatch.setattr(llm_skills, "resolve_skill_client", lambda sid: _Handle())
+
+    out = glossary.auto_extract("proj-reasoning", _req(target_lang="es", segments=[{"text": "Hello Marcus"}]))
+    assert out["proposed"] == 1
+    assert [t["target"] for t in out["terms"] if t["source"] == "Marcus"] == ["Marcus"]

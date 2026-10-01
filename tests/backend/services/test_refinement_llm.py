@@ -396,3 +396,26 @@ def test_internal_type_error_is_not_retried_or_memoized(monkeypatch):
 def test_multiple_leading_reasoning_blocks_keep_the_final_answer():
     from services.llm_backend import _strip_reasoning
     assert _strip_reasoning('<think>one</think>\n<thinking>two</thinking>Answer.') == 'Answer.'
+
+
+def test_prefilled_reasoning_block_is_stripped():
+    """Templates that put <think> in the prompt (Spark-X2.5, Qwen3 thinking
+    variants) leave only the closing tag in the reply when the server runs
+    without a reasoning parser."""
+    from services.llm_backend import _strip_reasoning
+    assert _strip_reasoning("The user wants Spanish.\n</think>\n\nHola.") == "Hola."
+    assert _strip_reasoning("weighing it</thinking>Answer.") == "Answer."
+    assert _strip_reasoning("only reasoning, then</think>") == ""
+    # An answer that merely mentions a tag is still left alone.
+    assert _strip_reasoning("Close it with <think>x</think> here.") == "Close it with <think>x</think> here."
+
+
+def test_literal_closing_tag_from_the_prompt_is_kept():
+    """A reply may repeat a bare </think> only because the input had one —
+    translating that input must not cut the answer at the tag."""
+    from services.llm_backend import _strip_reasoning
+    line = "Use </think> to close the block."
+    assert _strip_reasoning(line, prompt="Translate to Spanish:\n" + line) == line
+    assert _strip_reasoning("Usa </THINK> para cerrar.", prompt=line) == "Usa </THINK> para cerrar."
+    # A tag the prompt never contained still ends a prefilled block.
+    assert _strip_reasoning("weighing it</think>Answer.", prompt="Translate: hi") == "Answer."
