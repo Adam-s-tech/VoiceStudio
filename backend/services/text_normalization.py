@@ -472,17 +472,17 @@ def _expand_abbreviations(text: str, lang: str) -> str:
 # zeros ("007") or 7+ digits (IDs, phone numbers) are all left alone.
 
 # EN-only clock time: H:MM, 0-23 hours. Rejects H:MM:SS (durations).
-_TIME_RE = re.compile(r"(?<![\d:.,])([01]?\d|2[0-3]):([0-5]\d)(?![\d:])")
+_TIME_RE = re.compile(r"(?<![\w:.,/$%+-])([01]?\d|2[0-3]):([0-5]\d)(?![\w:/%+-])(?![.,]\d)")
 
 # EN-only ordinal, suffix verified in the callback ("2th" stays as-is).
-_ORDINAL_RE = re.compile(r"(?<![\w.,])(\d{1,4})(st|nd|rd|th)\b")
+_ORDINAL_RE = re.compile(r"(?<![\w.,:/$%+-])(\d{1,4})(st|nd|rd|th)\b")
 
 # EN-only dollars: $N or $N.CC. "$1,000" and "$5.5" are blocked by the
 # lookahead; a period or comma that ends the sentence or clause is not, the
 # same guard the integer and decimal rules use ("It costs $5." is spoken).
-_CURRENCY_RE = re.compile(r"(?<!\w)\$(\d{1,6})(?:\.(\d{2}))?(?!\d)(?![.,]\d)")
+_CURRENCY_RE = re.compile(r"(?<![\w.,:/$%+-])\$(\d{1,6})(?:\.(\d{2}))?(?![\w:/%+-])(?![.,]\d)")
 
-_PERCENT_RE = re.compile(r"(?<![\w.,])(\d{1,6}(?:\.\d{1,4})?)\s?%")
+_PERCENT_RE = re.compile(r"(?<![\w.,:/$%+-])(\d{1,6}(?:\.\d{1,4})?)\s?%(?![\w:/%+-])(?![.,]\d)")
 
 _DECIMAL_RE = re.compile(
     r"(?<![\w.,:/$%-])(\d{1,6})\.(\d{1,6})(?![\w:/%-])(?![.,]\d)"
@@ -527,9 +527,9 @@ def _numbers_to_words(text: str, lang: str) -> str:
     except ImportError:  # pragma: no cover — direct dependency; belt & braces
         return text
 
-    def _safe(m: re.Match, render: Callable[[re.Match], str]) -> str:
+    def _safe(m: re.Match, render: Callable[[re.Match], str], *, clock: bool = False) -> str:
         # Any num2words hiccup leaves this occurrence untouched.
-        if _glued_to_mark(m):
+        if _glued_to_mark(m) or (not clock and _leading_zero(m.group(1).partition(".")[0])):
             return m.group(0)
         try:
             return render(m)
@@ -546,7 +546,7 @@ def _numbers_to_words(text: str, lang: str) -> str:
                 return f"{hw} oh {num2words(mm, lang='en')}"
             return f"{hw} {num2words(mm, lang='en')}"
 
-        text = _TIME_RE.sub(lambda m: _safe(m, _time), text)
+        text = _TIME_RE.sub(lambda m: _safe(m, _time, clock=True), text)
 
         def _ordinal(m: re.Match) -> str:
             n = int(m.group(1))
@@ -636,7 +636,7 @@ def _numbers_to_words_native(text: str, lang: str) -> str:
 
     def _safe(m: re.Match, render: Callable[[re.Match], str]) -> str:
         """Render one match; on any error return the original text."""
-        if _glued_to_mark(m):
+        if _glued_to_mark(m) or _leading_zero(m.group(1).partition(".")[0]):
             return m.group(0)
         try:
             return render(m)
