@@ -86,6 +86,7 @@ metadata and the backend fallback mirror it.
 - The Twilio guide and integration directory describe the guided setup and in-app integration pages (#2304)
 
 ### Fixed
+- A generation that fails because the machine ran out of memory now says so and what to free, instead of only "Generation failed. Check the selected engine and try again." (#2462) — thanks @dubeypankaj11-spec!
 - Dub assembly, cached segments and audio tools can read generated WAV files when TorchCodec is missing or cannot load (#2379) — thanks @tokutei58301-boop!
 - Remote API-key and share-PIN clients can record and read export history while native filesystem operations stay local (#2383, #2384) — thanks @sedatdagg!
 - Concurrent job events receive unique sequence numbers (#2384) — thanks @sedatdagg!
