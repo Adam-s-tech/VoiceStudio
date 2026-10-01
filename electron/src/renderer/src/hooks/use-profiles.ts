@@ -2,6 +2,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
@@ -27,6 +28,7 @@ import { readDraft, writeDraft } from '@/features/design/design-draft';
 import { useBackendStatus } from './use-backend-status';
 
 const PROFILES_STALE_MS = 30_000;
+const deletionConfirmations = new WeakMap<QueryClient, Promise<void>>();
 
 export function useProfiles(): UseQueryResult<Profile[]> {
   const status = useBackendStatus();
@@ -109,8 +111,19 @@ export function useDeleteProfile(): UseMutationResult<void, Error, string> {
       toast.error(tr('clone.delete_profile_failed', { message: describeError(err) }));
       // Let the deletion error settle even if confirmation is paused offline.
       // The managed profiles query resumes when the backend becomes ready.
-      void (async () => {
+      const originalQuery = queryClient
+        .getQueryCache()
+        .build(queryClient, queryClient.defaultQueryOptions({ queryKey: queryKeys.profiles }));
+      const previous = deletionConfirmations.get(queryClient) ?? Promise.resolve();
+      // A later batch deletion must not cancel an earlier confirmation.
+      const confirmation = previous.then(async () => {
         try {
+          // Discard queued checks from a cleared/replaced query-client cache.
+          if (
+            queryClient.getQueryCache().find({ queryKey: queryKeys.profiles }) !== originalQuery
+          ) {
+            return;
+          }
           // Asset cleanup can fail after the profile deletion has committed.
           // Confirm absence before clearing state; a rollback or unreachable
           // backend must preserve the user's selected voice.
@@ -124,7 +137,13 @@ export function useDeleteProfile(): UseMutationResult<void, Error, string> {
         } catch {
           // The original error is already shown; absence is still unconfirmed.
         }
-      })();
+      });
+      deletionConfirmations.set(queryClient, confirmation);
+      void confirmation.then(() => {
+        if (deletionConfirmations.get(queryClient) === confirmation) {
+          deletionConfirmations.delete(queryClient);
+        }
+      });
     },
   });
 }

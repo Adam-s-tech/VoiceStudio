@@ -76,13 +76,15 @@ it('leaves the composer alone when another voice is selected', async () => {
   expect(cloneSettingsStore.state.refText).toBe('keep me');
 });
 
-function setupDelete() {
+function setupDelete(seedProfiles = true) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  client.setQueryData<Profile[]>(queryKeys.profiles, [profile({}), profile({ id: 'v2' })]);
+  if (seedProfiles) {
+    client.setQueryData<Profile[]>(queryKeys.profiles, [profile({}), profile({ id: 'v2' })]);
+  }
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
-  return { client, ...renderHook(() => useDeleteProfile(), { wrapper }) };
+  return { client, wrapper, ...renderHook(() => useDeleteProfile(), { wrapper }) };
 }
 
 it('clears deleted clone and design references after cleanup fails and the list confirms deletion', async () => {
@@ -335,3 +337,205 @@ it.each(['paused', 'fetching'])(
     }
   },
 );
+
+it.each(['same-hook', 'separate-hooks'])(
+  'confirms both failed batch deletions without losing the first selected voice: %s',
+  async (hookLayout) => {
+    const firstConfirmation = deferred<Profile[]>();
+    mock.remove.mockRejectedValue(new Error('cleanup incomplete'));
+    mock.list.mockReturnValueOnce(firstConfirmation.promise).mockResolvedValueOnce([]);
+    patchCloneSettings({ selectedProfileId: 'v1' });
+    writeDraft({ ...readDraft(), profileId: 'v2' });
+    const { client, result, wrapper } = setupDelete();
+    const second =
+      hookLayout === 'separate-hooks'
+        ? renderHook(() => useDeleteProfile(), { wrapper }).result
+        : result;
+    try {
+      await act(async () => {
+        await expect(result.current.mutateAsync('v1')).rejects.toThrow('cleanup incomplete');
+      });
+      await waitFor(() => expect(mock.list).toHaveBeenCalledTimes(1));
+      await act(async () => {
+        await expect(second.current.mutateAsync('v2')).rejects.toThrow('cleanup incomplete');
+      });
+      await act(async () => {
+        firstConfirmation.resolve([profile({ id: 'v2' })]);
+      });
+      await waitFor(() => expect(mock.list).toHaveBeenCalledTimes(2));
+      await waitFor(() =>
+        expect(client.getQueryState(queryKeys.profiles)?.fetchStatus).toBe('idle'),
+      );
+      expect(client.getQueryData<Profile[]>(queryKeys.profiles)).toEqual([]);
+      expect(cloneSettingsStore.state.selectedProfileId).toBeNull();
+      expect(readDraft().profileId).toBeNull();
+    } finally {
+      client.clear();
+    }
+  },
+);
+
+it('settles two in-flight DELETE errors offline and confirms both after reconnect across hooks', async () => {
+  const responses = deferred<void>();
+  mock.remove.mockImplementation(async () => {
+    await responses.promise;
+    throw new Error('backend stopped after DELETE');
+  });
+  mock.list.mockResolvedValue([]);
+  patchCloneSettings({ selectedProfileId: 'v1' });
+  writeDraft({ ...readDraft(), profileId: 'v2' });
+  const { client, result, wrapper } = setupDelete();
+  const second = renderHook(() => useDeleteProfile(), { wrapper });
+  let firstError!: Promise<unknown>;
+  let secondError!: Promise<unknown>;
+  try {
+    await act(async () => {
+      firstError = result.current.mutateAsync('v1').catch((error) => error);
+      secondError = second.result.current.mutateAsync('v2').catch((error) => error);
+    });
+    await waitFor(() => expect(mock.remove).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      onlineManager.setOnline(false);
+      responses.resolve();
+      await Promise.all([firstError, secondError]);
+    });
+    await waitFor(() => {
+      expect(result.current.isPending).toBe(false);
+      expect(second.result.current.isPending).toBe(false);
+    });
+    expect(mock.list).not.toHaveBeenCalled();
+    expect(cloneSettingsStore.state.selectedProfileId).toBe('v1');
+    expect(readDraft().profileId).toBe('v2');
+
+    await act(async () => {
+      onlineManager.setOnline(true);
+    });
+    await waitFor(() => expect(mock.list).toHaveBeenCalledTimes(2));
+    await waitFor(() => {
+      expect(cloneSettingsStore.state.selectedProfileId).toBeNull();
+      expect(readDraft().profileId).toBeNull();
+    });
+    expect(client.getQueryData(queryKeys.profiles)).toEqual([]);
+  } finally {
+    client.clear();
+  }
+});
+
+it.each([true, false])(
+  'discards a queued confirmation on cache clear while the first is paused (initial query: %s)',
+  async (seedProfiles) => {
+    const responses = deferred<void>();
+    mock.remove.mockImplementation(async () => {
+      await responses.promise;
+      throw new Error('backend stopped after DELETE');
+    });
+    mock.list.mockResolvedValue([]);
+    patchCloneSettings({ selectedProfileId: 'v1' });
+    writeDraft({ ...readDraft(), profileId: 'v2' });
+    const { client, result, wrapper, unmount } = setupDelete(seedProfiles);
+    const second = renderHook(() => useDeleteProfile(), { wrapper });
+    let firstError!: Promise<unknown>;
+    let secondError!: Promise<unknown>;
+    await act(async () => {
+      firstError = result.current.mutateAsync('v1').catch((error) => error);
+      secondError = second.result.current.mutateAsync('v2').catch((error) => error);
+    });
+    await waitFor(() => expect(mock.remove).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      onlineManager.setOnline(false);
+      responses.resolve();
+      await Promise.all([firstError, secondError]);
+    });
+    await waitFor(() =>
+      expect(client.getQueryState(queryKeys.profiles)?.fetchStatus).toBe('paused'),
+    );
+    unmount();
+    second.unmount();
+    client.clear();
+    const currentProfiles = [profile({}), profile({ id: 'v2' })];
+    client.setQueryData(queryKeys.profiles, currentProfiles);
+    const remounted = renderHook(() => useProfiles(), { wrapper });
+    try {
+      await act(async () => {
+        onlineManager.setOnline(true);
+      });
+      expect(mock.list).not.toHaveBeenCalled();
+      expect(client.getQueryData(queryKeys.profiles)).toEqual(currentProfiles);
+      expect(cloneSettingsStore.state.selectedProfileId).toBe('v1');
+      expect(readDraft().profileId).toBe('v2');
+    } finally {
+      remounted.unmount();
+      client.clear();
+    }
+  },
+);
+
+it('confirms deletion when a live query client has no loaded profiles query', async () => {
+  mock.remove.mockRejectedValue(new Error('cleanup incomplete'));
+  mock.list.mockResolvedValue([]);
+  patchCloneSettings({ selectedProfileId: 'v1' });
+  writeDraft({ ...readDraft(), profileId: 'v1' });
+  const { client, result } = setupDelete(false);
+  try {
+    expect(client.getQueryState(queryKeys.profiles)).toBeUndefined();
+    await act(async () => {
+      await expect(result.current.mutateAsync('v1')).rejects.toThrow('cleanup incomplete');
+    });
+    await waitFor(() => expect(mock.list).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(cloneSettingsStore.state.selectedProfileId).toBeNull();
+      expect(readDraft().profileId).toBeNull();
+    });
+  } finally {
+    client.clear();
+  }
+});
+
+it('uses normal query-client defaults and identity without fetching while offline', async () => {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: 60_000,
+        queryKeyHashFn: (key) => `custom:${JSON.stringify(key)}`,
+      },
+    },
+  });
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  mock.remove.mockImplementation(async () => {
+    onlineManager.setOnline(false);
+    throw new Error('backend offline');
+  });
+  mock.list.mockResolvedValue([]);
+  patchCloneSettings({ selectedProfileId: 'v1' });
+  writeDraft({ ...readDraft(), profileId: 'v1' });
+  const { result } = renderHook(() => useDeleteProfile(), { wrapper });
+  try {
+    await act(async () => {
+      await expect(result.current.mutateAsync('v1')).rejects.toThrow('backend offline');
+    });
+    await waitFor(() =>
+      expect(client.getQueryState(queryKeys.profiles)?.fetchStatus).toBe('paused'),
+    );
+    expect(client.getQueryCache().getAll()).toHaveLength(1);
+    expect(client.getQueryCache().find({ queryKey: queryKeys.profiles })?.queryHash).toBe(
+      `custom:${JSON.stringify(queryKeys.profiles)}`,
+    );
+    expect(mock.list).not.toHaveBeenCalled();
+
+    await act(async () => {
+      onlineManager.setOnline(true);
+    });
+    await waitFor(() => expect(mock.list).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(cloneSettingsStore.state.selectedProfileId).toBeNull();
+      expect(readDraft().profileId).toBeNull();
+    });
+    expect(client.getQueryCache().getAll()).toHaveLength(1);
+    expect(client.getQueryData(queryKeys.profiles)).toEqual([]);
+  } finally {
+    client.clear();
+  }
+});
