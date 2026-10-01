@@ -255,6 +255,19 @@ def test_a_lone_cold_load_still_loads_and_publishes(mm, monkeypatch):
 
 def test_a_warm_model_never_takes_the_load_lock(mm, monkeypatch):
     """The guard must not serialise the hot path behind a load lock."""
+    probe = _ConcurrentLoadProbe()
+    resident = object()
+    monkeypatch.setattr(mm, "model", resident, raising=False)
+    monkeypatch.setattr(mm, "_load_model_sync", probe, raising=False)
+
+    async def _no_heal():
+        return None
+
+    monkeypatch.setattr(mm, "_heal_tts_placement", _no_heal, raising=False)
+    monkeypatch.setattr(mm, "make_room_before_generate", lambda: None, raising=False)
+
+    assert asyncio.run(mm.get_model()) is resident
+    assert probe.calls == 0, "a resident model must not re-enter the cold load"
 
 
 def test_a_retry_after_a_timed_out_load_must_not_block_forever(mm, monkeypatch):
@@ -345,17 +358,101 @@ def _run_capture(mm):
     except BaseException as exc:  # noqa: BLE001 — the failure IS the subject
         return exc
 
-    probe = _ConcurrentLoadProbe()
-    resident = object()
-    monkeypatch.setattr(mm, "model", resident, raising=False)
-    monkeypatch.setattr(mm, "_load_model_sync", probe, raising=False)
 
-    async def _no_heal():
-        return None
+def _wedge_setup(mm, monkeypatch, loader):
+    from concurrent.futures import ThreadPoolExecutor
 
-    monkeypatch.setattr(mm, "_heal_tts_placement", _no_heal, raising=False)
-    monkeypatch.setattr(mm, "make_room_before_generate", lambda: None, raising=False)
+    monkeypatch.setattr(mm, "model", None, raising=False)
+    monkeypatch.setattr(mm, "_model_lock", asyncio.Lock(), raising=False)
+    monkeypatch.setattr(mm, "_model_load_thread_lock", threading.RLock(), raising=False)
+    monkeypatch.setattr(mm, "_load_model_sync", loader, raising=False)
+    monkeypatch.setattr(mm, "_make_room_before_tts_load", lambda: None, raising=False)
+    monkeypatch.setattr(mm, "_model_load_timeout", lambda: 0.3, raising=False)
+    mm._load_abandoned.clear()
+    pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="test-pool")
+    monkeypatch.setattr(mm, "_get_gpu_pool", lambda: pool, raising=False)
+    return pool
 
-    assert asyncio.run(mm.get_model()) is resident
-    assert probe.calls == 0, "a resident model must not re-enter the cold load"
 
+def test_an_abandoned_load_that_later_fails_does_not_strand_the_backend(mm, monkeypatch):
+    """Review (Greptile P1): the abandoned verdict must die with its loader.
+
+    A timed-out load that eventually FAILS releases the lock but used to leave
+    ``_load_abandoned`` set, so every later cold load was refused until restart
+    although nothing was stuck any more.
+    """
+    wedged, release = threading.Event(), threading.Event()
+    calls = []
+
+    def _loader():
+        calls.append(1)
+        if len(calls) == 1:
+            wedged.set()
+            release.wait(30)
+            raise RuntimeError("late native load failure")
+        return object()
+
+    pool = _wedge_setup(mm, monkeypatch, _loader)
+    try:
+        first = _run_capture(mm)
+        assert isinstance(first, mm.ModelLoadAbandoned), first
+        assert wedged.is_set()
+        assert mm._load_abandoned.is_set()
+
+        release.set()  # the wedged loader now dies on its own
+        deadline = time.monotonic() + 15
+        while mm._load_abandoned.is_set() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert not mm._load_abandoned.is_set(), (
+            "the abandoned flag outlived its loader; the backend stays refused"
+        )
+        monkeypatch.setattr(mm, "_get_gpu_pool", lambda: pool, raising=False)
+        retry = _run_capture(mm)
+        assert not isinstance(retry, BaseException), retry
+    finally:
+        release.set()
+        monkeypatch.setattr(mm, "model", None, raising=False)
+        pool.shutdown(wait=False)
+
+
+def test_a_caller_queued_behind_another_load_does_not_brand_it_abandoned(mm, monkeypatch):
+    """Review (Greptile P1): blame the worker that timed out, not whichever
+    load happens to be running.
+
+    Caller B times out while still queued behind caller A's healthy, in-flight
+    load. A's load must not be marked abandoned.
+    """
+    in_native, release = threading.Event(), threading.Event()
+    published = object()
+
+    def _loader():
+        in_native.set()
+        release.wait(30)
+        return published
+
+    pool = _wedge_setup(mm, monkeypatch, _loader)
+    monkeypatch.setattr(mm, "_model_load_timeout", lambda: 5.0, raising=False)
+    try:
+        # A: an inline-route load that holds the lock with no deadline.
+        a_result: dict[str, object] = {}
+        a = threading.Thread(
+            target=lambda: a_result.setdefault("r", mm._load_model_exclusive()),
+            daemon=True,
+        )
+        a.start()
+        assert in_native.wait(10)
+
+        # B: a pool route whose deadline (shortened) passes while queued.
+        monkeypatch.setattr(mm, "_model_load_timeout", lambda: 0.3, raising=False)
+        b = _run_capture(mm)
+        assert isinstance(b, RuntimeError), b
+        assert not mm._load_abandoned.is_set(), (
+            "a queued caller's timeout branded another caller's live load as stuck"
+        )
+        release.set()
+        a.join(timeout=15)
+        assert a_result.get("r") is published
+    finally:
+        release.set()
+        monkeypatch.setattr(mm, "model", None, raising=False)
+        pool.shutdown(wait=False)

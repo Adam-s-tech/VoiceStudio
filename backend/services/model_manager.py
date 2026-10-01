@@ -2368,17 +2368,36 @@ class ModelLoadAbandoned(RuntimeError):
     """
 
 
-#: Set by a cold load for as long as it holds ``_model_load_thread_lock`` —
-#: i.e. while it is inside the native loader and cannot be cancelled.
-#: #2394: this is what lets a later caller tell "another load is still working,
-#: wait your turn" (fine, and it will return the model) apart from "a load was
-#: already abandoned and may never finish" (a restart is the only way out).
-#: An Event, not a flag: the wait must be able to distinguish the two without
-#: polling.
-_load_in_progress = threading.Event()
+class _LoadTicket:
+    """One caller's claim on a cold load, so a timeout blames the RIGHT load.
+
+    #2394: ``_load_model_with_timeout()`` must mark a load abandoned only when
+    *its own* worker is the one stuck in the native loader. A process-global
+    "a load is in progress" flag cannot tell that apart from "my worker is
+    still queued behind somebody else's load" — it would brand a healthy,
+    progressing load as abandoned and make every later cold load fail fast.
+
+    ``loading`` is set by the worker once it holds the load lock and is about to
+    enter the native loader. ``gave_up`` is set by the caller when its deadline
+    passes. Each side sets its own event BEFORE reading the other's, so either
+    the caller sees ``loading`` (and abandons the running load) or the worker
+    sees ``gave_up`` (and declines to start one nobody awaits) — never neither.
+    """
+
+    __slots__ = ("loading", "gave_up", "done")
+
+    def __init__(self) -> None:
+        self.loading = threading.Event()
+        self.gave_up = threading.Event()
+        #: Set by the worker as it leaves the critical section, so a caller
+        #: that times out a hair after the load finished does not brand a
+        #: finished load as stuck.
+        self.done = threading.Event()
+
 
 #: Set when a load is GIVEN UP ON at its deadline while still running (#2394),
-#: cleared by that load's own ``finally`` if it ever finishes. Read before
+#: cleared by that load's own ``finally`` when it exits — success or failure —
+#: because from then on the lock is free and nothing is stuck. Read before
 #: waiting on the load lock: a caller that arrives after an abandonment must
 #: fail immediately, because the lock it would queue behind is held by a
 #: loader nobody is waiting on any more. Without this, a retry re-waits the
@@ -2882,7 +2901,9 @@ def _reset_gpu_pool() -> None:
         _gpu_pool_singleton.reset()
 
 
-def _load_model_exclusive(timeout: float | None = None):
+def _load_model_exclusive(
+    timeout: float | None = None, ticket: _LoadTicket | None = None
+):
     """The single cold-load leaf: reclaim, load, publish — under ONE lock.
 
     #2394. Both cold routes reach the native `from_pretrained` through here:
@@ -2947,21 +2968,35 @@ def _load_model_exclusive(timeout: float | None = None):
             "Logs → Restart backend) if it does not finish on its own, then try "
             "again."
         )
-    # Reaching the lock clears the "stuck" verdict: whoever held it has
-    # finished, so the backend is healthy again and needs no restart. A load
-    # that merely looked stuck from outside is not permanently disarmed.
+    # Reaching the lock means whoever held it has finished, so any "stuck"
+    # verdict is stale and the backend needs no restart.
     _load_abandoned.clear()
-    _load_in_progress.set()
     try:
+        if ticket is not None:
+            ticket.loading.set()
+            if ticket.gave_up.is_set():
+                # Our caller timed out while we were queued; it already told the
+                # user and moved on. Starting a native load nobody awaits would
+                # only pin this lock for the whole load.
+                raise ModelLoadAbandoned(
+                    "This model load request had already timed out; not "
+                    "starting a load nobody is waiting for."
+                )
         if model is not None:
-            # A load that finished while we waited. It also clears
-            # ``_load_in_progress`` on its way out.
+            # A load that finished while we waited.
             return model
         _make_room_before_tts_load()
         model = _load_model_sync()
         return model
     finally:
-        _load_in_progress.clear()
+        # Whether this load succeeded, failed or was an abandoned one finishing
+        # late, it is no longer inside the native loader: the lock is about to
+        # be free, so nothing is stuck any more. Without this a failed
+        # abandoned load would leave every later cold load refused until the
+        # backend restarts, despite a free lock.
+        if ticket is not None:
+            ticket.done.set()
+        _load_abandoned.clear()
         _model_load_thread_lock.release()
 
 
@@ -2990,10 +3025,11 @@ async def _load_model_with_timeout():
     """
     loop = asyncio.get_running_loop()
     timeout = _model_load_timeout()
+    ticket = _LoadTicket()
     try:
         return await asyncio.wait_for(
             loop.run_in_executor(
-                _get_gpu_pool(), _load_model_exclusive, timeout
+                _get_gpu_pool(), _load_model_exclusive, timeout, ticket
             ),
             timeout=timeout,
         )
@@ -3008,8 +3044,17 @@ async def _load_model_with_timeout():
         # rather than re-waiting the full budget behind this loader — the
         # inline route passes no deadline of its own, so without the flag it
         # would sit on the lock indefinitely (#2394).
-        if _load_in_progress.is_set():
+        ticket.gave_up.set()
+        stuck = False
+        if ticket.loading.is_set():
             _load_abandoned.set()
+            # Re-check after publishing: if the worker finished in between, its
+            # own clear may already have run and ours would be stale.
+            if ticket.done.is_set():
+                _load_abandoned.clear()
+            else:
+                stuck = True
+        if stuck:
             logger.error(
                 "Model load exceeded %ss and is still running in a worker that "
                 "cannot be interrupted; the load lock stays held until it "
