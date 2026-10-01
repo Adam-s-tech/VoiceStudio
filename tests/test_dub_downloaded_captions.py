@@ -119,3 +119,44 @@ def test_rollup_detection_does_not_remove_later_spoken_repetitions(tmp_path, mon
     assert job['full_transcript'] == (
         'hey everyone welcome back today we are baking bread from scratch from scratch'
     )
+
+
+NOTE_VTT = "\n".join([
+    "WEBVTT",
+    "",
+    "NOTE translator explanation",
+    "00:01.000 --> 00:02.000",
+    "Comment example, not dialogue.",
+    "",
+    "00:03.000 --> 00:04.000",
+    "NOTE this is spoken.",
+    "NOTEBOOK is spoken too.",
+    "WEBVTT is a spoken format name.",
+    "",
+])
+
+
+def test_downloaded_note_blocks_are_not_speech_but_dialogue_words_are(tmp_path):
+    """#2510: metadata is block-scoped, not line-scoped, and line endings
+    (CRLF or classic CR) must not change the answer."""
+    from services.dub_pipeline import parse_vtt_segments
+
+    for newline in ("\n", "\r\n", "\r"):
+        track = tmp_path / "t.vtt"
+        track.write_bytes(NOTE_VTT.replace("\n", newline).encode("utf-8"))
+        assert parse_vtt_segments(str(track)) == [{
+            "start": 3.0,
+            "end": 4.0,
+            "text": "NOTE this is spoken. NOTEBOOK is spoken too. WEBVTT is a spoken format name.",
+        }]
+
+
+def test_downloaded_captions_and_uploaded_parser_agree_on_note_handling(tmp_path):
+    from services.dub_pipeline import parse_vtt_segments
+    from services.srt_parser import parse_srt
+
+    track = tmp_path / "t.vtt"
+    track.write_text(NOTE_VTT, encoding="utf-8")
+    downloaded = [s["text"] for s in parse_vtt_segments(str(track))]
+    uploaded = [" ".join(s["text"].split()) for s in parse_srt(NOTE_VTT).segments]
+    assert downloaded == uploaded
