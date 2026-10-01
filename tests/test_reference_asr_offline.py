@@ -35,7 +35,10 @@ def test_missing_implicit_asr_never_calls_network_capable_loader(monkeypatch, se
             preprocess_prompt=False,
         )
     loader.assert_not_called()
-    lookup.assert_called_once_with("openai/whisper-large-v3-turbo", local_files_only=True)
+    # The default checkpoint is asked for first; the other reusable Whisper
+    # checkpoints are tried before the model concludes nothing is installed.
+    assert lookup.call_args_list[0].args == ("openai/whisper-large-v3-turbo",)
+    assert all(call.kwargs["local_files_only"] is True for call in lookup.call_args_list)
 
 
 @pytest.mark.parametrize("seconds", [1, 21])

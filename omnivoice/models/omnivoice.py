@@ -309,6 +309,104 @@ def _resolve_snapshot_dir(checkpoint) -> str:
 _DEFAULT_ASR_MODEL = "openai/whisper-large-v3-turbo"
 
 
+def _reference_asr_repos() -> List[str]:
+    """Whisper checkpoints the implicit cloning fallback may reuse, best first.
+
+    The configured PyTorch Whisper model leads; ``openai/whisper-large-v3`` is
+    the checkpoint Model Catalogue lists for that engine, so a user who
+    installed it there is not told that no speech-to-text model exists.
+    """
+    configured = os.environ.get("OMNIVOICE_PYTORCH_ASR_MODEL", "").strip()
+    repos: List[str] = []
+    for repo in (configured, _DEFAULT_ASR_MODEL, "openai/whisper-large-v3"):
+        if repo and repo not in repos:
+            repos.append(repo)
+    return repos
+
+
+def _hub_cache_roots() -> List[str]:
+    """Directories that directly contain ``models--*`` folders."""
+    from huggingface_hub import constants
+
+    candidates = [
+        os.environ.get("HF_HUB_CACHE"),
+        os.environ.get("HUGGINGFACE_HUB_CACHE"),
+        getattr(constants, "HF_HUB_CACHE", None),
+    ]
+    home = os.environ.get("HF_HOME")
+    if home:
+        candidates += [os.path.join(home, "hub"), home]
+    roots: List[str] = []
+    for root in candidates:
+        if root and root not in roots:
+            roots.append(root)
+    return roots
+
+
+def _has_asr_weights(snapshot: str) -> bool:
+    try:
+        names = os.listdir(snapshot)
+    except OSError:
+        return False
+    return "config.json" in names and any(
+        name.endswith((".safetensors", ".bin")) for name in names
+    )
+
+
+def _find_cached_reference_asr() -> Optional[str]:
+    """Local snapshot directory of an installed Whisper checkpoint, or None.
+
+    ``snapshot_download(repo, local_files_only=True)`` only resolves the
+    ``main`` ref. Model Catalogue installs every checkpoint at a pinned commit
+    and never writes that ref, so the plain lookup reported an installed model
+    as missing and cloning asked for a speech-to-text model the user already
+    had. Each cache root is therefore also asked for its concrete snapshot
+    revisions. Nothing here touches the network.
+    """
+    from huggingface_hub import snapshot_download
+    from huggingface_hub.errors import LocalEntryNotFoundError
+
+    configured = os.environ.get("OMNIVOICE_PYTORCH_ASR_MODEL", "").strip()
+    if configured and os.path.isdir(configured) and _has_asr_weights(configured):
+        return configured
+    for repo in _reference_asr_repos():
+        if os.path.isdir(repo):
+            continue
+        try:
+            return snapshot_download(repo, local_files_only=True)
+        except (LocalEntryNotFoundError, ValueError):
+            pass
+        for root in _hub_cache_roots():
+            snapshots = os.path.join(
+                root, "models--" + repo.replace("/", "--"), "snapshots"
+            )
+            try:
+                revisions = sorted(
+                    (
+                        name
+                        for name in os.listdir(snapshots)
+                        if os.path.isdir(os.path.join(snapshots, name))
+                    ),
+                    key=lambda name: os.path.getmtime(os.path.join(snapshots, name)),
+                    reverse=True,
+                )
+            except OSError:
+                continue
+            for revision in revisions:
+                try:
+                    found = snapshot_download(
+                        repo,
+                        revision=revision,
+                        local_files_only=True,
+                        cache_dir=root,
+                    )
+                except (LocalEntryNotFoundError, ValueError):
+                    continue
+                if _has_asr_weights(found):
+                    return found
+    return None
+
+
 class OmniVoice(PreTrainedModel):
     _supports_flex_attn = True
     _supports_flash_attn_2 = True
@@ -478,17 +576,13 @@ class OmniVoice(PreTrainedModel):
 
     def _load_cached_reference_asr(self):
         """Implicit cloning fallback may reuse local weights, never download them."""
-        from huggingface_hub import snapshot_download
-        from huggingface_hub.errors import LocalEntryNotFoundError
-
-        try:
-            snapshot = snapshot_download(_DEFAULT_ASR_MODEL, local_files_only=True)
-        except LocalEntryNotFoundError as exc:
+        snapshot = _find_cached_reference_asr()
+        if snapshot is None:
             raise _ReferenceAsrNotInstalled(
                 "Automatic reference transcription needs an installed speech-to-text "
                 "model. Provide a matching reference transcript, or install and select "
                 "a speech-to-text model in Model Catalogue, then try again."
-            ) from exc
+            )
         # Pass a directory rather than the repo ID so transformers cannot make
         # metadata requests or download missing assets from a partial snapshot.
         self.load_asr_model(model_name=snapshot)
