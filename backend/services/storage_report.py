@@ -200,7 +200,7 @@ def build_report(
         })
 
     def _finish(category_id: str, cat: dict, complete: bool, err_path: str | None) -> None:
-        cat["complete"] = complete
+        cat["complete"] = complete and err_path is None
         if not complete:
             _warn_unreadable(category_id, cat["path"], "timeout")
         if err_path is not None:
@@ -263,6 +263,33 @@ def build_report(
     _finish("hf_cache", hf_cat, hf_complete, hf_err)
     categories.append(hf_cat)
 
+    # Use one ownership snapshot for both categories: only installed sidecars
+    # belong to engine_venvs. Interrupted installs inside DATA_DIR remain data.
+    engine_err: str | None = None
+    try:
+        with os.scandir(engines_dir) as it:
+            engine_entries = list(it)
+    except FileNotFoundError:
+        engine_entries = []
+    except OSError:
+        engine_entries = []
+        engine_err = engines_dir
+    engine_dirs = []
+    unclassified_engines = set()
+    for e in engine_entries:
+        # Resolve a transient inspection failure before either category claims
+        # the entry. Persistently unknown ownership remains an incomplete scan.
+        for _ in range(2):
+            try:
+                if e.is_dir(follow_symlinks=False) and os.path.isdir(os.path.join(e.path, ".venv")):
+                    engine_dirs.append(e.path)
+                break
+            except OSError:
+                engine_err = engine_err or e.path
+        else:
+            unclassified_engines.add(e.path)
+    engine_dirs.sort()
+
     # ── 2. App data dir, broken into subtotals ─────────────────────────────
     deadline = time.monotonic() + category_timeout
     data_complete = True
@@ -271,10 +298,11 @@ def build_report(
     claimed: set[str] = set()
 
     # When sidecar engines live under DATA_DIR/engines, the engine-venv category
-    # below owns that subtree — claim it here so it isn't also swept into "other".
+    # below owns installed sidecars; count the unclaimed remainder separately.
     engines_child = _engines_child_name(engines_dir, data_dir)
     if engines_child:
         claimed.add(engines_child)
+        data_err = engine_err
 
     for name in _DATA_CHILD_DIRS:
         p = os.path.join(data_dir, name)
@@ -322,6 +350,20 @@ def build_report(
     except OSError:
         if os.path.exists(data_dir):
             data_err = data_err or data_dir
+    if engines_child:
+        for e in engine_entries:
+            if e.path in engine_dirs or e.path in unclassified_engines:
+                continue
+            try:
+                if e.is_dir(follow_symlinks=False):
+                    size, ok, err = _dir_size(e.path, deadline)
+                    other_bytes += size
+                    data_complete = data_complete and ok
+                    data_err = data_err or err
+                else:
+                    other_bytes += e.stat(follow_symlinks=False).st_size
+            except OSError:
+                data_err = data_err or e.path
     children.append({"id": "other", "path": data_dir, "bytes": other_bytes, "complete": True})
 
     data_cat = {
@@ -338,21 +380,10 @@ def build_report(
     deadline = time.monotonic() + category_timeout
     venv_total = 0
     venv_complete = True
-    venv_err: str | None = None
+    venv_err: str | None = engine_err
     venv_items: list[dict] = []
-    try:
-        with os.scandir(engines_dir) as it:
-            engine_dirs = sorted(e.path for e in it if e.is_dir(follow_symlinks=False))
-    except OSError:
-        engine_dirs = []
     for edir in engine_dirs:
-        # A sidecar install is the venv PLUS a git checkout PLUS multi-GB weights
-        # (`checkpoints/`) — measure the whole `<id>` dir, not just `.venv`, or the
-        # weights (usually the bulk) go uncounted now that the data category no
-        # longer sweeps this subtree into "other". Only real installs have a venv,
-        # so that gate still skips a bare/interrupted dir.
-        if not os.path.isdir(os.path.join(edir, ".venv")):
-            continue
+        # Measure the whole installed sidecar: environment, checkout and weights.
         size, ok, err = _dir_size(edir, deadline)
         venv_total += size
         venv_complete = venv_complete and ok
