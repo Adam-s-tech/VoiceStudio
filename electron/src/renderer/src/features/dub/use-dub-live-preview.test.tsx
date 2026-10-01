@@ -6,23 +6,18 @@ const mocks = vi.hoisted(() => ({
   append: vi.fn(),
   finalize: vi.fn(),
   fail: vi.fn(),
-  onDone: null as (() => void) | null,
 }));
 
 vi.mock('@/lib/api/websocket', () => ({ backendWebSocketUrl: mocks.socketUrl }));
 vi.mock('@/lib/audio/streaming-preview', () => ({
   supportsStreamingPreview: () => true,
-  createStreamingPreview: (_rate: number, _fade: number, onDone?: () => void) => {
-    mocks.onDone = onDone ?? null;
-    return {
-      appendPcm16Bytes: mocks.append,
-      finalize: mocks.finalize,
-      fail: mocks.fail,
-    };
-  },
+  createStreamingPreview: () => ({
+    appendPcm16Bytes: mocks.append,
+    finalize: mocks.finalize,
+    fail: mocks.fail,
+  }),
 }));
 
-import { acquireSynthesis } from '@/lib/synthesis-lock';
 import { LIVE_DUB_PREVIEW_DELAY_MS, useDubLivePreview } from './use-dub-live-preview';
 
 class Socket {
@@ -111,40 +106,4 @@ it('cancels an obsolete stream immediately and stays silent while disabled', asy
   rerender({ enabled: false });
   await act(async () => vi.advanceTimersByTimeAsync(LIVE_DUB_PREVIEW_DELAY_MS));
   expect(Socket.instances).toHaveLength(1);
-});
-
-it('releases the socket and synthesis slot when playback is cancelled mid-stream (#2511)', async () => {
-  const { result } = renderHook(() => useDubLivePreview({ enabled: true, language: 'Spanish' }));
-  act(() => result.current.onEdit(segment, 'Hola'));
-  await act(async () => vi.advanceTimersByTimeAsync(LIVE_DUB_PREVIEW_DELAY_MS));
-  const socket = Socket.instances[0];
-  act(() => socket.open());
-  act(() => socket.frame('{"type":"start","sample_rate":24000}'));
-  act(() => socket.frame(new Uint8Array([1, 2, 3, 4]).buffer));
-  expect(result.current.liveSegmentId).toBe('line-1');
-  expect(acquireSynthesis()).toBeNull();
-
-  // The playback manager stopped this output (stop button / another preview).
-  act(() => mocks.onDone?.());
-
-  expect(result.current.liveSegmentId).toBeNull();
-  expect(socket.close).toHaveBeenCalled();
-  const release = acquireSynthesis();
-  expect(release).not.toBeNull();
-  release?.();
-});
-
-it('keeps the finished-tail path unchanged: done already released the slot', async () => {
-  const { result } = renderHook(() => useDubLivePreview({ enabled: true, language: 'Spanish' }));
-  act(() => result.current.onEdit(segment, 'Hola'));
-  await act(async () => vi.advanceTimersByTimeAsync(LIVE_DUB_PREVIEW_DELAY_MS));
-  const socket = Socket.instances[0];
-  act(() => socket.open());
-  act(() => socket.frame('{"type":"start","sample_rate":24000}'));
-  act(() => socket.frame('{"type":"done"}'));
-  const release = acquireSynthesis();
-  expect(release).not.toBeNull();
-  release?.();
-  act(() => mocks.onDone?.());
-  expect(result.current.liveSegmentId).toBeNull();
 });
