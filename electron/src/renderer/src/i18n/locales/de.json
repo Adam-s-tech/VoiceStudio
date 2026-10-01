@@ -2089,7 +2089,7 @@
     "setup_required": "Lokale Laufzeit installieren",
     "setup_hint": "Python und App-Abhängigkeiten herunterladen (mehrere GB). Sprachmodelle werden separat installiert, wenn du sie auswählst.",
     "installing": "Abhängigkeiten…",
-    "setup_space": "Gib mindestens 9 GiB auf dem Laufwerk der App frei und versuche es erneut.",
+    "setup_space": "Gib mindestens {{gib}} GiB auf dem Laufwerk der App frei und versuche es erneut.",
     "setup_access": "Erlaube Schreibzugriff auf den Datenordner der App und versuche es erneut.",
     "setup_unsupported_platform": "Dieser Intel-Mac kann das lokale KI-Backend nicht ausführen — PyTorch bietet keine macOS-Intel-Wheels. Verbinde stattdessen unten ein Remote-Backend; keine lokale Installation nötig.",
     "ready": "Engine bereit",
@@ -2305,7 +2305,10 @@
     "still_needed": "Noch benötigt:",
     "back": "Zurück",
     "enter_studio": "Betreten Sie das Studio",
-    "continue_ok": "Alles gut – weiter"
+    "continue_ok": "Alles gut – weiter",
+    "check_arch_label": "Windows auf ARM",
+    "check_arch_detail": "ARM64-Windows-PC – das KI-Backend läuft als x64 unter der Windows-Emulation, nur auf der CPU (keine GPU-/NPU-Beschleunigung).",
+    "check_arch_fix": "Die Sprachgenerierung funktioniert, ist aber langsamer. Bevorzugen Sie eine leichtgewichtige Sprach-Engine (KittenTTS, Supertonic-3, PocketTTS) und ein kleines Whisper-Modell."
   },
   "consent": {
     "title": "VoiceStudio verbessern helfen?",
