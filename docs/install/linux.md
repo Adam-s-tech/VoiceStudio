@@ -27,6 +27,22 @@ existing install keeps working untouched. Source installs (`bun run setup:api`)
 follow the lockfile and still fetch the CUDA build; use the packaged app on a
 CPU-only machine.
 
+## ChromeOS, iPad and other devices
+
+There is no native ChromeOS or iPadOS app, and VoiceStudio does not run
+inside the browser alone: the models need a real backend.
+
+- **Chromebook with Linux (Beta) on x86-64:** use the AppImage, the supported
+  Linux package ([Install (AppImage)](#install-appimage)); `.deb` bundling is
+  disabled. Expect CPU-only generation (the container has no GPU access on most
+  devices) and enough RAM for the model you pick. ARM Chromebooks are not
+  supported: the Linux builds are x86-64 only.
+- **Any browser, including ChromeOS, iPad and phones:** run VoiceStudio on a
+  PC, Mac or server and open its web interface from the device. On the same
+  network turn on **Network** sharing and scan the QR code; from anywhere, use
+  Tailscale. See [Sharing & Remote Access](../sharing.md); for a headless host
+  see [Docker](docker.md).
+
 ## Legacy Tauri installation and troubleshooting
 
 The instructions below apply to the sunset Tauri app and existing Tauri installers.

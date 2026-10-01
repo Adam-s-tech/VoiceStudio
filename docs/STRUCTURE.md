@@ -7,7 +7,7 @@ Every folder has a single job. Every file at the root earns its place.
 ```
 VoiceStudio/
 │
-├── README.md / README_CN.md     ⟵ user-facing overview (English / Chinese)
+├── README.md / README_CN.md / README_JA.md ⟵ user-facing overview (English / Chinese / Japanese)
 ├── CHANGELOG.md                 ⟵ release history; Electron releases use the tagged section
 ├── CLAUDE.md / AGENTS.md        ⟵ the working contract for AI agents — keep the two in sync
 ├── LICENSE, LICENSE-NOTICE.md, SPONSORS.md
@@ -39,7 +39,7 @@ VoiceStudio/
 │   │   └── setup/               first-run wizard, model download
 │   ├── core/                    config, db, job queue, event bus, auth/CSRF, path security,
 │   │                            opt-in analytics, version, diagnostics
-│   ├── services/                97 modules of business logic — TTS, dubbing pipeline,
+│   ├── services/                98 modules of business logic — TTS, dubbing pipeline,
 │   │                            audio DSP, GPU gateway, engine routing, model lifecycle
 │   ├── engines/                 per-engine adapters: indextts, supertonic3, confucius4,
 │   │                            dots_tts, moss_tts_v15, pockettts, audiocpp,

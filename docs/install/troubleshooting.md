@@ -67,6 +67,17 @@ your launch environment. An ordinary “address already in use” conflict still
 the existing backend-attachment/conflict flow; VoiceStudio does not stop unrelated
 processes or change firewall rules.
 
+If the backend log ends with `FATAL: the operating system refused to let
+VoiceStudio listen on port …` (`[Errno 13]` / WinError 10013), the OS denied the
+bind rather than reporting a taken port. On Windows a possible cause is a
+reserved range (Hyper-V, WSL, Docker and WinNAT reserve them); another process
+holding the port exclusively gives the same error. List the reserved ranges with
+`netsh interface ipv4 show excludedportrange protocol=tcp` and set
+`OMNIVOICE_PORT` to a port outside every range that no other app uses. On
+macOS and Linux, ports below 1024 need elevated rights. A default launch already
+skips reserved ports on its own; this message appears only when the port was
+chosen explicitly.
+
 ## Generation failure diagnosis
 
 OmniVoice's in-process and subprocess engines both reuse an installed speech
