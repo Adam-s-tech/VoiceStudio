@@ -200,7 +200,7 @@ def build_report(
         })
 
     def _finish(category_id: str, cat: dict, complete: bool, err_path: str | None) -> None:
-        cat["complete"] = complete
+        cat["complete"] = complete and err_path is None
         if not complete:
             _warn_unreadable(category_id, cat["path"], "timeout")
         if err_path is not None:
@@ -265,15 +265,23 @@ def build_report(
 
     # Use one ownership snapshot for both categories: only installed sidecars
     # belong to engine_venvs. Interrupted installs inside DATA_DIR remain data.
+    engine_err: str | None = None
     try:
         with os.scandir(engines_dir) as it:
             engine_entries = list(it)
+    except FileNotFoundError:
+        engine_entries = []
     except OSError:
         engine_entries = []
-    engine_dirs = sorted(
-        e.path for e in engine_entries
-        if e.is_dir(follow_symlinks=False) and os.path.isdir(os.path.join(e.path, ".venv"))
-    )
+        engine_err = engines_dir
+    engine_dirs = []
+    for e in engine_entries:
+        try:
+            if e.is_dir(follow_symlinks=False) and os.path.isdir(os.path.join(e.path, ".venv")):
+                engine_dirs.append(e.path)
+        except OSError:
+            engine_err = engine_err or e.path
+    engine_dirs.sort()
 
     # ── 2. App data dir, broken into subtotals ─────────────────────────────
     deadline = time.monotonic() + category_timeout
@@ -287,6 +295,7 @@ def build_report(
     engines_child = _engines_child_name(engines_dir, data_dir)
     if engines_child:
         claimed.add(engines_child)
+        data_err = engine_err
 
     for name in _DATA_CHILD_DIRS:
         p = os.path.join(data_dir, name)
@@ -338,16 +347,16 @@ def build_report(
         for e in engine_entries:
             if e.path in engine_dirs:
                 continue
-            if e.is_dir(follow_symlinks=False):
-                size, ok, err = _dir_size(e.path, deadline)
-                other_bytes += size
-                data_complete = data_complete and ok
-                data_err = data_err or err
-            else:
-                try:
+            try:
+                if e.is_dir(follow_symlinks=False):
+                    size, ok, err = _dir_size(e.path, deadline)
+                    other_bytes += size
+                    data_complete = data_complete and ok
+                    data_err = data_err or err
+                else:
                     other_bytes += e.stat(follow_symlinks=False).st_size
-                except OSError:
-                    data_err = data_err or e.path
+            except OSError:
+                data_err = data_err or e.path
     children.append({"id": "other", "path": data_dir, "bytes": other_bytes, "complete": True})
 
     data_cat = {
@@ -364,7 +373,7 @@ def build_report(
     deadline = time.monotonic() + category_timeout
     venv_total = 0
     venv_complete = True
-    venv_err: str | None = None
+    venv_err: str | None = engine_err
     venv_items: list[dict] = []
     for edir in engine_dirs:
         # Measure the whole installed sidecar: environment, checkout and weights.

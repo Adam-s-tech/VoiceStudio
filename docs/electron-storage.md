@@ -17,3 +17,5 @@ Remove all data scans the backend data root, Electron runtime/configuration, log
 `electron/tests/storage-settings-smoke.mjs` verifies warning/partial-scan display, folder reveal, cancel/confirm cleanup, partial cleanup failure and backup status with mocked mutations. Live read-only reports returned all four categories, one volume and an existing backup. No actual files were deleted. Tauri storage regression tests pass after shared-helper extraction. Connection, performance and privacy browser tests also pass after the settings-navigation refactor.
 
 Interrupted sidecar installs without an environment remain included in application data. Completed sidecar environments, checkouts and weights are counted once in the engine category.
+
+An unreadable engine directory or entry produces an incomplete report and a warning; unavailable bytes are not presented as a complete empty footprint.
