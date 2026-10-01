@@ -75,8 +75,14 @@ def _min_nvidia_driver(platform: str | None = None) -> tuple[int, ...]:
     )
 
 
-def _driver_tuple(driver: str | None) -> tuple[int, ...]:
-    return tuple(int(p) for p in (driver or "0").strip().split(".") if p.isdigit())
+def _driver_tuple(driver: str | None) -> tuple[int, ...] | None:
+    """Parsed driver version, or ``None`` when the metadata is missing or not a
+    dotted number ("N/A", "[Not Supported]") - the floor check is skipped then
+    rather than failing a working GPU."""
+    parts = (driver or "").strip().split(".")
+    if not parts or not all(p.isdigit() for p in parts):
+        return None
+    return tuple(int(p) for p in parts)
 _RAM_FAIL_GB = 8
 _RAM_WARN_GB = 12
 # Installed DIMMs never fully reach the OS: firmware, integrated graphics and
@@ -154,7 +160,8 @@ def _detect_gpu() -> dict:
             pass
         try:
             floor = _min_nvidia_driver()  # per host OS
-            if _driver_tuple(driver) < floor:
+            parsed = _driver_tuple(driver)
+            if parsed is not None and parsed < floor:
                 info["notes"].append(
                     f"NVIDIA driver {driver} below "
                     f"{'.'.join(map(str, floor))} required "

@@ -35,6 +35,7 @@ _WIN_DISPLAY_CLASS = (
 )
 _LINUX_DRM = "/sys/class/drm"
 _GB = 1024 ** 3
+_INTEL_IGPU_BDF = "0000:00:02.0"
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,11 @@ class HostGPU:
     name: str
     vram_gb: float = 0.0
     pci_device_id: str = ""
+    #: A dedicated card rather than an integrated GPU. Only consulted for Intel
+    #: (AMD/NVIDIA parts are always explained). Not derived from VRAM alone:
+    #: Linux's i915/xe drivers expose no ``mem_info_vram_total``, so an Arc card
+    #: reads 0 GB there and would otherwise be dropped.
+    discrete: bool = False
 
 
 def _vendor_for(pci_vendor_id: str) -> GPUVendor | None:
@@ -97,11 +103,13 @@ def _read_windows(winreg) -> tuple[HostGPU, ...]:
                     if vendor is None:
                         continue  # Basic Display, Hyper-V, remote-desktop adapters
                     name = str(val("DriverDesc") or val("HardwareInformation.AdapterString"))
+                    vram = _vram_from_registry(val("HardwareInformation.qwMemorySize", 0))
                     gpus.append(HostGPU(
                         vendor=vendor,
                         name=name.strip() or f"{vendor.upper()} GPU",
-                        vram_gb=_vram_from_registry(val("HardwareInformation.qwMemorySize", 0)),
+                        vram_gb=vram,
                         pci_device_id=_device_id_from_matching(matching),
+                        discrete=vram >= 2,
                     ))
             except OSError:
                 continue
@@ -136,7 +144,13 @@ def _read_linux(drm_root: str = _LINUX_DRM) -> tuple[HostGPU, ...]:
         raw_vram = _read_text(os.path.join(dev, "mem_info_vram_total"))
         if raw_vram.isdigit():
             vram = round(int(raw_vram) / _GB, 1)
-        gpus.append(HostGPU(vendor=vendor, name=name, vram_gb=vram, pci_device_id=device_id))
+        # Intel's integrated GPU always sits at PCI 00:02.0; a card behind a
+        # bridge (any other address) is a dedicated Arc part.
+        bdf = os.path.basename(os.path.realpath(dev))
+        gpus.append(HostGPU(
+            vendor=vendor, name=name, vram_gb=vram, pci_device_id=device_id,
+            discrete=vram >= 2 or (vendor == "intel" and bdf != _INTEL_IGPU_BDF),
+        ))
     return tuple(gpus)
 
 
@@ -167,13 +181,32 @@ def refresh() -> tuple[HostGPU, ...]:
 
 
 def discrete_candidates(gpus: tuple[HostGPU, ...]) -> tuple[HostGPU, ...]:
-    """GPUs worth explaining: AMD/NVIDIA parts, or an Intel part with its own
-    VRAM (Arc). Plain Intel iGPUs are everywhere and not an acceleration
-    target for any shipped engine, so they would only add noise."""
+    """GPUs worth explaining: AMD/NVIDIA parts, or a dedicated Intel card (Arc).
+    Plain Intel iGPUs are everywhere and not an acceleration target for any
+    shipped engine, so they would only add noise."""
     return tuple(
         g for g in gpus
-        if g.vendor in ("nvidia", "amd") or (g.vendor == "intel" and g.vram_gb >= 2)
+        if g.vendor in ("nvidia", "amd") or (g.vendor == "intel" and g.discrete)
     )
 
 
-__all__ = ["HostGPU", "GPUVendor", "detect_host_gpus", "discrete_candidates", "refresh"]
+def pick_for_build(gpus: tuple[HostGPU, ...], build_kind: str | None) -> HostGPU | None:
+    """The card a failed GPU start should be diagnosed against.
+
+    On a Radeon + GeForce machine whose CUDA build found nothing, the NVIDIA
+    path is the broken one; with a ROCm build it is the AMD one. Picking
+    "the first discrete card" blamed the wrong vendor for half of mixed hosts.
+    """
+    cands = discrete_candidates(gpus)
+    order = ("amd", "nvidia", "intel") if build_kind == "rocm" else ("nvidia", "amd", "intel")
+    for vendor in order:
+        for g in cands:
+            if g.vendor == vendor:
+                return g
+    return None
+
+
+__all__ = [
+    "HostGPU", "GPUVendor", "detect_host_gpus", "discrete_candidates",
+    "pick_for_build", "refresh",
+]

@@ -146,7 +146,7 @@ def test_inventory_never_raises_and_can_be_disabled(monkeypatch):
 
 def test_plain_intel_igpu_is_not_a_candidate():
     assert _m("core.gpu_inventory").discrete_candidates((IGPU,)) == ()
-    arc = HostGPU(vendor="intel", name="Intel Arc A770", vram_gb=16.0)
+    arc = HostGPU(vendor="intel", name="Intel Arc A770", vram_gb=16.0, discrete=True)
     assert _m("core.gpu_inventory").discrete_candidates((IGPU, arc)) == (arc,)
 
 
@@ -186,8 +186,13 @@ def _probe_with_gpus(monkeypatch, gpus, *, cuda=None, hip=None):
         xpu=types.SimpleNamespace(is_available=lambda: False),
     )
     monkeypatch.setattr("core.gpu_inventory.detect_host_gpus", lambda: gpus)
-    with patch.dict("sys.modules", {"torch": torch}):
-        return _m("core.device_caps").refresh()
+    try:
+        with patch.dict("sys.modules", {"torch": torch}):
+            return _m("core.device_caps").refresh()
+    finally:
+        # refresh() cached a fake-torch probe process-wide; don't leak it into
+        # later tests (the patches above are still active here, so clear only).
+        _m("core.device_caps").detect_host_caps.cache_clear()
 
 
 def test_probe_flags_amd_card_that_the_cuda_wheel_cannot_drive(monkeypatch):
@@ -376,6 +381,73 @@ def test_indextts_keeps_its_claim_when_the_venv_cannot_be_inspected(tmp_path, mo
     # Never narrowed off a ROCm host either.
     cuda_caps = HostCaps(family="cuda", available_families=("cuda", "cpu"))
     assert IndexTTS2Backend.runtime_compute_profile(cuda_caps)["routing_status"] == "accelerated"
+
+
+def test_indextts_inspects_the_managed_default_venv_too(tmp_path, monkeypatch):
+    """Review: with no OMNIVOICE_INDEXTTS_DIR, bootstrap falls back to the
+    package's own venv - a CUDA torch there must not be reported as GPU use."""
+    from engines.indextts import IndexTTS2Backend, bootstrap
+
+    monkeypatch.delenv("OMNIVOICE_INDEXTTS_DIR", raising=False)
+    monkeypatch.setattr(bootstrap, "_resolved_python", None)
+    monkeypatch.setattr(bootstrap, "_ENGINES_VENV_DIR", tmp_path / ".venv")
+    _fake_venv(tmp_path, "__version__ = '2.8.0+cu128'\ncuda = '12.8'\nhip = None\n")
+    caps = HostCaps(family="rocm", available_families=("rocm", "cpu"))
+    assert IndexTTS2Backend.runtime_compute_profile(caps)["routing_status"] == "cpu_fallback"
+
+
+def test_linux_intel_arc_is_found_without_a_vram_figure(tmp_path):
+    """i915/xe expose no mem_info_vram_total, so Arc used to read 0 GB and be
+    dropped as noise. A card behind a bridge is discrete; the iGPU at 00:02.0
+    is not."""
+    inv = _m("core.gpu_inventory")
+    pci = tmp_path / "pci"
+    for name in ("0000:00:02.0", "0000:03:00.0"):
+        (pci / name).mkdir(parents=True)
+    for card, bdf in (("card0", "0000:00:02.0"), ("card1", "0000:03:00.0")):
+        (tmp_path / card).mkdir()
+        (tmp_path / card / "device").symlink_to(pci / bdf)
+        (pci / bdf / "vendor").write_text("0x8086\n")
+        (pci / bdf / "device").write_text("0x56a0\n")
+    gpus = inv._read_linux(str(tmp_path))
+    assert [(g.vram_gb, g.discrete) for g in gpus] == [(0.0, False), (0.0, True)]
+    assert [g.discrete for g in inv.discrete_candidates(gpus)] == [True]
+
+
+def test_mixed_radeon_geforce_host_is_diagnosed_against_the_build(monkeypatch):
+    """Review: with both cards and a CUDA build that found nothing, the NVIDIA
+    path is the broken one - recommending ROCm is the wrong diagnosis."""
+    both = (RADEON, GEFORCE)
+    assert _report(_cpu_caps(), both, "cuda")["state"] == "nvidia_cuda_unavailable"
+    assert _report(_cpu_caps(), both, "rocm", platform="linux")["state"] == "amd_rocm_no_device"
+    assert _report(_cpu_caps(), both, "cpu")["state"] == "nvidia_cpu_build"
+    note = _m("core.device_caps")._unusable_gpu_note(_torch(cuda="12.8"), both)
+    assert "GeForce" in note
+
+
+def test_engine_missing_its_runtime_is_never_counted_as_using_the_gpu():
+    row = _row("audiocpp", ("cpu", "vulkan"), "accelerated", device="vulkan", available=False)
+    rep = _report(_cpu_caps(), [RADEON], "cuda", tts=[row])
+    assert rep["engines"][0]["code"] == "not_installed"
+
+
+@pytest.mark.parametrize("driver", ["N/A", "[Not Supported]", "", "abc.def"])
+def test_unparseable_nvidia_driver_metadata_skips_the_floor_check(monkeypatch, driver):
+    """CodeRabbit: an unreadable driver string must not fail a working GPU."""
+    import sys as _sys
+    import platform as _p
+
+    if _sys.platform == "darwin" and _p.machine() == "arm64":
+        pytest.skip("apple-silicon branch returns before nvidia-smi")
+    wizard = _m("api.routers.setup.wizard")
+    monkeypatch.setattr(
+        wizard, "_run_cmd",
+        lambda args, timeout=2.0: (0, f"{driver}, NVIDIA GeForce RTX 4070\n") if args[0] == "nvidia-smi" else (-1, ""),
+    )
+    info = wizard._detect_gpu()
+    assert info["vendor"] == "nvidia"
+    assert not any("below" in n for n in info["notes"])
+    assert wizard._driver_tuple(driver) is None
 
 
 def test_self_check_names_the_card_instead_of_saying_no_gpu(monkeypatch):

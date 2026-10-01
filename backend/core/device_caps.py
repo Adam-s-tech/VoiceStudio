@@ -208,17 +208,16 @@ def _rocm_requires_dxg_detection(version: object) -> bool:
 def _unusable_gpu_note(torch, gpus) -> str | None:
     """Note for the commonest silent-CPU host: hardware the torch build cannot
     drive. ``None`` when no discrete GPU is known or torch can drive it."""
-    from core.gpu_inventory import discrete_candidates
+    from core.gpu_inventory import pick_for_build
 
-    cands = discrete_candidates(tuple(gpus or ()))
-    if not cands:
-        return None
-    gpu = cands[0]
     try:
         hip = getattr(torch.version, "hip", None)
         cuda = getattr(torch.version, "cuda", None)
     except Exception:  # noqa: BLE001
         hip = cuda = None
+    gpu = pick_for_build(tuple(gpus or ()), "rocm" if hip else "cuda" if cuda else "cpu")
+    if gpu is None:
+        return None
     build = f"ROCm {hip}" if hip else (f"CUDA {cuda}" if cuda else "CPU-only")
     return f"{gpu.name} ({gpu.vendor.upper()}) {UNUSABLE_GPU_MARKER}: this is a {build} PyTorch build"
 

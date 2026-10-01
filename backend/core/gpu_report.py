@@ -23,7 +23,7 @@ import sys
 from typing import Any
 
 from core.device_caps import KERNEL_RISK_MARKER, HostCaps
-from core.gpu_inventory import HostGPU, detect_host_gpus, discrete_candidates
+from core.gpu_inventory import HostGPU, detect_host_gpus, discrete_candidates, pick_for_build
 
 # Host states in which a physical GPU exists that PyTorch cannot drive.
 UNUSABLE_GPU_STATES = frozenset({
@@ -69,10 +69,6 @@ def torch_build() -> dict[str, Any]:
         return {"kind": "unknown", "version": None, "runtime": None}
 
 
-def _first(gpus: tuple[HostGPU, ...], vendor: str) -> HostGPU | None:
-    return next((g for g in gpus if g.vendor == vendor), None)
-
-
 def classify_host(
     caps: HostCaps,
     gpus: tuple[HostGPU, ...],
@@ -89,23 +85,25 @@ def classify_host(
         return "pinned_cpu", {}
 
     kind = build.get("kind")
-    cands = discrete_candidates(gpus)
-    amd, nvidia = _first(cands, "amd"), _first(cands, "nvidia")
-    if amd is not None:
+    # Diagnose the card this build was meant to drive: on a Radeon + GeForce
+    # host a CUDA build that finds nothing is an NVIDIA problem, not an AMD one.
+    card = pick_for_build(gpus, str(kind))
+    params = {"build": kind, "torch": build.get("version")}
+    if card is not None and card.vendor == "amd":
         code = {
             "cuda": "amd_cuda_build",
             "rocm": "amd_rocm_no_device",
         }.get(str(kind), "amd_cpu_build")
-        return code, {"gpu": amd.name, "build": kind, "torch": build.get("version")}
-    if nvidia is not None:
+        return code, {"gpu": card.name, **params}
+    if card is not None and card.vendor == "nvidia":
         code = {
             "cpu": "nvidia_cpu_build",
             "unknown": "nvidia_cpu_build",
             "rocm": "nvidia_rocm_build",
         }.get(str(kind), "nvidia_cuda_unavailable")
-        return code, {"gpu": nvidia.name, "build": kind, "torch": build.get("version")}
-    if cands:
-        return "intel_unsupported", {"gpu": cands[0].name}
+        return code, {"gpu": card.name, **params}
+    if card is not None:
+        return "intel_unsupported", {"gpu": card.name}
     return "no_gpu", {}
 
 
@@ -114,9 +112,10 @@ def _engine_entry(row: dict, kind: str, host_code: str) -> dict[str, Any]:
     status = row.get("routing_status")
     device = row.get("effective_device") or "cpu"
     params: dict[str, Any] = {}
-    if status == "unavailable" and not row.get("available"):
-        # Not installed (e.g. the audio.cpp runtime): the static routing says
-        # nothing useful, so don't present a verdict for it.
+    if not row.get("available"):
+        # Missing a dependency, binary or model: it cannot run at all, so no
+        # verdict (and never a "uses the GPU") - whatever its static routing
+        # says. The row still tells the picker it needs installing.
         code, params = "not_installed", {"needs": ", ".join(compat)}
     elif status == "accelerated":
         code = "gpu_caveat" if row.get("routing_reason") else "gpu"

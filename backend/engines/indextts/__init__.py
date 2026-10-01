@@ -179,11 +179,12 @@ class IndexTTS2Backend(SubprocessBackend):
             from engines.indextts import bootstrap
             from services.sidecar_install import venv_torch_hip
 
-            python = bootstrap._resolved_python
-            if python is None and os.environ.get("OMNIVOICE_INDEXTTS_DIR"):
-                python = bootstrap._venv_python_path(
-                    Path(os.environ["OMNIVOICE_INDEXTTS_DIR"]) / ".venv"
-                )
+            # The venv bootstrap will use: the one it already resolved, else the
+            # first candidate on disk in its own probe order (user clone, then
+            # this package's managed venv) - never spawning the import probe.
+            python = bootstrap._resolved_python or next(
+                (p for p in bootstrap._probe_paths() if p.is_file()), None
+            )
             if python is None:
                 return False
             return venv_torch_hip(Path(python).parent.parent) is False
