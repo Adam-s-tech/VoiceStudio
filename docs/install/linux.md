@@ -14,6 +14,19 @@ Use `bun run desktop-prod` to build and launch Electron, or `bun run dist`
 to create local installers without publishing. The app manages its backend.
 See [Electron setup](../../electron/README.md) and [migration notes](../electron-migration.md).
 
+### Machines without an NVIDIA GPU
+
+Laptops and desktops with Intel/AMD integrated graphics (or any GPU without
+an NVIDIA driver) run the whole app on the CPU, just slower. When no NVIDIA
+driver is found, the packaged app's runtime setup installs the small CPU build
+of PyTorch rather than the CUDA build and its ~3 GB of `nvidia-*` packages,
+and needs about 5 GiB of free disk instead of 9 GiB. Pick a light voice engine
+(KittenTTS, Supertonic-3, PocketTTS) and a small Whisper model for the best
+speed. `OMNIVOICE_TORCH_VARIANT=cuda|cpu|rocm` overrides the detection, and an
+existing install keeps working untouched. Source installs (`bun run setup:api`)
+follow the lockfile and still fetch the CUDA build; use the packaged app on a
+CPU-only machine.
+
 ## Legacy Tauri installation and troubleshooting
 
 The instructions below apply to the sunset Tauri app and existing Tauri installers.
