@@ -1242,9 +1242,18 @@ def parse_vtt_segments(vtt_path: str) -> list[dict]:
 
     segments: list[dict] = []
     blocks = raw.replace("\r\n", "\n").split("\n\n")
-    for block in blocks:
-        lines = [ln for ln in block.split("\n") if ln.strip() and not ln.startswith("WEBVTT") and not ln.startswith("NOTE")]
+    for index, block in enumerate(blocks):
+        lines = [ln for ln in block.split("\n") if ln.strip()]
+        if index == 0 and lines and lines[0].strip().startswith("WEBVTT"):
+            lines = lines[1:]
         if not lines:
+            continue
+        first = lines[0].strip()
+        # Headers/comments apply to a whole block, not to spoken cue lines.
+        if re.match(r"NOTE(?:[ \t]|$)", first):
+            continue
+        identifies_cue = len(lines) > 1 and "-->" in lines[1]
+        if first in {"STYLE", "REGION"} and not identifies_cue:
             continue
         # Skip numeric cue ID line if present
         if "-->" not in lines[0] and len(lines) > 1:
