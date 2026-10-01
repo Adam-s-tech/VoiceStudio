@@ -235,6 +235,35 @@ and skips cuts inside speech that cannot be assigned safely. This improves phras
 timing; it does not promise phoneme-level lip sync or correct inaccurate source
 transcripts automatically.
 
+### Mirror source delivery
+
+**More → Mirror source delivery** writes a direction for each line from how the
+original actor spoke it. VoiceStudio measures pitch, pitch movement, loudness,
+syllable rate and voicing on the separated vocals track (the full mix when
+separation did not run) and compares every line against the same speaker's own
+typical delivery. Markedly louder, higher and faster lines become `urgent, quick`;
+near-unvoiced lines become `whispered`; lines close to the speaker's norm stay empty.
+
+| Measured against the speaker's baseline | Direction |
+| :--- | :--- |
+| Louder, faster and higher | `urgent` |
+| Louder, higher or more animated | `energetic` |
+| Quieter, lower and flatter | `calm` |
+| Loud but unhurried | `announcing` |
+| Mostly unvoiced and quiet | `whispered` |
+| Faster or slower syllables | `quick` / `slow` |
+
+Only empty directions are filled; a direction you typed is never replaced, and
+**Undo** reverts the whole pass. The words are the same taxonomy typed directions
+use, so they reach the TTS instruction, translation tone and speech-rate target
+with or without an LLM. Emotion is not inferred from acoustics; add it yourself.
+A speaker needs three measurable lines for their own baseline; otherwise the video's
+pooled baseline is used without pitch, which does not transfer between voices.
+Analysis runs locally in pure NumPy and takes roughly ten seconds per hour of
+dialogue; a line longer than a minute is measured from its first minute. The API is `POST /dub/prosody-mirror/{job_id}` with the editor's current
+segments; it only suggests directions and never changes the job, and refuses requests
+whose segments add up to more than twice the source audio plus one minute (one line).
+
 ### Preserve sound outside dialogue
 
 Background-preserving previews and audio/video exports keep the original stereo
