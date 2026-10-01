@@ -46,6 +46,8 @@ def test_implicit_asr_loads_only_the_resolved_local_snapshot(monkeypatch, tmp_pa
     model = _model()
     snapshot = tmp_path / "cached-whisper"
     snapshot.mkdir()
+    for name in ("config.json", "preprocessor_config.json", "tokenizer.json", "model.safetensors"):
+        (snapshot / name).write_text("{}")
     lookup = Mock(return_value=str(snapshot))
     monkeypatch.setattr("huggingface_hub.snapshot_download", lookup)
 

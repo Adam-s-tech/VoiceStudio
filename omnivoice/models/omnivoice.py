@@ -28,6 +28,7 @@ This is the main entry point for both inference and training:
 """
 
 import difflib
+import json
 import logging
 import math
 import os
@@ -344,13 +345,29 @@ def _hub_cache_roots() -> List[str]:
 
 
 def _has_asr_weights(snapshot: str) -> bool:
+    """True when ``snapshot`` holds every file a Whisper pipeline loads.
+
+    Config, feature-extractor settings, a tokenizer and the complete weights
+    (every shard named by an index). A truncated download is rejected so the
+    caller can fall through to a complete snapshot instead of failing at load.
+    """
     try:
-        names = os.listdir(snapshot)
+        names = set(os.listdir(snapshot))
     except OSError:
         return False
-    return "config.json" in names and any(
-        name.endswith((".safetensors", ".bin")) for name in names
-    )
+    if not {"config.json", "preprocessor_config.json"} <= names:
+        return False
+    if not ({"tokenizer.json", "vocab.json"} & names):
+        return False
+    for index in ("model.safetensors.index.json", "pytorch_model.bin.index.json"):
+        if index in names:
+            try:
+                with open(os.path.join(snapshot, index), encoding="utf-8") as handle:
+                    shards = set(json.load(handle).get("weight_map", {}).values())
+            except (OSError, ValueError, AttributeError):
+                return False
+            return bool(shards) and shards <= names
+    return bool({"model.safetensors", "pytorch_model.bin"} & names)
 
 
 def _find_cached_reference_asr() -> Optional[str]:
@@ -373,7 +390,9 @@ def _find_cached_reference_asr() -> Optional[str]:
         if os.path.isdir(repo):
             continue
         try:
-            return snapshot_download(repo, local_files_only=True)
+            found = snapshot_download(repo, local_files_only=True)
+            if _has_asr_weights(found):
+                return found
         except (LocalEntryNotFoundError, ValueError):
             pass
         for root in _hub_cache_roots():

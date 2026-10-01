@@ -83,8 +83,14 @@ def _install_pinned(cache, repo="openai/whisper-large-v3", complete=True):
     snapshot.mkdir(parents=True)
     (snapshot / "config.json").write_text("{}")
     if complete:
-        (snapshot / "model.safetensors").write_bytes(b"0" * 16)
+        _complete(snapshot)
     return snapshot
+
+
+def _complete(snapshot):
+    for name in ("preprocessor_config.json", "tokenizer.json"):
+        (snapshot / name).write_text("{}")
+    (snapshot / "model.safetensors").write_bytes(b"0" * 16)
 
 
 @pytest.fixture()
@@ -231,3 +237,45 @@ def test_stored_transcript_on_a_long_clip_still_clones_from_catalogue_whisper(
     assert prompt is not None
     assert model.loaded == [str(snapshot)]
     assert prompt.ref_text.startswith("Words from the cached Whisper")
+
+
+def test_newest_incomplete_snapshot_yields_to_an_older_complete_one(
+    tmp_path, hf_cache
+):
+    """Config plus one weight file is not enough: tokenizer and feature
+    extractor settings are needed too, so the older whole snapshot wins."""
+    import time
+
+    whole = _install_pinned(hf_cache)
+    newer = whole.parent / ("a" * 40)
+    newer.mkdir()
+    (newer / "config.json").write_text("{}")
+    (newer / "model.safetensors").write_bytes(b"0" * 16)
+    later = time.time() + 60
+    os.utime(newer, (later, later))
+    model = _model()
+
+    model.create_voice_clone_prompt(
+        _wav(tmp_path / "ref.wav", 3), None, preprocess_prompt=False
+    )
+
+    assert model.loaded == [str(whole)]
+
+
+def test_sharded_snapshot_missing_a_shard_is_incomplete(tmp_path):
+    import json
+
+    from omnivoice.models.omnivoice import _has_asr_weights
+
+    snapshot = tmp_path / "snap"
+    snapshot.mkdir()
+    (snapshot / "config.json").write_text("{}")
+    _complete(snapshot)
+    (snapshot / "model.safetensors").unlink()
+    (snapshot / "model.safetensors.index.json").write_text(
+        json.dumps({"weight_map": {"a": "m-1.safetensors", "b": "m-2.safetensors"}})
+    )
+    (snapshot / "m-1.safetensors").write_bytes(b"0")
+    assert not _has_asr_weights(str(snapshot))
+    (snapshot / "m-2.safetensors").write_bytes(b"0")
+    assert _has_asr_weights(str(snapshot))

@@ -267,9 +267,11 @@ class ReplyParser:
         # here, or finish() would discard text ``_emitted`` already counts
         # (or, for json, drop a say that parses). While streaming everything
         # without a format marker is held anyway, so waiting costs nothing.
-        say = _SAY_LINE_RE.search(text) if final and self.mode in (None, "plain") else None
-        if say:
-            text = text[say.start():]
+        # The LAST line-start SAY: wins: with no closing tag, any earlier one
+        # is a draft inside the reasoning, and the answer comes after it.
+        says = list(_SAY_LINE_RE.finditer(text)) if final and self.mode in (None, "plain") else []
+        if says:
+            text = text[says[-1].start():]
         return text.lstrip()
 
     def _decide_mode(self, body: str, final: bool) -> None:

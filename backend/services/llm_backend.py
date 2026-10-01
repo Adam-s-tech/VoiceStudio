@@ -67,12 +67,17 @@ def _strip_reasoning(raw: str, prompt: str = "") -> str:
     would silently overwrite the user's words with it.
 
     ``prompt`` is the text the reply answers. A bare closing tag only ends a
-    prefilled block when the prompt does not contain that tag: an answer that
-    translates or quotes input with a literal ``</think>`` must keep it.
+    prefilled block when the reply has more of that tag than the prompt does:
+    an answer that translates or quotes input with a literal ``</think>`` must
+    keep it, yet reasoning that ends in the same tag is still removed.
     """
     prefilled = _PREFILLED_THINK_RE.match(raw)
-    if prefilled and f"</{prefilled.group(1)}>".lower() not in prompt.lower():
-        raw = raw[prefilled.end():]
+    if prefilled:
+        tag = f"</{prefilled.group(1)}>".lower()
+        # Quoted tags the answer legitimately repeats from the prompt are
+        # kept; the reasoning boundary is the first tag beyond that count.
+        if raw.lower().count(tag) > prompt.lower().count(tag):
+            raw = raw[prefilled.end():]
     while match := _THINK_TAG_RE.match(raw):
         raw = raw[match.end():]
     cleaned = _OPEN_THINK_RE.sub("", raw)

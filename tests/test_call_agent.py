@@ -385,6 +385,17 @@ def test_a_literal_closing_tag_inside_tagged_speech_does_not_reslice():
     assert out.strip() == f"Please type the word {close} into the form, thanks. Goodbye."
 
 
+def test_unclosed_reasoning_with_a_draft_say_line_speaks_only_the_last():
+    """No closing tag ever arrives: an earlier line-start SAY: is a draft
+    inside the reasoning, so finish() speaks the final one (#2431 review)."""
+    p = M_agent().ReplyParser()
+    out = p.feed("Thinking.\nSAY: draft, do not speak\nBetter wording.\n")
+    out += p.feed("SAY: It's under Palash.\nACTION: none")
+    out += p.finish()
+    assert out.strip() == "It's under Palash."
+    assert "draft" not in out
+
+
 def test_a_draft_say_line_inside_reasoning_is_not_spoken():
     """Unclosed reasoning may draft a `SAY:` line; only the closing tag —
     or finish, if none ever comes — may establish the boundary, so a draft

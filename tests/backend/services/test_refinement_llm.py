@@ -419,3 +419,13 @@ def test_literal_closing_tag_from_the_prompt_is_kept():
     assert _strip_reasoning("Usa </THINK> para cerrar.", prompt=line) == "Usa </THINK> para cerrar."
     # A tag the prompt never contained still ends a prefilled block.
     assert _strip_reasoning("weighing it</think>Answer.", prompt="Translate: hi") == "Answer."
+
+
+def test_reasoning_ending_in_a_tag_the_source_also_contains_is_still_removed():
+    """Source text with a literal </think> must not switch reasoning removal
+    off: the reply has one more tag than the prompt, and that one is the
+    boundary (#2425 review)."""
+    from services.llm_backend import _strip_reasoning
+    prompt = "Translate to Spanish:\nUse </think> to close the block."
+    reply = "The user wants Spanish.</think>Usa </think> para cerrar el bloque."
+    assert _strip_reasoning(reply, prompt=prompt) == "Usa </think> para cerrar el bloque."
