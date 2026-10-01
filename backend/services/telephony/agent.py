@@ -233,6 +233,10 @@ class ReplyParser:
         self.raw = ""
         self.mode: str | None = None  # tagged | json | plain
         self._emitted = 0
+        # End offset of a closing think tag found while the format was still
+        # undecided. Fixed once found, so a literal "</think>" quoted later
+        # inside tagged speech can never re-slice text ``_emitted`` counts.
+        self._close_end: int | None = None
         self.action = "none"
         self.outcome: str | None = None
 
@@ -248,9 +252,12 @@ class ReplyParser:
             # No opening tag: either there is no reasoning at all, or the
             # chat template prefilled the opening tag into the prompt and
             # the model streams only …SAY: (#2428).
-            close = _THINK_CLOSE_RE.search(text)
-            if close:
-                text = text[close.end():]
+            if self._close_end is None and self.mode is None:
+                close = _THINK_CLOSE_RE.search(text)
+                if close:
+                    self._close_end = close.end()
+            if self._close_end is not None:
+                text = text[self._close_end:]
         # A line-start SAY: marks where thinking ends for the model that
         # never sent a closing tag either (#2428) — but only at finish, and
         # only while no mode has been chosen (#2431 review): a draft "SAY:"

@@ -372,6 +372,19 @@ def test_a_json_reply_is_not_resliced_by_a_trailing_say_line():
     assert p.action == "none"
 
 
+def test_a_literal_closing_tag_inside_tagged_speech_does_not_reslice():
+    """The closing-tag boundary is only looked for while no mode is chosen:
+    once a tagged reply is streaming, a quoted tag must not re-slice text
+    ``_emitted`` already counts (#2431 review)."""
+    close = "<" + "/think>"
+    p = M_agent().ReplyParser()
+    out = p.feed("SAY: Please type the word ")
+    out += p.feed(close + " into the form, thanks. ")
+    out += p.feed("Goodbye.\nACTION: none")
+    out += p.finish()
+    assert out.strip() == f"Please type the word {close} into the form, thanks. Goodbye."
+
+
 def test_a_draft_say_line_inside_reasoning_is_not_spoken():
     """Unclosed reasoning may draft a `SAY:` line; only the closing tag —
     or finish, if none ever comes — may establish the boundary, so a draft
