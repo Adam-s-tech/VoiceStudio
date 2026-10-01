@@ -27,6 +27,7 @@ import {
 } from '@/lib/store/clone-settings';
 import { readDraft, writeDraft } from '@/features/design/design-draft';
 import { useBackendStatus } from './use-backend-status';
+import { isBackendReachable } from '@shared/utils/backendStage';
 
 const PROFILES_STALE_MS = 30_000;
 const DELETION_CONFIRMATION_TIMEOUT_MS = 30_000;
@@ -38,7 +39,7 @@ export function useProfiles(): UseQueryResult<Profile[]> {
     queryKey: queryKeys.profiles,
     queryFn: listProfiles,
     staleTime: PROFILES_STALE_MS,
-    enabled: status.stage === 'ready',
+    enabled: isBackendReachable(status.stage),
   });
 }
 

@@ -2099,6 +2099,7 @@
     "starting": "Yerel motor başlatılıyor…",
     "attaching": "Çalışan motora bağlanılıyor…",
     "crashed": "Yerel motor beklenmedik şekilde durdu.",
+    "unresponsive": "Yerel motor şu anda meşgul ve yanıt vermiyor — kendiliğinden toparlanacak.",
     "failed": "Yerel motor başlatılamadı.",
     "idle": "Yerel motor bekleniyor…",
     "log_label": "Motor günlüğü",
@@ -2106,7 +2107,10 @@
     "elapsed": "{{seconds}} sn geçti",
     "first_run_hint": "Python ortamı hazırlanırken ilk çalıştırma birkaç dakika sürebilir.",
     "port_in_use_short": "{{port}} bağlantı noktası kullanımda",
-    "proxy_bypass_help": "VoiceStudio’yu tamamen kapatın, terminalde HTTP_PROXY/HTTPS_PROXY değerini proxy URL’sine ve NO_PROXY değerini hariç tutulacak sunuculara ayarlayın, ardından VoiceStudio’yu o terminalden başlatın. Açık uygulamada yeniden denemek yeni ortam değişkenlerini yüklemez."
+    "proxy_bypass_help": "VoiceStudio’yu tamamen kapatın, terminalde HTTP_PROXY/HTTPS_PROXY değerini proxy URL’sine ve NO_PROXY değerini hariç tutulacak sunuculara ayarlayın, ardından VoiceStudio’yu o terminalden başlatın. Açık uygulamada yeniden denemek yeni ortam değişkenlerini yüklemez.",
+    "hint_spawn_blocked": "İşletim sisteminiz veya güvenlik yazılımınız yerel motorun başlatılmasını reddetti. VoiceStudio çalışma zamanı klasörünü antivirüs dışlamalarınıza ekleyin (Windows: Windows Güvenliği → Virüs ve tehdit koruması → Ayarları yönet → Dışlamalar), klasörün OneDrive gibi bulutla eşitlenen bir klasörde olmadığından emin olun ve yeniden deneyin.",
+    "hint_slow_start": "Bekleme süresi dolduğunda motor hâlâ başlıyordu. Yavaş bilgisayarlar, özellikle ayrı ekran kartı olmayanlar, ve bir kurulumdan sonraki ilk başlatma (antivirüs her yeni dosyayı tarar) birkaç dakika sürebilir. Çok bellek kullanan uygulamaları kapatıp yeniden deneyin; sonraki başlatmalar çok daha hızlıdır.",
+    "hint_synced_folder": "Bu konum, bulutla eşitlenen bir klasörde (OneDrive, Dropbox, iCloud Drive, Google Drive). Yalnızca çevrimiçi yer tutucular ve dosya kilitleme Python ortamını bozar. VoiceStudio'yu normal bir yerel klasöre (örneğin Windows'ta C:\\VoiceStudio, macOS ve Linux'ta ~/VoiceStudio) taşıyın ve yeniden kurun."
   },
   "bootstrap": {
     "checking": "Ortam kontrol ediliyor…",

@@ -12,6 +12,7 @@ export type BackendStage =
   | 'attaching' // an already-running backend on the port answered → we reuse it
   | 'starting' // we spawned it and are polling /system/info
   | 'ready'
+  | 'unresponsive' // alive, but too busy to answer /health — self-recovering, never terminal
   | 'crashed' // the spawned process exited unexpectedly
   | 'port_in_use' // backend exited 78 (EX_CONFIG): another process holds the port
   | 'failed'; // could not start within the budget / spawn error
