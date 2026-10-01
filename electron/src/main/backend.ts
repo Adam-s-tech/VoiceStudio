@@ -157,10 +157,7 @@ export function bundledUvPath(resourcesPath: string, platform = process.platform
  * before any install is offered — never after a multi-GB failure.
  * Testable via parameters following bundledUvPath's precedent.
  */
-export function isUnsupportedPlatform(
-  platform = process.platform,
-  arch = process.arch,
-): boolean {
+export function isUnsupportedPlatform(platform = process.platform, arch = process.arch): boolean {
   return platform === 'darwin' && arch === 'x64';
 }
 
@@ -384,6 +381,40 @@ export function managedBackendSpawnOptions(
     stdio: drainFd === null ? ['pipe', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe', 'pipe'],
     drainFd,
   };
+}
+
+/** A failed spawn names the program, not just the OS error. Windows denies a
+ *  blocked executable with a bare `spawn UNKNOWN`; runtime-owned launches get
+ *  the install that owns the program, while custom `OMNIVOICE_BACKEND_CMD`
+ *  launches point at their own executable instead (#2440). */
+export function spawnFailureMessage(
+  command: string,
+  error: unknown,
+  { runtimeOwned = true }: { runtimeOwned?: boolean } = {},
+): string {
+  const detail = errorMessage(error);
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  const launchRejected = ['ENOENT', 'UNKNOWN', 'EACCES', 'EPERM'].includes(code ?? '');
+  if (!launchRejected) return `Could not start ${command}: ${detail}`;
+  return runtimeOwned
+    ? `Could not start ${command}: ${detail}. Install or repair the local runtime, then restart VoiceStudio.`
+    : `Could not start ${command}: ${detail}. Check that the program exists and can be launched, then try again.`;
+}
+
+/** The startup-budget failure says what the launch actually did, so a report
+ *  shows where startup stalled instead of asking for the log (#2445): the
+ *  backend's last line, "no output" for a managed process that never printed,
+ *  or "nothing spawned" for an attach-only wait that owns no process. */
+export function startupTimeoutMessage(
+  port: number,
+  budgetMs: number,
+  { owned, lastOutput }: { owned: boolean; lastOutput?: string },
+): string {
+  const base =
+    `Backend did not answer on port ${port} within ${Math.round(budgetMs / 1000)} s ` +
+    '(OMNIVOICE_STARTUP_BUDGET_S).';
+  if (!owned) return `${base} Nothing was spawned for this attempt.`;
+  return lastOutput ? `${base} Last output: ${lastOutput}` : `${base} It printed no output.`;
 }
 
 function delay(ms: number): Promise<void> {
@@ -717,7 +748,13 @@ export class BackendSupervisor extends EventEmitter<{
             });
             this.attachLineReader(child.stdout, 'out');
             this.attachLineReader(child.stderr, 'err');
-            child.on('error', reject);
+            child.on('error', (err) =>
+              reject(
+                Object.assign(new Error(spawnFailureMessage(command, err)), {
+                  code: (err as NodeJS.ErrnoException | undefined)?.code,
+                }),
+              ),
+            );
             child.on('close', (code) => {
               if (this.child === child) this.child = null;
               if (code === 0) resolve(capturedStdout);
@@ -740,10 +777,10 @@ export class BackendSupervisor extends EventEmitter<{
           code === 'INTEL_MAC_UNSUPPORTED'
             ? 'unsupported_platform'
             : code === 'ENOSPC'
-            ? 'space'
-            : ['EACCES', 'EPERM', 'EROFS'].includes(code || '')
-              ? 'access'
-              : undefined;
+              ? 'space'
+              : ['EACCES', 'EPERM', 'EROFS'].includes(code || '')
+                ? 'access'
+                : undefined;
         this.runtimeInterrupted = await runtimeInstallInterrupted(project);
         this.pushLog('err', errorMessage(error));
         this.setStage('setup_required', { message: errorMessage(error) });
@@ -1010,9 +1047,13 @@ export class BackendSupervisor extends EventEmitter<{
     });
   }
 
+  /** Launch the resolved backend command and wire its lifecycle events. */
   private spawnChild(plan: SpawnPlan, gen: number): void {
     this.crashes.resetCapture();
     const [command, ...args] = plan.argv;
+    // A custom command bypasses the managed runtime; its own executable is the
+    // only thing that can be repaired.
+    const runtimeOwned = !parseBackendCmdOverride(process.env.OMNIVOICE_BACKEND_CMD);
     if (!command) {
       this.setStage('failed', { message: 'Empty backend command' });
       return;
@@ -1032,7 +1073,7 @@ export class BackendSupervisor extends EventEmitter<{
       });
     } catch (err) {
       this.setStage('failed', {
-        message: `Could not start the backend: ${errorMessage(err)}`,
+        message: spawnFailureMessage(command, err, { runtimeOwned }),
       });
       return;
     }
@@ -1060,7 +1101,7 @@ export class BackendSupervisor extends EventEmitter<{
       if (gen !== this.generation) return;
       this.child = null;
       this.setStage('failed', {
-        message: `Could not start the backend: ${errorMessage(err)}`,
+        message: spawnFailureMessage(command, err, { runtimeOwned }),
       });
     });
     child.on('exit', (code, signal) => {
@@ -1143,6 +1184,7 @@ export class BackendSupervisor extends EventEmitter<{
     }
   }
 
+  /** Poll /health until ready, retiring the launch when the budget expires. */
   private async waitUntilReady(gen: number, budgetMs: number): Promise<void> {
     // `OMNIVOICE_STARTUP_BUDGET_S` bounds how long the *backend* may take to
     // answer, so it is measured from the moment this poll loop begins — which
@@ -1178,17 +1220,12 @@ export class BackendSupervisor extends EventEmitter<{
         // died silently — and would let an attach-only wait blame output from
         // a backend this attempt never started.
         const owned = this.child !== null;
+        // Taken before teardown too: killing the child can append shutdown
+        // output, which must not replace the startup line the report needs.
+        const lastOutput = owned ? this.childLog.at(-1) : undefined;
         await this.killChild();
-        const lastLine = owned ? this.childLog.at(-1) : undefined;
         this.setStage('failed', {
-          message:
-            `Backend did not answer on port ${this.port} within ${Math.round(budgetMs / 1000)} s ` +
-            '(OMNIVOICE_STARTUP_BUDGET_S).' +
-            (!owned
-              ? ' Nothing was spawned for this attempt.'
-              : lastLine
-                ? ` Last output: ${lastLine}`
-                : ' It printed no output.'),
+          message: startupTimeoutMessage(this.port, budgetMs, { owned, lastOutput }),
         });
         return;
       }
