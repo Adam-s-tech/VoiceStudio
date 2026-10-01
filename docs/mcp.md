@@ -18,6 +18,13 @@ start once VoiceStudio is open.
 | `list_voices` / `list_personalities` / `list_languages` | enumerate what's available. |
 | `check_health` | backend status + active GPU device. |
 
+`list_voices`, `list_personalities`, `transcribe`, and `check_health` return
+JSON-encoded text in their MCP tool responses. The `voice://{profile_id}`
+and `history://recent` resources also return JSON text; recent history
+contains at most 20 items. Parse the returned text with a JSON parser
+(for example, Python's `json.loads`). A missing voice returns a JSON object
+with an `error` message.
+
 ## Output mode and file inputs
 
 An LLM agent pays for every byte it receives in context, and a WAV as base64
