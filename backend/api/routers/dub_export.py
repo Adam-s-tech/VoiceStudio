@@ -13,7 +13,7 @@ from typing import Optional
 from core.config import DUB_DIR
 from core.http_headers import content_disposition
 from core.logging_utils import log_safe
-from core.path_security import UnsafePath, resolve_within
+from core.path_security import UnsafePath, portable_filename, resolve_within
 from core.tasks import task_manager
 from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
@@ -1844,7 +1844,7 @@ async def dub_export_srt(
     srt_content = "\n".join(srt_lines)
     base_name = os.path.splitext(job.get('filename', 'video'))[0]
     suffix = "_dual" if dual else ""
-    dl_name = f"subtitles_{base_name}{suffix}.srt"
+    dl_name = portable_filename(f"subtitles_{base_name}{suffix}.srt", "subtitles")
     return Response(
         content=srt_content,
         media_type="text/plain",
@@ -1903,7 +1903,7 @@ async def dub_export_vtt(
     vtt_content = "\n".join(vtt_lines)
     base_name = os.path.splitext(job.get('filename', 'video'))[0]
     suffix = "_dual" if dual else ""
-    dl_name = f"subtitles_{base_name}{suffix}.vtt"
+    dl_name = portable_filename(f"subtitles_{base_name}{suffix}.vtt", "subtitles")
     return Response(
         content=vtt_content,
         media_type="text/vtt",
@@ -1947,7 +1947,7 @@ async def dub_export_ass(
             ]
 
     base_name = os.path.splitext(job.get('filename', 'video'))[0]
-    dl_name = f"subtitles_{base_name}_karaoke.ass"
+    dl_name = portable_filename(f"subtitles_{base_name}_karaoke.ass", "subtitles.ass")
     return Response(
         content=build_ass(segments),
         media_type="text/plain",

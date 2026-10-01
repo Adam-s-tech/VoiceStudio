@@ -1,4 +1,5 @@
 import { registerSiteBrowser } from './site-browser';
+import { portableFilename } from './portable-filename';
 import { saveFiltersFor } from './save-filters';
 import { resolveBackendDownloadUrl } from './backend-download';
 import {
@@ -150,7 +151,7 @@ function assertSaveAudioRequest(value: unknown): SaveAudioRequest {
   }
   return {
     url: assertString(req.url, 'audio url'),
-    suggestedName: assertString(req.suggestedName, 'file name'),
+    suggestedName: portableFilename(assertString(req.suggestedName, 'file name')),
     method: req.method,
   };
 }
@@ -161,7 +162,7 @@ function assertSaveDataRequest(value: unknown): SaveDataRequest {
   if (!(req.data instanceof Uint8Array)) throw new Error('Invalid file data');
   return {
     data: req.data,
-    suggestedName: assertString(req.suggestedName, 'file name'),
+    suggestedName: portableFilename(assertString(req.suggestedName, 'file name')),
   };
 }
 
