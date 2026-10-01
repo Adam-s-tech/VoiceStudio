@@ -99,3 +99,40 @@ def test_native_unreadable_engines_emit_partial_report(tmp_path):
         assert all(not c["complete"] for c in report["categories"] if c["id"] in {"data", "engine_venvs"})
     finally:
         engines.chmod(0o700)
+
+
+def test_transient_installed_entry_error_preserves_category_ownership(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+    from services import storage_report
+    data = tmp_path / "data"
+    engines = data / "engines"
+    installed = engines / "installed"
+    (installed / ".venv").mkdir(parents=True)
+    (installed / "weights.bin").write_bytes(b"installed weights")
+    real_scandir = storage_report.os.scandir
+    class Entry:
+        def __init__(self, entry):
+            self.entry = entry
+            self.path, self.name = entry.path, entry.name
+            self.calls = 0
+        def is_dir(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                raise PermissionError("transient entry inspection failure")
+            return self.entry.is_dir(**kwargs)
+        def stat(self, **kwargs):
+            return self.entry.stat(**kwargs)
+    @contextmanager
+    def scan_engines():
+        with real_scandir(engines) as entries:
+            yield iter([Entry(e) for e in entries])
+    def scandir(path):
+        return scan_engines() if str(path) == str(engines) else real_scandir(path)
+    monkeypatch.setattr(storage_report.os, "scandir", scandir)
+    report = storage_report.build_report(data_dir=str(data), engines_dir=str(engines),
+        hf_cache_dir=str(tmp_path / "hf"), temp_root=str(tmp_path / "tmp"))
+    categories = {c["id"]: c for c in report["categories"]}
+    assert categories["engine_venvs"]["bytes"] == len(b"installed weights")
+    other = next(c for c in categories["data"]["children"] if c["id"] == "other")
+    assert other["bytes"] == 0
+    assert any(w["kind"] == "unreadable" and w["path"] == str(installed) for w in report["warnings"])

@@ -275,12 +275,19 @@ def build_report(
         engine_entries = []
         engine_err = engines_dir
     engine_dirs = []
+    unclassified_engines = set()
     for e in engine_entries:
-        try:
-            if e.is_dir(follow_symlinks=False) and os.path.isdir(os.path.join(e.path, ".venv")):
-                engine_dirs.append(e.path)
-        except OSError:
-            engine_err = engine_err or e.path
+        # Resolve a transient inspection failure before either category claims
+        # the entry. Persistently unknown ownership remains an incomplete scan.
+        for _ in range(2):
+            try:
+                if e.is_dir(follow_symlinks=False) and os.path.isdir(os.path.join(e.path, ".venv")):
+                    engine_dirs.append(e.path)
+                break
+            except OSError:
+                engine_err = engine_err or e.path
+        else:
+            unclassified_engines.add(e.path)
     engine_dirs.sort()
 
     # ── 2. App data dir, broken into subtotals ─────────────────────────────
@@ -345,7 +352,7 @@ def build_report(
             data_err = data_err or data_dir
     if engines_child:
         for e in engine_entries:
-            if e.path in engine_dirs:
+            if e.path in engine_dirs or e.path in unclassified_engines:
                 continue
             try:
                 if e.is_dir(follow_symlinks=False):
