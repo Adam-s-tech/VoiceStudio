@@ -32,6 +32,24 @@ export const ROCM_TORCH_PINS = [
   'torchaudio==2.8.0',
   'torchvision==0.23.0',
 ] as const;
+/**
+ * Whether the user opted into the ROCm torch stack AND this OS can have it.
+ *
+ * PyTorch's ROCm index (`ROCM_TORCH_INDEX`) publishes Linux wheels only. On
+ * Windows `uv pip install --index-url <rocm6.4> torch==2.8.0` finds nothing and
+ * the whole runtime bootstrap fails, leaving the app unusable instead of merely
+ * CPU-bound - so the opt-in is ignored there (the default torch stays, and
+ * Settings > Performance explains which engines can still use a Radeon GPU).
+ * Windows ROCm needs AMD's own wheels and a validated engine matrix; it is
+ * deliberately not wired into this recipe.
+ */
+export function rocmTorchOptIn(platform: NodeJS.Platform = process.platform): boolean {
+  return (
+    process.env.OMNIVOICE_TORCH_VARIANT?.trim().toLowerCase() === 'rocm' &&
+    platform !== 'win32' &&
+    platform !== 'darwin'
+  );
+}
 export const RUNTIME_REPAIR_PACKAGES = [
   'torch',
   'torchaudio',
@@ -108,7 +126,7 @@ export function runtimePython(root: string, platform = process.platform): string
 async function dependencyStamp(bundle: string): Promise<string> {
   const hash = createHash('sha256');
   hash.update(RUNTIME_SCHEMA);
-  if (process.env.OMNIVOICE_TORCH_VARIANT?.trim().toLowerCase() === 'rocm') {
+  if (rocmTorchOptIn()) {
     hash.update(':torch=rocm');
   }
   for (const file of ['pyproject.toml', 'uv.lock']) hash.update(await readFile(join(bundle, file)));
@@ -341,7 +359,7 @@ export async function runtimeCompatible(bundle: string, project: string): Promis
       bundledProject.equals(installedProject) &&
       bundledLock.equals(installedLock) &&
       (marker === null
-        ? process.env.OMNIVOICE_TORCH_VARIANT?.trim().toLowerCase() !== 'rocm'
+        ? !rocmTorchOptIn()
         : marker === (await dependencyStamp(bundle)))
     );
   } catch {
@@ -515,7 +533,7 @@ export async function installRuntime(
   }
   await run(uv, ['sync', '--frozen', '--no-dev', ...pythonArgs, ...repairArgs], project, env);
   signal.throwIfAborted();
-  if (process.env.OMNIVOICE_TORCH_VARIANT?.trim().toLowerCase() === 'rocm') {
+  if (rocmTorchOptIn()) {
     await run(
       uv,
       [

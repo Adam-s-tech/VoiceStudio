@@ -98,6 +98,23 @@ def _run_cmd(args: list[str], timeout: float = 2.0) -> tuple[int, str]:
         return -1, ""
 
 
+def _amd_unusable_note() -> str:
+    """Why an AMD card sits idle, per OS - and only options that really exist."""
+    if sys.platform == "win32":
+        return (
+            "AMD GPU detected, but this install's PyTorch is the NVIDIA CUDA "
+            "build, which cannot drive it, and no ROCm build of the PyTorch "
+            "version VoiceStudio ships exists for Windows. PyTorch "
+            "engines run on the CPU; audio.cpp (Vulkan) can use the GPU - see "
+            "Settings > Performance for the per-engine list."
+        )
+    return (
+        "AMD GPU detected but torch was installed with CUDA wheels. Set "
+        "OMNIVOICE_TORCH_VARIANT=rocm and re-run setup to install the ROCm "
+        "build of PyTorch (docs/install/linux.md#amd-gpu-rocm)."
+    )
+
+
 def _detect_gpu() -> dict:
     """Best-effort detection of GPU vendor + driver + compute backend."""
     info = {
@@ -149,11 +166,22 @@ def _detect_gpu() -> dict:
             pass
         return info
 
-    # AMD
+    # AMD. rocm-smi only exists where a ROCm userspace is installed - never on
+    # a stock Windows box - so fall back to the OS adapter inventory (registry /
+    # sysfs, no subprocess), which sees a Radeon whatever PyTorch can do with it.
     rc, out = _run_cmd(["rocm-smi", "--showproductname"])
-    if rc == 0 and out.strip():
+    amd_name = out.strip().splitlines()[0][:120] if rc == 0 and out.strip() else None
+    if amd_name is None:
+        try:
+            from core.gpu_inventory import detect_host_gpus
+
+            amd_gpu = next((g for g in detect_host_gpus() if g.vendor == "amd"), None)
+        except Exception:
+            amd_gpu = None
+        amd_name = amd_gpu.name[:120] if amd_gpu else None
+    if amd_name is not None:
         info["vendor"] = "amd"
-        info["device_name"] = out.strip().splitlines()[0][:120]
+        info["device_name"] = amd_name
         try:
             import torch
             has_hip = getattr(torch.version, "hip", None) is not None
@@ -162,11 +190,7 @@ def _detect_gpu() -> dict:
                 info["available"] = True
             else:
                 info["backend"] = "cpu"
-                info["notes"].append(
-                    "AMD GPU detected but torch was installed with CUDA wheels. "
-                    "Re-run `uv sync --index-url https://download.pytorch.org/whl/rocm6.1` "
-                    "to enable ROCm acceleration."
-                )
+                info["notes"].append(_amd_unusable_note())
         except Exception:
             info["notes"].append("AMD GPU detected but torch not importable.")
         return info
@@ -505,7 +529,7 @@ def preflight():
             f"(driver {gpu['driver']}). " + " ".join(gpu["notes"])
         )
         gpu_fix = (
-            f"Update NVIDIA drivers to ≥ R{_MIN_NVIDIA_DRIVER} "
+            f"Update NVIDIA drivers to ≥ R{'.'.join(map(str, _min_nvidia_driver()))} "
             "(https://www.nvidia.com/Download/index.aspx). Or run CPU-only "
             "by continuing past this step — dubbing will be ~10× slower."
         )
@@ -517,9 +541,8 @@ def preflight():
         )
         gpu_fix = (
             None if gpu["available"] else
-            "AMD support is experimental. Re-run `uv sync --index-url "
-            "https://download.pytorch.org/whl/rocm6.1` to enable. App works "
-            "on CPU otherwise (slower)."
+            " ".join(gpu["notes"] or [_amd_unusable_note()])
+            + " The app works on CPU otherwise (slower)."
         )
     elif gpu["available"]:
         # Fallback: torch.cuda works but nvidia-smi/rocm-smi absent (e.g. Docker)
