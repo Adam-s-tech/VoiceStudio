@@ -160,6 +160,20 @@ def test_unload_sidecar_skips_busy(echo):
         echo._lock.release()
 
 
+def test_backend_unload_skips_busy_and_frees_idle(echo):
+    """``unload()`` is the path model eviction takes; it must not interrupt a
+    synthesis in flight (#2507 — a second ``unload`` shadowed this one)."""
+    _spawn_alive(echo)
+    assert echo._lock.acquire(blocking=False)
+    try:
+        echo.unload()
+        assert echo._proc is not None and echo._proc.poll() is None
+    finally:
+        echo._lock.release()
+    echo.unload()
+    assert echo._proc is None or echo._proc.poll() is not None
+
+
 def test_unload_all_sidecars_includes_this_one(echo):
     _spawn_alive(echo)
     assert unload_all_sidecars() >= 1
