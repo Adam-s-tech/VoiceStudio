@@ -301,6 +301,94 @@ def test_reply_parser_json_plain_and_reasoning_blocks():
     assert p.action == "none"
 
 
+def test_reply_parser_never_speaks_prefilled_thinking():
+    """Fail-before/pass-after for #2428: a chat template that prefills the
+    opening tag into the prompt leaves only the closing tag on the wire.
+    The parser used to settle on plain at the first non-format characters
+    and spoke the reasoning — to the person on the phone, in the user's
+    voice — while the system prompt requires replies to start with SAY:."""
+    close = "<" + "/think>"
+    p = M_agent().ReplyParser()
+    out = ""
+    for d in ["The caller", " asked for the booking name. The brief says Palash. ",
+              "I should confirm and end.\n\n" + close +
+              "\n\nSAY: It's under Palash. Thank you, goodbye.\nACTION: end_call"]:
+        out += p.feed(d)
+    out += p.finish()
+    assert out.strip() == "It's under Palash. Thank you, goodbye."
+    assert "booking name" not in out      # the reasoning never streamed
+    assert "brief says" not in out
+    assert "SAY:" not in out and "ACTION:" not in out
+    assert p.action == "end_call"
+
+
+def test_reply_parser_drops_prefilled_thinking_that_never_closes():
+    """A model that streams no closing tag either is still bounded by a
+    line-start SAY: — everything before it was thinking (#2428)."""
+    p = M_agent().ReplyParser()
+    out = ""
+    for d in ["I should confirm the booking. ", "Then end the call.\n",
+              "SAY: It's under Palash.\nACTION: none"]:
+        out += p.feed(d)
+    out += p.finish()
+    assert out.strip() == "It's under Palash."
+    assert "booking" not in out and "SAY:" not in out
+    assert p.action == "none"
+
+
+def test_reply_parser_speaks_an_unformatted_reply_only_at_finish():
+    """A reply with neither marker may be prefilled thinking, so it cannot
+    be spoken while it streams (#2428) — but it is still spoken: finish()
+    settles it as plain text, as it always did. Format-following replies
+    keep first-sentence streaming (see the two tests above)."""
+    p = M_agent().ReplyParser()
+    assert p.feed("Sorry, I cannot do that.") == ""
+    assert p.finish().strip() == "Sorry, I cannot do that."
+    assert p.action == "none"
+
+
+def test_reply_parser_drops_prefilled_thinking_at_a_lowercase_boundary():
+    """The line-start boundary is case-insensitive like SAY itself: a
+    lowercase `say:` must end prefilled thinking too, or finish() would
+    speak the reasoning as plain (#2428 review)."""
+    p = M_agent().ReplyParser()
+    out = ""
+    for d in ["I should confirm the booking.\n", "say: It's under Palash.\nACTION: none"]:
+        out += p.feed(d)
+    out += p.finish()
+    assert out.strip() == "It's under Palash."
+    assert "booking" not in out
+    assert p.action == "none"
+
+
+def test_a_json_reply_is_not_resliced_by_a_trailing_say_line():
+    """The line-start boundary applies only while no mode is chosen: a
+    body already streaming as json must not be re-sliced at finish() by a
+    stray SAY: line, or the say is dropped (#2431 review)."""
+    p = M_agent().ReplyParser()
+    body = '{"say": "Sure thing.", "action": "none"}\nSAY: stray line'
+    assert p.feed(body) == ""
+    assert p.finish() == "Sure thing."
+    assert p.action == "none"
+
+
+def test_a_draft_say_line_inside_reasoning_is_not_spoken():
+    """Unclosed reasoning may draft a `SAY:` line; only the closing tag —
+    or finish, if none ever comes — may establish the boundary, so a draft
+    must never reach the caller mid-stream (#2428 review)."""
+    close = "<" + "/think>"
+    p = M_agent().ReplyParser()
+    out = ""
+    for d in ["I'll reply now.\nSAY: draft, do not speak\n",
+              close + "\n\nSAY: It's under Palash.\nACTION: none"]:
+        out += p.feed(d)
+        assert "draft" not in out  # never spoken, at any point in the stream
+    out += p.finish()
+    assert out.strip() == "It's under Palash."
+    assert "reply now" not in out and "draft" not in out
+    assert p.action == "none"
+
+
 def test_guard_blocks_card_and_unknown_id_numbers_but_allows_brief_numbers():
     agent = M_agent()
     brief = "Callback number 415 555 0123 4."
