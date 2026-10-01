@@ -9,8 +9,98 @@ transcript must still read every spoken line once.
 from __future__ import annotations
 
 import os
+import pytest
 
 os.environ.setdefault("OMNIVOICE_MODEL", "test")
+
+
+@pytest.mark.parametrize("header", ["NOTE", "NOTE translator explanation", "NOTE\ttranslator explanation"])
+def test_downloaded_vtt_comment_blocks_preserve_spoken_metadata_words(tmp_path, header):
+    from services.dub_pipeline import parse_vtt_segments
+
+    blocks = [
+        "WEBVTT",
+        header + "\n00:01.000 --> 00:02.000\nComment example, not dialogue.",
+        "00:03.000 --> 00:04.000\nNOTE this is spoken.\nNOTEBOOK is spoken too.\nWEBVTT is a spoken format name.",
+        "STYLE\n00:05.000 --> 00:06.000\nOrdinary dialogue.",
+        "REGION\n00:07.000 --> 00:08.000\nAnother spoken line.",
+    ]
+    track = tmp_path / "original.en.vtt"
+    track.write_text("\n\n".join(blocks), encoding="utf-8")
+    assert parse_vtt_segments(str(track)) == [
+        {"start": 3.0, "end": 4.0, "text": "NOTE this is spoken. NOTEBOOK is spoken too. WEBVTT is a spoken format name."},
+        {"start": 5.0, "end": 6.0, "text": "Ordinary dialogue."},
+        {"start": 7.0, "end": 8.0, "text": "Another spoken line."},
+    ]
+
+
+def test_downloaded_vtt_keeps_rolling_caption_timings(tmp_path):
+    from services.dub_pipeline import parse_vtt_segments
+
+    track = tmp_path / "original.en-orig.vtt"
+    track.write_text(ROLLING_VTT, encoding="utf-8")
+    segments = parse_vtt_segments(str(track))
+    assert len(segments) == 5
+    assert segments[1] == {"start": 2.31, "end": 2.32, "text": "hey everyone welcome back"}
+    assert segments[2] == {"start": 2.32, "end": 4.79, "text": "hey everyone welcome back today we are baking bread"}
+
+
+def test_downloaded_vtt_keeps_cue_immediately_after_header(tmp_path):
+    from services.dub_pipeline import parse_vtt_segments
+
+    track = tmp_path / "original.en.vtt"
+    track.write_text("WEBVTT\n00:01.000 --> 00:02.000\nOrdinary dialogue.\n", encoding="utf-8")
+    assert parse_vtt_segments(str(track)) == [{"start": 1.0, "end": 2.0, "text": "Ordinary dialogue."}]
+
+
+def test_downloaded_vtt_ingest_persists_only_dialogue(monkeypatch):
+    import asyncio
+    import shutil
+    import uuid
+    import wave
+    from pathlib import Path
+    from core.config import DUB_DIR
+    from core.db import db_conn, init_db
+    from services import dub_pipeline as pipeline
+
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        pytest.skip("native caption ingest needs ffmpeg and ffprobe")
+    init_db()
+    job_id = uuid.uuid4().hex
+    job_dir = Path(DUB_DIR) / job_id
+    job_dir.mkdir(parents=True)
+    media = job_dir / "original.wav"
+    with wave.open(str(media), "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(16000)
+        handle.writeframes(b"\0\0" * 48000)
+    track = job_dir / "original.en.vtt"
+    track.write_text("WEBVTT\n\nNOTE explanation\n00:00.000 --> 00:01.000\nComment example.\n\n00:01.000 --> 00:02.000\nNOTE real dialogue.\n", encoding="utf-8")
+    # Only the external download transport is replaced; parsing, native
+    # extraction, hashing, job admission and SQLite persistence are real.
+    monkeypatch.setattr(pipeline, "yt_download_sync", lambda *args, **kwargs: (str(media), "Fixture", [str(track)]))
+
+    async def prepare():
+        stream = pipeline.ingest_pipeline(job_id, str(job_dir), {"kind": "url", "url": "https://example.invalid/fixture", "input_type": "audio", "fetch_subs": True})
+        try:
+            async for event in stream:
+                if '"extract_done"' in event:
+                    return  # Preparation persisted; do not enter ML stages.
+            pytest.fail("ingest did not finish audio preparation")
+        finally:
+            await stream.aclose()
+
+    try:
+        asyncio.run(prepare())
+        pipeline._dub_jobs.pop(job_id, None)
+        job = pipeline.get_job(job_id)
+        assert job["youtube_subs"]["en"] == [{"start": 1.0, "end": 2.0, "text": "NOTE real dialogue."}]
+    finally:
+        pipeline._dub_jobs.pop(job_id, None)
+        with db_conn() as connection:
+            connection.execute("DELETE FROM dub_history WHERE id=?", (job_id,))
+        shutil.rmtree(job_dir)
 
 ROLLING_VTT = "\n".join([
     "WEBVTT",
