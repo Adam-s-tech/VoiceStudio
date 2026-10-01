@@ -21,10 +21,18 @@ import types
 
 import pytest
 
-from core import device_caps, gpu_inventory, gpu_report
 from core.device_caps import HostCaps, UNUSABLE_GPU_MARKER
 from core.gpu_inventory import HostGPU
 from services.engine_routing import resolve_routing
+
+
+def _m(name: str):
+    """Resolve a module per call, not at import: other suites purge
+    ``sys.modules``, and a stale import would patch an object nothing else uses
+    (same trap as tests/test_why_no_gpu_1274.py)."""
+    import importlib
+
+    return importlib.import_module(name)
 
 RADEON = HostGPU(vendor="amd", name="AMD Radeon RX 9070 XT", vram_gb=16.0, pci_device_id="7550")
 GEFORCE = HostGPU(vendor="nvidia", name="NVIDIA GeForce RTX 4070", vram_gb=12.0)
@@ -94,7 +102,7 @@ def test_windows_registry_finds_radeon_and_skips_virtual_adapters():
         "0002": {"DriverDesc": "Microsoft Basic Display Adapter", "MatchingDeviceId": ""},
         "Configuration": {"DriverDesc": "ignored"},
     })
-    gpus = gpu_inventory._read_windows(reg)
+    gpus = _m("core.gpu_inventory")._read_windows(reg)
     assert [(g.vendor, g.name, g.vram_gb, g.pci_device_id) for g in gpus] == [
         ("amd", "AMD Radeon RX 9070 XT", 16.0, "7550"),
     ]
@@ -108,7 +116,7 @@ def test_windows_registry_vram_blob_from_older_drivers():
             "HardwareInformation.qwMemorySize": (8 * 1024 ** 3).to_bytes(8, "little"),
         },
     })
-    (gpu,) = gpu_inventory._read_windows(reg)
+    (gpu,) = _m("core.gpu_inventory")._read_windows(reg)
     assert (gpu.vendor, gpu.vram_gb) == ("nvidia", 8.0)
 
 
@@ -126,27 +134,27 @@ def test_linux_sysfs_lists_cards_not_connectors(tmp_path):
         (dev / "device").write_text("0x7550\n")
         if vram:
             (dev / "mem_info_vram_total").write_text(vram)
-    gpus = gpu_inventory._read_linux(str(tmp_path))
+    gpus = _m("core.gpu_inventory")._read_linux(str(tmp_path))
     assert [(g.vendor, g.vram_gb) for g in gpus] == [("amd", 16.0), ("nvidia", 0.0)]
 
 
 def test_inventory_never_raises_and_can_be_disabled(monkeypatch):
     monkeypatch.setenv("OMNIVOICE_DISABLE_GPU_INVENTORY", "1")
-    assert gpu_inventory.refresh() == ()
-    assert gpu_inventory._read_linux("/definitely/not/here") == ()
+    assert _m("core.gpu_inventory").refresh() == ()
+    assert _m("core.gpu_inventory")._read_linux("/definitely/not/here") == ()
 
 
 def test_plain_intel_igpu_is_not_a_candidate():
-    assert gpu_inventory.discrete_candidates((IGPU,)) == ()
+    assert _m("core.gpu_inventory").discrete_candidates((IGPU,)) == ()
     arc = HostGPU(vendor="intel", name="Intel Arc A770", vram_gb=16.0)
-    assert gpu_inventory.discrete_candidates((IGPU, arc)) == (arc,)
+    assert _m("core.gpu_inventory").discrete_candidates((IGPU, arc)) == (arc,)
 
 
 # ── the misleading "NVIDIA driver" message ────────────────────────────────
 
 
 def test_cuda_wheel_on_amd_only_host_does_not_blame_nvidia_driver():
-    msg = " ".join(device_caps.why_no_gpu(_torch(cuda="12.8"), gpus=(RADEON,)))
+    msg = " ".join(_m("core.device_caps").why_no_gpu(_torch(cuda="12.8"), gpus=(RADEON,)))
     assert "NVIDIA driver" not in msg
     assert UNUSABLE_GPU_MARKER in msg
     assert "Radeon RX 9070 XT" in msg
@@ -154,12 +162,12 @@ def test_cuda_wheel_on_amd_only_host_does_not_blame_nvidia_driver():
 
 
 def test_cuda_wheel_with_an_nvidia_card_keeps_the_driver_advice():
-    msg = " ".join(device_caps.why_no_gpu(_torch(cuda="12.8"), gpus=(GEFORCE,)))
+    msg = " ".join(_m("core.device_caps").why_no_gpu(_torch(cuda="12.8"), gpus=(GEFORCE,)))
     assert "NVIDIA driver is missing or too old" in msg
 
 
 def test_cuda_wheel_on_gpu_less_host_keeps_the_driver_advice():
-    msg = " ".join(device_caps.why_no_gpu(_torch(cuda="12.8"), gpus=()))
+    msg = " ".join(_m("core.device_caps").why_no_gpu(_torch(cuda="12.8"), gpus=()))
     assert "NVIDIA driver is missing or too old" in msg
 
 
@@ -177,9 +185,9 @@ def _probe_with_gpus(monkeypatch, gpus, *, cuda=None, hip=None):
         backends=types.SimpleNamespace(mps=types.SimpleNamespace(is_available=lambda: False)),
         xpu=types.SimpleNamespace(is_available=lambda: False),
     )
-    monkeypatch.setattr(gpu_inventory, "detect_host_gpus", lambda: gpus)
+    monkeypatch.setattr("core.gpu_inventory.detect_host_gpus", lambda: gpus)
     with patch.dict("sys.modules", {"torch": torch}):
-        return device_caps.refresh()
+        return _m("core.device_caps").refresh()
 
 
 def test_probe_flags_amd_card_that_the_cuda_wheel_cannot_drive(monkeypatch):
@@ -230,7 +238,7 @@ def _row(eid, compat, status, device="cpu", reason=None, available=True):
 
 
 def _report(caps, gpus, kind, tts=(), asr=(), platform="win32"):
-    return gpu_report.build_gpu_report(
+    return _m("core.gpu_report").build_gpu_report(
         caps, tuple(gpus), {"kind": kind, "version": "2.8.0+cu128", "runtime": "12.8"},
         list(tts), list(asr), platform=platform,
     )
@@ -307,24 +315,24 @@ def test_engine_verdicts_on_windows_amd_host():
 
 
 def test_collect_never_raises_when_registries_explode(monkeypatch):
-    monkeypatch.setattr(gpu_report, "detect_host_gpus", lambda: (RADEON,))
+    monkeypatch.setattr("core.gpu_report.detect_host_gpus", lambda: (RADEON,))
 
     def boom():
         raise RuntimeError("registry broken")
 
     monkeypatch.setattr("services.tts_backend.list_backends", boom)
     monkeypatch.setattr("services.asr_backend.list_backends", boom)
-    rep = gpu_report.collect_gpu_report()
+    rep = _m("core.gpu_report").collect_gpu_report()
     assert rep["engines"] == []
     assert "state" in rep
 
 
 def test_report_reasons_are_scrubbed(monkeypatch):
-    monkeypatch.setattr(gpu_report, "detect_host_gpus", lambda: ())
+    monkeypatch.setattr("core.gpu_report.detect_host_gpus", lambda: ())
     row = _row("x", ("cuda", "cpu"), "cpu_fallback", reason="failed at C:\\Users\\alice\\secret")
     monkeypatch.setattr("services.tts_backend.list_backends", lambda: [row])
     monkeypatch.setattr("services.asr_backend.list_backends", lambda: [])
-    rep = gpu_report.collect_gpu_report()
+    rep = _m("core.gpu_report").collect_gpu_report()
     assert "alice" not in (rep["engines"][0]["reason"] or "")
 
 
@@ -371,24 +379,24 @@ def test_indextts_keeps_its_claim_when_the_venv_cannot_be_inspected(tmp_path, mo
 
 
 def test_self_check_names_the_card_instead_of_saying_no_gpu(monkeypatch):
-    from core import diagnose
+    diagnose = _m("core.diagnose")
 
     note = f"AMD Radeon RX 9070 XT (AMD) {UNUSABLE_GPU_MARKER}: this is a CUDA 12.8 PyTorch build"
     monkeypatch.setattr("services.model_manager.get_best_device", lambda: "cpu")
-    monkeypatch.setattr(device_caps, "detect_host_caps", lambda: _cpu_caps(note))
+    monkeypatch.setattr("core.device_caps.detect_host_caps", lambda: _cpu_caps(note))
     check = diagnose._check_device()
     assert check["status"] == "warn"
     assert "Radeon RX 9070 XT" in check["detail"]
     assert "no GPU acceleration detected" not in check["detail"]
 
-    monkeypatch.setattr(device_caps, "detect_host_caps", lambda: _cpu_caps())
+    monkeypatch.setattr("core.device_caps.detect_host_caps", lambda: _cpu_caps())
     assert "no GPU acceleration detected" in diagnose._check_device()["detail"]
 
 
 def test_settings_route_serves_the_report(monkeypatch):
     from api.routers import settings
 
-    monkeypatch.setattr(gpu_report, "detect_host_gpus", lambda: (RADEON,))
+    monkeypatch.setattr("core.gpu_report.detect_host_gpus", lambda: (RADEON,))
     monkeypatch.setattr("services.tts_backend.list_backends", lambda: [])
     monkeypatch.setattr("services.asr_backend.list_backends", lambda: [])
     rep = settings.get_gpu_report()
