@@ -38,6 +38,7 @@ metadata and the backend fallback mirror it.
 
 ### Added
 
+- Mirror source delivery gives each dub line a direction measured from the original actor's pitch, loudness, pace and voicing, relative to that speaker (#2410) — thanks @JoshuaWIls!
 - MCP agents can design a voice from a text description and reuse it by `profile_id` (`describe_voice`, `design_voice`) (#2368) — thanks @thelselutopia!
 - Dictation vocabulary hint in Settings → Dictation shortcut: names and jargon that Faster Whisper, MLX Whisper and OpenAI-compatible engines should expect (#2395) — thanks @m061i6!
 - Cheaper Inference is available as an optional LLM provider (#2325) — thanks @aiapienthusiast!
@@ -98,6 +99,7 @@ metadata and the backend fallback mirror it.
 - MLX Qwen3-TTS receives the selected language correctly; MeloTTS explains missing text resources without downloading during generation (#2419)
 - The language picker offers only the languages each MLX-Audio model supports (Kokoro, CSM, Qwen3-TTS, Dia, Chatterbox, MeloTTS, OuteTTS), per their model cards, instead of every language (#977)
 
+- Dubbing Clean Up now applies the merged segments it reports instead of leaving the transcript unchanged (#2410) — thanks @JoshuaWIls!
 - The Enter that confirms Korean, Japanese or Chinese input no longer also submits project renames, language search, pronunciation, worker or MCP fields (#2338) — thanks @HEOJUNFO!
 - English text normalization speaks a dollar amount followed by a period or comma ("It costs $5.") instead of leaving the digits (#2390) — thanks @kevin9327!
 - Voice Design sends descriptions unchanged to free-text engines and restores the original design when reopening a take (#2401) — thanks @CauaMatheus and @dominikj-cf!

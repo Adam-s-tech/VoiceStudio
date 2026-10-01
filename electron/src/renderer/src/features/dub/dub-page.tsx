@@ -8,17 +8,10 @@ import { getBridge } from '@/components/bridge';
 import { WorkspaceHeader } from '@/components/app-shell/workspace-header';
 import { Switch } from '@/components/ui/switch';
 import { MAX_COOKIE_EXPORT_BYTES } from '@shared/utils/cookieExport';
-import {
-  hasCompleteTranslation,
-  multiLangTargets,
-} from '@shared/utils/multiLang';
+import { hasCompleteTranslation, multiLangTargets } from '@shared/utils/multiLang';
 import { segmentGenInputs } from '@shared/utils/segments';
 import { clampSegmentEdit } from '@shared/utils/timeline';
-import {
-  dialectLabel,
-  dialectMatchesLang,
-  dialectOptionsFor,
-} from '@shared/api/dialects';
+import { dialectLabel, dialectMatchesLang, dialectOptionsFor } from '@shared/api/dialects';
 import { DubExportPanel } from './dub-export-panel';
 import { DubTimeline } from './dub-timeline';
 import { PasteTranslation } from './paste-translation';
@@ -56,6 +49,7 @@ import {
   ClipboardPasteIcon,
   Clock3Icon,
   AudioLinesIcon,
+  AudioWaveformIcon,
   FilmIcon,
   GaugeIcon,
   HeadphonesIcon,
@@ -139,6 +133,7 @@ import {
   ingestDubUrl,
   isDubUrl,
   cleanupDubSegments,
+  mirrorDubSourceDelivery,
   restoreDubSegments,
   skipFailedDubTranslations,
   planDubIncremental,
@@ -547,9 +542,11 @@ export function DubPage() {
           ? 'dub.translating'
           : session.phase === 'cleaning'
             ? 'dub.clean_up'
-            : session.phase === 'generating'
-              ? 'dub_workflow.generating_dub'
-              : 'common.loading';
+            : session.phase === 'mirroring'
+              ? 'dub.mirror_delivery'
+              : session.phase === 'generating'
+                ? 'dub_workflow.generating_dub'
+                : 'common.loading';
   const eventCurrent = Number(session.event?.current);
   const eventTotal = Number(session.event?.total);
   const progressPercent =
@@ -2020,7 +2017,7 @@ export function DubPage() {
                           size: 'icon-sm',
                         })}
                       >
-                        {session.phase === 'cleaning' ? (
+                        {session.phase === 'cleaning' || session.phase === 'mirroring' ? (
                           <LoaderCircleIcon className="animate-spin" />
                         ) : (
                           <MoreHorizontalIcon />
@@ -2032,35 +2029,79 @@ export function DubPage() {
                             <Menu.Item
                               disabled={!session.jobId}
                               onClick={() =>
-                                void cleanupDubSegments().then((removed) => {
-                                  if (removed === null) {
+                                void cleanupDubSegments()
+                                  .then((removed) => {
+                                    if (removed === null) {
+                                      toast.error(
+                                        t('dub_workflow.cleanup_failed', {
+                                          message: dubSession.state.error || t('common.error'),
+                                        }),
+                                      );
+                                      return;
+                                    }
+                                    const valid = new Set(
+                                      dubSession.state.segments.map((item) => item.id),
+                                    );
+                                    setSelectedSegmentIds(
+                                      (current) =>
+                                        new Set([...current].filter((id) => valid.has(id))),
+                                    );
+                                    toast.success(
+                                      removed
+                                        ? t('dub_workflow.cleaned', {
+                                            count: removed,
+                                          })
+                                        : t('dub_workflow.segments_clean'),
+                                    );
+                                  })
+                                  .catch((error) =>
                                     toast.error(
                                       t('dub_workflow.cleanup_failed', {
-                                        message: dubSession.state.error || t('common.error'),
+                                        message: describeError(error),
                                       }),
-                                    );
-                                    return;
-                                  }
-                                  const valid = new Set(
-                                    dubSession.state.segments.map((item) => item.id),
-                                  );
-                                  setSelectedSegmentIds(
-                                    (current) =>
-                                      new Set([...current].filter((id) => valid.has(id))),
-                                  );
-                                  toast.success(
-                                    removed
-                                      ? t('dub_workflow.cleaned', {
-                                          count: removed,
-                                        })
-                                      : t('dub_workflow.segments_clean'),
-                                  );
-                                })
+                                    ),
+                                  )
                               }
                               className="flex cursor-default items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-disabled:opacity-40 data-highlighted:bg-accent"
                             >
                               <WandSparklesIcon className="size-4" />
                               {t('dub.clean_up')}
+                            </Menu.Item>
+                            <Menu.Item
+                              disabled={!session.jobId}
+                              onClick={() =>
+                                void mirrorDubSourceDelivery()
+                                  .then((outcome) => {
+                                    if (!outcome) {
+                                      toast.error(
+                                        t('dub_workflow.mirror_failed', {
+                                          message: dubSession.state.error || t('common.error'),
+                                        }),
+                                      );
+                                    } else if (outcome.applied) {
+                                      toast.success(
+                                        t('dub_workflow.mirror_applied', {
+                                          count: outcome.applied,
+                                        }),
+                                      );
+                                    } else if (!outcome.measured) {
+                                      toast.info(t('dub_workflow.mirror_insufficient'));
+                                    } else {
+                                      toast.info(t('dub_workflow.mirror_none'));
+                                    }
+                                  })
+                                  .catch((error) =>
+                                    toast.error(
+                                      t('dub_workflow.mirror_failed', {
+                                        message: describeError(error),
+                                      }),
+                                    ),
+                                  )
+                              }
+                              className="flex cursor-default items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-disabled:opacity-40 data-highlighted:bg-accent"
+                            >
+                              <AudioWaveformIcon className="size-4" />
+                              {t('dub.mirror_delivery')}
                             </Menu.Item>
                             <Menu.Item
                               disabled={!canRestoreOriginal}
