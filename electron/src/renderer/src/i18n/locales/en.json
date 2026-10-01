@@ -541,7 +541,9 @@
     "gpu_arch_unsupported": "This PyTorch build does not support your GPU. Choose CPU in Settings → Performance & Device, or install a compatible PyTorch build.",
     "windows_app_control_blocked": "Windows application control blocked a required file. Ask your administrator to allow the trusted VoiceStudio runtime, then restart the app.",
     "audio_io_failed": "Audio could not be read or saved. Check the file format, free disk space, and file permissions. Review the folder in Settings → Storage.",
-    "no_audio_track": "This file has no audio track, so there is no speech to transcribe, dub or clone. Choose a video or audio file that contains sound."
+    "no_audio_track": "This file has no audio track, so there is no speech to transcribe, dub or clone. Choose a video or audio file that contains sound.",
+    "transcription_media_tool": "Transcription needs ffmpeg, which VoiceStudio could not find or run. Open Settings → Audio tools and use Download/Repair, or install ffmpeg (macOS: brew install ffmpeg; Windows: winget install Gyan.FFmpeg; Linux: your package manager) and restart VoiceStudio. You can also point FFMPEG_PATH at an ffmpeg binary.",
+    "transcription_pipe_lost": "The backend lost its output pipe to the app while transcribing (broken pipe). Restart VoiceStudio and try again."
   },
   "tts": {
     "generationComplete": "Speech generation complete",

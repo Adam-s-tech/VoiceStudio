@@ -397,9 +397,15 @@ def test_webvtt_note_words_inside_dialogue_are_retained():
     assert parse_srt(text).segments[0]['text'] == 'NOTE this is spoken\nSTYLE\nREGION'
 
 
-@pytest.mark.parametrize('identifier', ['STYLE', 'REGION', 'NOTE', 'NOTE identifier'])
+@pytest.mark.parametrize('identifier', ['STYLE', 'REGION'])
 def test_webvtt_metadata_words_can_identify_a_cue(identifier):
     text = f'WEBVTT\n\n{identifier}\n00:01.000 --> 00:02.000\nSpoken text\n'
+    assert [cue['text'] for cue in parse_srt(text).segments] == ['Spoken text']
+
+
+@pytest.mark.parametrize('identifier', ['NOTE', 'NOTE identifier'])
+def test_webvtt_note_block_is_never_a_cue_even_with_a_timing_line(identifier):
+    text = f'WEBVTT\n\n{identifier}\n00:01.000 --> 00:02.000\nprivate note\n\n00:03.000 --> 00:04.000\nSpoken text\n'
     assert [cue['text'] for cue in parse_srt(text).segments] == ['Spoken text']
 
 

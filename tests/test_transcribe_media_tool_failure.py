@@ -143,3 +143,72 @@ def test_imageio_style_binary_is_reachable_by_bare_name(tmp_path, monkeypatch):
     monkeypatch.setenv("PATH", "/nonexistent")
     ffmpeg_utils.ensure_media_tools_on_path()
     assert os.path.samefile(shutil.which("ffmpeg"), real)
+
+
+def _stub(path):
+    import stat
+
+    path.write_text("#!/bin/sh\nexit 0\n")
+    path.chmod(path.stat().st_mode | stat.S_IEXEC)
+
+
+def test_shim_survives_relative_paths_and_beats_a_competing_ffmpeg(tmp_path, monkeypatch):
+    """Relative FFMPEG_PATH, and a system ffmpeg sitting beside the resolved ffprobe."""
+    import os
+    import shutil
+    import sys
+
+    import core.config as cfg
+    from services import ffmpeg_utils
+
+    if sys.platform == "win32":
+        pytest.skip("POSIX shell stub")
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    _stub(tools / "ffmpeg-custom")
+    system = tmp_path / "usr_bin"
+    system.mkdir()
+    _stub(system / "ffmpeg")
+    _stub(system / "ffprobe")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cfg, "DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setattr(ffmpeg_utils, "find_ffmpeg", lambda: "tools/ffmpeg-custom")
+    monkeypatch.setattr(ffmpeg_utils, "find_ffprobe", lambda: str(system / "ffprobe"))
+    monkeypatch.setenv("PATH", str(system))
+
+    ffmpeg_utils.ensure_media_tools_on_path()
+
+    found = shutil.which("ffmpeg")
+    assert os.path.samefile(found, tools / "ffmpeg-custom"), found
+
+
+def test_copied_shim_is_refreshed_when_same_size_contents_differ(tmp_path, monkeypatch):
+    import os
+    import sys
+
+    import core.config as cfg
+    from services import ffmpeg_utils
+
+    if sys.platform == "win32":
+        pytest.skip("POSIX shell stub")
+    real = tmp_path / "ffmpeg-custom"
+    _stub(real)
+    monkeypatch.setattr(cfg, "DATA_DIR", str(tmp_path / "data"))
+
+    def _no_links(*_a, **_k):
+        raise OSError(1, "links refused")
+
+    monkeypatch.setattr(os, "symlink", _no_links)
+    monkeypatch.setattr(os, "link", _no_links)
+
+    shim_dir = ffmpeg_utils._bare_name_shim(str(real), "ffmpeg")
+    copy = os.path.join(shim_dir, "ffmpeg")
+    assert open(copy, "rb").read() == real.read_bytes()
+    # Same length, different bytes: a corrupt copy must not keep shadowing it.
+    data = bytearray(real.read_bytes())
+    data[-3] = ord("X")
+    with open(copy, "wb") as handle:
+        handle.write(data)
+    ffmpeg_utils._bare_name_shim(str(real), "ffmpeg")
+    assert open(copy, "rb").read() == real.read_bytes()

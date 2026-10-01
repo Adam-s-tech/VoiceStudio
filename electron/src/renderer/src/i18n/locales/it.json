@@ -2847,7 +2847,9 @@
     "gpu_arch_unsupported": "Questa versione di PyTorch non supporta la tua GPU. Scegli CPU in Impostazioni → Prestazioni e dispositivo oppure installa una versione compatibile di PyTorch.",
     "windows_app_control_blocked": "Il controllo delle applicazioni di Windows ha bloccato un file necessario. Chiedi all’amministratore di autorizzare il runtime attendibile di VoiceStudio, quindi riavvia l’app.",
     "audio_io_failed": "Impossibile leggere o salvare l’audio. Controlla il formato del file, lo spazio libero e le autorizzazioni. Verifica la cartella in Impostazioni → Archiviazione.",
-    "no_audio_track": "Questo file non ha una traccia audio, quindi non c'è parlato da trascrivere, doppiare o clonare. Scegli un file video o audio che contenga suono."
+    "no_audio_track": "Questo file non ha una traccia audio, quindi non c'è parlato da trascrivere, doppiare o clonare. Scegli un file video o audio che contenga suono.",
+    "transcription_media_tool": "La trascrizione richiede ffmpeg, che VoiceStudio non ha trovato o non è riuscito a eseguire. Apri Impostazioni → Strumenti audio e usa Scarica/Ripara, oppure installa ffmpeg (macOS: brew install ffmpeg; Windows: winget install Gyan.FFmpeg; Linux: il tuo gestore di pacchetti) e riavvia VoiceStudio. Puoi anche puntare FFMPEG_PATH a un binario ffmpeg.",
+    "transcription_pipe_lost": "Il backend ha perso il canale di output verso l'app durante la trascrizione (broken pipe). Riavvia VoiceStudio e riprova."
   },
   "network": {
     "copied": "Copiato",

@@ -1,5 +1,6 @@
 import asyncio
 import errno
+import filecmp
 import logging
 from core.logging_utils import log_safe
 import os
@@ -343,6 +344,9 @@ def _bare_name_shim(real: str, tool: str) -> "str | None":
     exe = f"{tool}.exe" if os.name == "nt" else tool
     if os.path.basename(real).lower() == exe:
         return None
+    # An FFMPEG_PATH like ./tools/ffmpeg-custom is relative to the process cwd;
+    # a symlink resolves its target relative to the shims directory instead.
+    real = os.path.abspath(real)
     try:
         from core.config import DATA_DIR
 
@@ -351,9 +355,11 @@ def _bare_name_shim(real: str, tool: str) -> "str | None":
         os.makedirs(directory, exist_ok=True)
         if os.path.lexists(link):
             try:
+                # Symlink/hardlink: same file. A copy must match byte for byte
+                # (a corrupt copy, or a changed binary of equal size, must not
+                # keep shadowing the validated one).
                 if os.path.samefile(link, real) or (
-                    not os.path.islink(link)
-                    and os.path.getsize(link) == os.path.getsize(real)
+                    not os.path.islink(link) and filecmp.cmp(link, real, shallow=False)
                 ):
                     return directory
             except OSError:
@@ -368,7 +374,8 @@ def _bare_name_shim(real: str, tool: str) -> "str | None":
                 shutil.copy2(real, link)
         return directory
     except OSError as e:
-        logger.debug("bare-name %s shim unavailable: %s", tool, e)
+        # errno only: the exception text carries absolute (home) paths.
+        logger.debug("bare-name %s shim unavailable (errno=%s)", tool, e.errno)
         return None
 
 
@@ -411,7 +418,9 @@ def ensure_media_tools_on_path() -> list[str]:
         # case-sensitive and "already present" must not depend on casing.
         normalize = os.path.normcase
         present = {normalize(e) for e in entries if e}
-        for directory in directories:
+        # Reversed so the first-listed directory (the validated shim) ends up
+        # first on PATH, ahead of any competing system ffmpeg/ffprobe.
+        for directory in reversed(directories):
             if normalize(directory) in present:
                 continue
             entries.insert(0, directory)

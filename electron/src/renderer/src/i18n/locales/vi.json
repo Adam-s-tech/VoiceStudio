@@ -2845,7 +2845,9 @@
     "gpu_arch_unsupported": "Bản dựng PyTorch này không hỗ trợ GPU của bạn. Chọn CPU trong Cài đặt → Hiệu năng và thiết bị hoặc cài đặt bản dựng PyTorch tương thích.",
     "windows_app_control_blocked": "Tính năng kiểm soát ứng dụng của Windows đã chặn một tệp cần thiết. Nhờ quản trị viên cho phép môi trường chạy VoiceStudio đáng tin cậy, rồi khởi động lại ứng dụng.",
     "audio_io_failed": "Không thể đọc hoặc lưu âm thanh. Kiểm tra định dạng tệp, dung lượng đĩa trống và quyền truy cập tệp. Kiểm tra thư mục trong Cài đặt → Lưu trữ.",
-    "no_audio_track": "Tệp này không có rãnh âm thanh nên không có lời nói để chép lời, lồng tiếng hoặc nhân bản. Hãy chọn tệp video hoặc âm thanh có tiếng."
+    "no_audio_track": "Tệp này không có rãnh âm thanh nên không có lời nói để chép lời, lồng tiếng hoặc nhân bản. Hãy chọn tệp video hoặc âm thanh có tiếng.",
+    "transcription_media_tool": "Chép lời cần ffmpeg, nhưng VoiceStudio không thể tìm thấy hoặc chạy nó. Mở Cài đặt → Công cụ âm thanh và dùng Tải xuống/Sửa chữa, hoặc cài ffmpeg (macOS: brew install ffmpeg; Windows: winget install Gyan.FFmpeg; Linux: trình quản lý gói của bạn) rồi khởi động lại VoiceStudio. Bạn cũng có thể trỏ FFMPEG_PATH tới tệp ffmpeg.",
+    "transcription_pipe_lost": "Backend đã mất kênh đầu ra tới ứng dụng khi đang chép lời (broken pipe). Hãy khởi động lại VoiceStudio và thử lại."
   },
   "network": {
     "copied": "Đã sao chép",

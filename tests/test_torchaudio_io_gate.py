@@ -97,3 +97,53 @@ def test_load_audio_reads_segment_when_torchcodec_is_missing(tmp_path, torchaudi
     _write_wav(wav, frames=480, rate=24000)
     samples, rate = load_audio(str(wav))
     assert rate == 24000 and tuple(samples.shape) == (1, 480)
+
+
+def test_truncated_float_wav_keeps_declared_size_so_the_cache_is_rejected(
+    tmp_path, torchaudio_2_9
+):
+    import numpy as np
+    import soundfile as sf
+
+    from api.routers.dub_generate import _cached_payload_intact
+    from services.audio_io import audio_info
+
+    wav = tmp_path / "seg.wav"
+    sf.write(str(wav), np.full(2400, 0.1, dtype="float32"), 24000, subtype="FLOAT")
+    info = audio_info(wav)
+    assert (info.num_frames, info.bits_per_sample) == (2400, 32)
+    wav.write_bytes(wav.read_bytes()[:-1000])
+    info = audio_info(wav)
+    assert info.num_frames == 2400, "libsndfile would clamp this to the bytes present"
+    assert not _cached_payload_intact(str(wav), info)
+
+
+def test_audio_info_leaves_the_stream_where_it_found_it(tmp_path, monkeypatch, torchaudio_2_9):
+    import io
+
+    import soundfile as sf
+
+    import services.audio_io as aio
+
+    wav = tmp_path / "seg.wav"
+    _write_wav(wav, frames=480)
+    for payload in (wav.read_bytes(), b"not audio at all" * 8):
+        buf = io.BytesIO(b"junk" + payload)
+        buf.seek(4)
+        seen = []
+
+        def fake_load(source):
+            seen.append(source.tell())
+            return aio.torch.zeros(1, 480), 24000
+
+        monkeypatch.setattr(aio, "load_audio", fake_load)
+        if payload.startswith(b"RIFF"):
+            assert aio.audio_info(buf).num_frames == 480
+        else:
+            # sf.info consumes header bytes before rejecting the stream; the
+            # decoder fallback must start from the caller's position again.
+            monkeypatch.setattr(sf, "info", lambda s: (s.read(16), (_ for _ in ()).throw(RuntimeError("bad")))[1])
+            aio.audio_info(buf)
+            assert seen == [4]
+        if payload.startswith(b"RIFF"):
+            assert buf.tell() == 4

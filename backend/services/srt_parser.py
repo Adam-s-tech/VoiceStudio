@@ -90,11 +90,14 @@ def parse_srt(content: str) -> SrtParseResult:
             lines = block.strip().split("\n")
             first = lines[0].strip()
             # WebVTT's block parser gives a timing line in position two
-            # precedence over the identifier (including STYLE/REGION/NOTE).
-            # https://www.w3.org/TR/webvtt1/#file-parsing
+            # precedence over the identifier, so STYLE/REGION can name a real
+            # cue (https://www.w3.org/TR/webvtt1/#file-parsing). A NOTE block
+            # is a private comment, never speech: a commented-out cue under
+            # it must not be dubbed.
             identifies_cue = len(lines) > 1 and _TIMING_RE.match(lines[1])
-            metadata = first in {"STYLE", "REGION"} or re.match(r"NOTE(?:[ \t]|$)", first)
-            if metadata and not identifies_cue:
+            if re.match(r"NOTE(?:[ \t]|$)", first):
+                continue
+            if first in {"STYLE", "REGION"} and not identifies_cue:
                 continue
             blocks.append(block)
         text = "\n\n".join(blocks)

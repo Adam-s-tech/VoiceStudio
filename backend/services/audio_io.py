@@ -161,39 +161,85 @@ _SUBTYPE_BITS = {
 }
 
 
+def _riff_wav_header(source: PathOrBuf) -> "AudioInfo | None":
+    """Header-DECLARED facts of a fixed-width RIFF/WAVE file, or None.
+
+    Handles integer PCM, IEEE float and WAVE_FORMAT_EXTENSIBLE. Reports what the
+    ``data`` chunk header claims, as ``torchaudio.info`` did: libsndfile clamps
+    the frame count to the bytes actually present, which would hide a truncated
+    cache from the dub fast-path integrity check (``_cached_payload_intact``)
+    that compares the two. Leaves a seekable stream where it found it.
+    """
+    import struct
+
+    handle = source if hasattr(source, "read") else open(os.fspath(source), "rb")
+    start = handle.tell() if hasattr(handle, "tell") else 0
+    try:
+        head = handle.read(12)
+        if len(head) != 12 or head[:4] != b"RIFF" or head[8:12] != b"WAVE":
+            return None
+        fmt = None
+        while True:
+            chunk = handle.read(8)
+            if len(chunk) != 8:
+                return None
+            cid, size = chunk[:4], struct.unpack("<I", chunk[4:])[0]
+            if cid == b"fmt ":
+                body = handle.read(size)
+                if len(body) < 16:
+                    return None
+                tag, channels, rate, _brate, _align, bits = struct.unpack("<HHIIHH", body[:16])
+                if tag not in (1, 3, 0xFFFE) or channels < 1 or bits < 8 or bits % 8:
+                    return None
+                fmt = (channels, rate, bits)
+                if size % 2:
+                    handle.read(1)
+            elif cid == b"data":
+                if fmt is None:
+                    return None
+                channels, rate, bits = fmt
+                return AudioInfo(rate, size // (channels * bits // 8), channels, bits)
+            else:
+                handle.seek(size + (size % 2), os.SEEK_CUR)
+    finally:
+        if handle is source:
+            try:
+                handle.seek(start)
+            except (OSError, ValueError):
+                pass
+        else:
+            handle.close()
+
+
 def audio_info(source: PathOrBuf) -> AudioInfo:
     """Read an audio header without ``torchaudio.info``.
 
     torchaudio 2.9 removed ``info`` (and routes ``load`` through TorchCodec), so
     every caller of it died with ``AttributeError`` — which the dub cache checks
     swallow, silently treating each cached segment as missing and re-rendering
-    the whole job (#2378). libsndfile reads the header of every WAV/FLAC/OGG the
-    app writes; anything else falls back to a full :func:`load_audio` decode.
-    Raises whatever the underlying reader raises for an unreadable file.
+    the whole job (#2378). Fixed-width WAV reports its declared header values;
+    libsndfile reads the other formats the app writes; anything else falls back
+    to a full :func:`load_audio` decode. Raises whatever the underlying reader
+    raises for an unreadable file.
     """
-    import wave
-
     import soundfile as sf
 
     position = source.tell() if hasattr(source, "tell") and getattr(source, "seekable", lambda: False)() else None
-    try:
-        # Integer-PCM WAV: report what the header DECLARES, as torchaudio.info
-        # did. libsndfile clamps the frame count to the bytes actually present,
-        # which would hide a truncated cache from the dub fast-path integrity
-        # check (_cached_payload_intact) that compares the two.
-        with wave.open(os.fspath(source) if isinstance(source, os.PathLike) else source) as header:
-            return AudioInfo(
-                int(header.getframerate()), int(header.getnframes()),
-                int(header.getnchannels()), int(header.getsampwidth()) * 8,
-            )
-    except (wave.Error, EOFError):
-        if position is not None:
-            source.seek(position)
+    declared = _riff_wav_header(source)
+    if declared is not None:
+        return declared
+    if position is not None:
+        source.seek(position)
     try:
         meta = sf.info(source)
     except RuntimeError:  # LibsndfileError subclasses it
+        # sf.info may have consumed header bytes; the decoder needs them all.
+        if position is not None:
+            source.seek(position)
         wav, rate = load_audio(source)
         return AudioInfo(int(rate), int(wav.shape[-1]), int(wav.shape[0]), 0)
+    if position is not None:
+        source.seek(position)
     return AudioInfo(
         int(meta.samplerate), int(meta.frames), int(meta.channels),
         _SUBTYPE_BITS.get(meta.subtype, 0),

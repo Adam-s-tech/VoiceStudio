@@ -84,10 +84,10 @@ function captionBlocks(text, webvtt) {
     const first = lines[0];
     if (/^WEBVTT(?:[ \t]|$)/.test(first)) return false;
     if (!isWebVttMetadata(first)) return true;
-    // WebVTT's block parser gives a timing line in position two precedence
-    // over the identifier, so `STYLE`/`REGION`/`NOTE` can name a real cue.
-    // https://www.w3.org/TR/webvtt1/#file-parsing — mirrors parse_srt.
-    return lines.length > 1 && isTimingLine(lines[1]);
+    // A timing line in position two outranks a STYLE/REGION identifier
+    // (https://www.w3.org/TR/webvtt1/#file-parsing), but a NOTE block is a
+    // private comment and never speech. Mirrors parse_srt.
+    return !first.startsWith('NOTE') && lines.length > 1 && isTimingLine(lines[1]);
   });
 }
 

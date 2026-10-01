@@ -2845,7 +2845,9 @@
     "gpu_arch_unsupported": "このPyTorchビルドはお使いのGPUに対応していません。設定 → パフォーマンスとデバイスでCPUを選択するか、互換性のあるPyTorchビルドをインストールしてください。",
     "windows_app_control_blocked": "Windowsのアプリケーション制御が必要なファイルをブロックしました。信頼できるVoiceStudioランタイムを許可するよう管理者に依頼し、アプリを再起動してください。",
     "audio_io_failed": "音声を読み込むか保存することができませんでした。ファイル形式、ディスクの空き容量、ファイルのアクセス権を確認してください。設定 → ストレージでフォルダーを確認してください。",
-    "no_audio_track": "このファイルには音声トラックがないため、文字起こし・吹き替え・クローンする音声がありません。音声を含む動画または音声ファイルを選んでください。"
+    "no_audio_track": "このファイルには音声トラックがないため、文字起こし・吹き替え・クローンする音声がありません。音声を含む動画または音声ファイルを選んでください。",
+    "transcription_media_tool": "文字起こしには ffmpeg が必要ですが、VoiceStudio は見つけられないか実行できませんでした。設定 → オーディオツールを開いてダウンロード/修復を使うか、ffmpeg をインストール（macOS: brew install ffmpeg、Windows: winget install Gyan.FFmpeg、Linux: お使いのパッケージマネージャー）して VoiceStudio を再起動してください。FFMPEG_PATH を ffmpeg のファイルに向けることもできます。",
+    "transcription_pipe_lost": "文字起こし中にバックエンドがアプリへの出力パイプを失いました（broken pipe）。VoiceStudio を再起動してもう一度お試しください。"
   },
   "network": {
     "copied": "コピーされました",
