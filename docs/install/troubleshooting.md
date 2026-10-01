@@ -666,8 +666,8 @@ Apple-Silicon install skips this index entirely.
 busy and the Radeon idle, and **Settings → About → Run self-check** says the
 compute device is `cpu`.
 
-**Cause:** the default install ships the NVIDIA CUDA build of PyTorch, which
-cannot drive AMD GPUs. This is not a driver problem on your side. Open
+**Cause:** the default install has the NVIDIA CUDA build of PyTorch (or the
+CPU-only build when no NVIDIA driver is present), and neither can drive AMD GPUs. This is not a driver problem on your side. Open
 **Settings → Performance → GPU acceleration**: it names your card, the installed
 PyTorch build and, for every engine, whether it uses the GPU.
 

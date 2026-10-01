@@ -108,8 +108,8 @@ def _amd_unusable_note() -> str:
     """Why an AMD card sits idle, per OS - and only options that really exist."""
     if sys.platform == "win32":
         return (
-            "AMD GPU detected, but this install's PyTorch is the NVIDIA CUDA "
-            "build, which cannot drive it, and no ROCm build of the PyTorch "
+            "AMD GPU detected, but this install's PyTorch (the NVIDIA CUDA or "
+            "CPU-only build) cannot drive it, and no ROCm build of the PyTorch "
             "version VoiceStudio ships exists for Windows. PyTorch "
             "engines run on the CPU; audio.cpp (Vulkan) can use the GPU - see "
             "Settings > Performance for the per-engine list."

@@ -115,9 +115,9 @@ ships the CUDA build of PyTorch; with an NVIDIA GPU and a regular NVIDIA
 driver it's picked up automatically (no CUDA Toolkit install needed).
 
 **AMD GPUs — including Ryzen / Ryzen AI integrated Radeon graphics — do not
-accelerate PyTorch engines on Windows.** The installer ships the NVIDIA CUDA
-build of PyTorch 2.8, which cannot drive a Radeon card, so those engines run on
-the CPU. pytorch.org publishes no Windows ROCm wheels, and VoiceStudio's ROCm
+accelerate PyTorch engines on Windows.** The runtime has PyTorch 2.8 as either
+the NVIDIA CUDA build or (with no NVIDIA driver present) the CPU-only build;
+neither can drive a Radeon card, so those engines run on the CPU. pytorch.org publishes no Windows ROCm wheels, and VoiceStudio's ROCm
 option (`OMNIVOICE_TORCH_VARIANT=rocm`) is Linux-only — it is ignored on Windows
 rather than failing setup. (The Ryzen AI NPU is likewise not used.) Everything
 still works on CPU, just slower. What you can do today:

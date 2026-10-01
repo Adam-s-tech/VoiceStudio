@@ -255,9 +255,10 @@ describe('packaged runtime setup', () => {
     );
     await installRuntime(bundle, project, 'uv', run, new AbortController().signal);
     // No Linux-only index lookup that would fail the whole bootstrap...
-    expect(run.mock.calls.find(([, args]) => args[0] === 'pip' && args[1] === 'install')).toBe(
-      undefined,
+    const rocmLookups = run.mock.calls.filter(([, args]) =>
+      args.some((arg) => arg === ROCM_TORCH_INDEX || ROCM_TORCH_PINS.some((pin) => arg === pin)),
     );
+    expect(rocmLookups).toEqual([]);
     // ...and the default runtime stays reusable instead of being rebuilt forever.
     expect(await runtimeReady(bundle, project)).toBe(true);
   });
