@@ -2099,6 +2099,7 @@
     "starting": "Đang khởi động bộ máy cục bộ…",
     "attaching": "Đang kết nối với bộ máy đang chạy…",
     "crashed": "Bộ máy cục bộ đã dừng đột ngột.",
+    "unresponsive": "Động cơ cục bộ đang bận và tạm thời không phản hồi — nó sẽ tự phục hồi.",
     "failed": "Không thể khởi động bộ máy cục bộ.",
     "idle": "Đang chờ bộ máy cục bộ…",
     "log_label": "Nhật ký bộ máy",
@@ -2106,7 +2107,10 @@
     "elapsed": "Đã qua {{seconds}} giây",
     "first_run_hint": "Lần chạy đầu có thể mất vài phút để chuẩn bị môi trường Python.",
     "port_in_use_short": "Cổng {{port}} đang được sử dụng",
-    "proxy_bypass_help": "Thoát hoàn toàn VoiceStudio, đặt HTTP_PROXY/HTTPS_PROXY thành URL proxy và NO_PROXY thành các máy chủ được loại trừ trong terminal, rồi mở VoiceStudio từ terminal đó. Thử lại trong ứng dụng đang mở không tải các biến môi trường mới."
+    "proxy_bypass_help": "Thoát hoàn toàn VoiceStudio, đặt HTTP_PROXY/HTTPS_PROXY thành URL proxy và NO_PROXY thành các máy chủ được loại trừ trong terminal, rồi mở VoiceStudio từ terminal đó. Thử lại trong ứng dụng đang mở không tải các biến môi trường mới.",
+    "hint_spawn_blocked": "Hệ điều hành hoặc phần mềm bảo mật của bạn đã từ chối khởi chạy engine cục bộ. Hãy thêm thư mục runtime của VoiceStudio vào danh sách loại trừ của phần mềm diệt virus (Windows: Bảo mật Windows → Bảo vệ khỏi virus và mối đe dọa → Quản lý cài đặt → Loại trừ), đảm bảo thư mục này không nằm trong thư mục đồng bộ đám mây như OneDrive, rồi thử lại.",
+    "hint_slow_start": "Engine vẫn đang khởi động thì hết thời gian chờ. Máy chậm, nhất là máy không có GPU rời, và lần khởi chạy đầu tiên sau khi cài đặt (phần mềm diệt virus quét mọi tệp mới) có thể mất vài phút. Hãy đóng các ứng dụng tốn nhiều bộ nhớ rồi thử lại; những lần khởi động sau nhanh hơn nhiều.",
+    "hint_synced_folder": "Vị trí này nằm trong thư mục đồng bộ đám mây (OneDrive, Dropbox, iCloud Drive, Google Drive). Các tệp giữ chỗ chỉ có trên mạng và việc khóa tệp làm hỏng môi trường Python. Hãy chuyển VoiceStudio sang một thư mục cục bộ thông thường (ví dụ C:\\VoiceStudio trên Windows hoặc ~/VoiceStudio trên macOS và Linux) rồi thiết lập lại."
   },
   "bootstrap": {
     "checking": "Đang kiểm tra môi trường…",

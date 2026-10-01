@@ -1847,8 +1847,59 @@ _mimetypes.add_type("audio/flac", ".flac")
 # not-ready, exactly like the connection-refused it replaces), the full body
 # once ready. No torch import pre-ready — it would block 10-20s on the very
 # import whose progress this endpoint exists to report.
+_health_device: str | None = None
+_health_device_lock = threading.Lock()
+_health_device_thread: threading.Thread | None = None
+
+
+def _probe_health_device() -> str:
+    """Name the compute device. Blocking: imports torch and may initialise the
+    CUDA driver, which can take seconds and stall behind a busy GPU."""
+    import torch
+
+    if torch.cuda.is_available():
+        return f"cuda ({torch.cuda.get_device_name(0)})"
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+def _resolve_health_device() -> None:
+    global _health_device
+    try:
+        _health_device = _probe_health_device()
+    except Exception:  # noqa: BLE001 - a liveness label must never fail a probe
+        _health_device = "unknown"
+
+
+def _cached_health_device() -> str:
+    """The device label without ever blocking the caller.
+
+    The first call starts one background resolver and answers "unknown"; every
+    later call returns the cached label. /health is the shell's liveness probe,
+    polled every 2 s for the life of the app with a 1.5 s deadline, so it must
+    cost O(1): re-asking torch/the CUDA driver on each probe, from a worker
+    thread competing with a generation for the GIL and the driver, is how a
+    healthy, busy backend got reported as "not responding" (#2490, #2491).
+    """
+    global _health_device_thread
+    if _health_device is not None:
+        return _health_device
+    with _health_device_lock:
+        if _health_device is None and _health_device_thread is None:
+            _health_device_thread = threading.Thread(
+                target=_resolve_health_device, name="health-device", daemon=True
+            )
+            _health_device_thread.start()
+    return _health_device or "unknown"
+
+
+# `async def`, deliberately: a sync route runs in the shared 40-thread worker
+# pool, where it queues behind every blocked sync route (model/status polls
+# waiting on a load lock, long synchronous handlers). The liveness probe must
+# depend on the event loop alone, because that is what it is reporting on.
 @app.get("/health")
-def health():
+async def health():
     if not _startup_progress.is_ready():
         _step, _label = _startup_progress.current_step()
         return JSONResponse(
@@ -1861,15 +1912,7 @@ def health():
             },
             headers={"Retry-After": "2"},
         )
-    import torch
-
-    device = "cpu"
-    if torch.cuda.is_available():
-        device = f"cuda ({torch.cuda.get_device_name(0)})"
-    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-        device = "mps"
-
-    return {"status": "ok", "device": device, "version": APP_VERSION}
+    return {"status": "ok", "device": _cached_health_device(), "version": APP_VERSION}
 
 
 # ── Startup progress ────────────────────────────────────────────────────

@@ -2099,6 +2099,7 @@
     "starting": "Lokale engine starten…",
     "attaching": "Verbinding maken met de actieve engine…",
     "crashed": "De lokale engine is onverwacht gestopt.",
+    "unresponsive": "De lokale engine is bezet en reageert nu niet — hij komt vanzelf weer terug.",
     "failed": "De lokale engine kon niet worden gestart.",
     "idle": "Wachten op de lokale engine…",
     "log_label": "Engine-logboek",
@@ -2106,7 +2107,10 @@
     "elapsed": "{{seconds}} s verstreken",
     "first_run_hint": "De eerste start kan enkele minuten duren terwijl de Python-omgeving wordt voorbereid.",
     "port_in_use_short": "Poort {{port}} is bezet",
-    "proxy_bypass_help": "Sluit VoiceStudio volledig af, stel in een terminal HTTP_PROXY/HTTPS_PROXY in op je proxy-URL en NO_PROXY op de uitgesloten hosts en start VoiceStudio vanuit die terminal. Opnieuw proberen in de geopende app laadt geen nieuwe omgevingsvariabelen."
+    "proxy_bypass_help": "Sluit VoiceStudio volledig af, stel in een terminal HTTP_PROXY/HTTPS_PROXY in op je proxy-URL en NO_PROXY op de uitgesloten hosts en start VoiceStudio vanuit die terminal. Opnieuw proberen in de geopende app laadt geen nieuwe omgevingsvariabelen.",
+    "hint_spawn_blocked": "Je besturingssysteem of beveiligingssoftware weigerde de lokale engine te starten. Voeg de runtimemap van VoiceStudio toe aan de uitzonderingen van je antivirus (Windows: Windows-beveiliging → Virus- en bedreigingsbeveiliging → Instellingen beheren → Uitsluitingen), controleer dat de map niet in een met de cloud gesynchroniseerde map zoals OneDrive staat en probeer het opnieuw.",
+    "hint_slow_start": "De engine was nog aan het opstarten toen de wachttijd verstreek. Trage computers, vooral zonder aparte GPU, en de eerste start na een installatie (de antivirus scant elk nieuw bestand) kunnen enkele minuten duren. Sluit geheugenintensieve apps en probeer het opnieuw; latere starts gaan veel sneller.",
+    "hint_synced_folder": "Deze locatie staat in een met de cloud gesynchroniseerde map (OneDrive, Dropbox, iCloud Drive, Google Drive). Alleen-online-plaatsaanduidingen en bestandsvergrendeling breken de Python-omgeving. Verplaats VoiceStudio naar een gewone lokale map (bijvoorbeeld C:\\VoiceStudio op Windows of ~/VoiceStudio op macOS en Linux) en stel het opnieuw in."
   },
   "bootstrap": {
     "checking": "Omgeving controleren…",

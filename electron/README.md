@@ -35,7 +35,10 @@ child's stdin is the liveness signal — closing it makes the backend exit.
 Environment knobs: `OMNIVOICE_PORT` (backend port), `VOICESTUDIO_UI_PORT`
 (renderer dev server, default 3902), `VOICESTUDIO_SKIP_BACKEND=1` (never
 spawn, only attach), `OMNIVOICE_BACKEND_CMD` (argv override, JSON array or
-whitespace-separated), `OMNIVOICE_STARTUP_BUDGET_S` (default 300).
+whitespace-separated), `OMNIVOICE_STARTUP_BUDGET_S` (default 300, or 600 on a
+host with four or fewer cores or 8 GB of RAM or less; measured from the spawn so
+a slow launch never spends the backend's window, and extended while the backend
+is still printing, up to three times the budget).
 
 ## Same-origin API
 

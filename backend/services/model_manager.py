@@ -1402,12 +1402,32 @@ def shutdown_watermark_pool(*, timeout: float = 20.0) -> None:
 model = None  # type: ignore
 _model_lock = asyncio.Lock()
 
-#: Process-wide exclusion for a cold load that runs INLINE on a GPU-pool
-#: worker (#1417). `_model_lock` cannot serve there — it is an asyncio.Lock
-#: bound to the server loop, and that path arrives on a bootstrap loop from
-#: another thread. A threading.Lock is loop-agnostic, so the two together
-#: guarantee only one cold load is ever in flight whichever route reached it.
-_model_load_thread_lock = threading.Lock()
+#: Process-wide exclusion for a cold TTS load, whichever route reached it
+#: (#1417, #2394).
+#:
+#: `_model_lock` cannot be that lock on its own: it is an asyncio.Lock bound
+#: to the server loop, and the inline pool-worker path arrives on a bootstrap
+#: loop from another thread, where awaiting it raises "is bound to a different
+#: event loop" (#1417). So the exclusion is a threading.Lock, which is
+#: loop-agnostic — but it must be taken on BOTH routes, not one.
+#:
+#: It used to be taken only by the inline pool-worker path, under the belief
+#: that `_model_lock` covered the other one. The two are disjoint: a
+#: `preload_model()` (or server-loop `get_model()`) holds `_model_lock` and
+#: runs the load IN THE POOL, while a generate reaching
+#: `OmniVoiceBackend._ensure_loaded()` on a second pool worker holds only this
+#: lock. On a CUDA host the pool has up to four workers (#567), so the second
+#: route saw `model is None` — the preload had not finished — took this free
+#: lock, and ran `VoiceStudio.from_pretrained` CONCURRENTLY with the preload's.
+#: Two overlapping native loads in one process is precisely what Windows
+#: answers with 0xC0000005 ("exit code -1073741819"), which is what #2394
+#: reported 16 s after startup while a background preload was in flight.
+#: #1669 is the same class on the ASR side.
+#:
+#: An RLock, not a Lock: exclusion is the point, but a future re-entrant path
+#: must degrade to today's behaviour rather than wedge every later load on a
+#: lock this thread already holds.
+_model_load_thread_lock = threading.RLock()
 _last_used = time.time()
 # Idle timeout is resolved per-tick in _resolve_idle_timeout() (MM2-05) from
 # prefs/env/core.config — no module-level duplicate of IDLE_TIMEOUT_SECONDS.
@@ -2330,6 +2350,64 @@ class ModelLoadInterruptedByShutdown(RuntimeError):
     """
 
 
+class ModelLoadAbandoned(RuntimeError):
+    """A cold load is still running after its deadline and was given up on
+    (#2394).
+
+    ``asyncio.wait_for`` cancels the *await*, not the thread: the worker stays
+    inside the native ``from_pretrained``, which cannot be interrupted, and it
+    still holds ``_model_load_thread_lock``. ``_reset_gpu_pool()`` drops the
+    pool but not that thread, so the lock is pinned until the load dies on its
+    own.
+
+    A caller arriving after that cannot succeed, whatever it does — it would
+    queue behind a load nobody is waiting on any more, for up to the full load
+    budget, and then be told to "retry", which is the advice that produced the
+    original dead end. This says what is actually true: the load is stuck, and
+    only restarting the backend clears it.
+    """
+
+
+class _LoadTicket:
+    """One caller's claim on a cold load, so a timeout blames the RIGHT load.
+
+    #2394: ``_load_model_with_timeout()`` must mark a load abandoned only when
+    *its own* worker is the one stuck in the native loader. A process-global
+    "a load is in progress" flag cannot tell that apart from "my worker is
+    still queued behind somebody else's load" — it would brand a healthy,
+    progressing load as abandoned and make every later cold load fail fast.
+
+    ``loading`` is set by the worker once it holds the load lock and is about to
+    enter the native loader. ``gave_up`` is set by the caller when its deadline
+    passes. Each side sets its own event BEFORE reading the other's, so either
+    the caller sees ``loading`` (and abandons the running load) or the worker
+    sees ``gave_up`` (and declines to start one nobody awaits) — never neither.
+    """
+
+    __slots__ = ("loading", "gave_up", "done")
+
+    def __init__(self) -> None:
+        self.loading = threading.Event()
+        self.gave_up = threading.Event()
+        #: Set by the worker as it leaves the critical section, so a caller
+        #: that times out a hair after the load finished does not brand a
+        #: finished load as stuck.
+        self.done = threading.Event()
+
+
+#: Set when a load is GIVEN UP ON at its deadline while still running (#2394),
+#: cleared by that load's own ``finally`` when it exits — success or failure —
+#: because from then on the lock is free and nothing is stuck. Read before
+#: waiting on the load lock: a caller that arrives after an abandonment must
+#: fail immediately, because the lock it would queue behind is held by a
+#: loader nobody is waiting on any more. Without this, a retry re-waits the
+#: whole budget — the inline ``get_model()`` route included, which passes no
+#: deadline of its own — and only then reports a failure the retry could not
+#: have avoided.
+_load_abandoned = threading.Event()
+
+
+
 # Flipped by main.py's lifespan: set the moment graceful shutdown starts,
 # cleared on startup (in-process relaunches: TestClient boots, the
 # --health-check thread). While set, executor-rejection errors during a load
@@ -2825,6 +2903,132 @@ def _reset_gpu_pool() -> None:
         _gpu_pool_singleton.reset()
 
 
+_LOAD_WAIT_SLICE_S = 0.25
+
+
+def _raise_if_load_abandoned() -> None:
+    """Refuse promptly while a given-up-on loader still owns the load lock."""
+    if _load_abandoned.is_set():
+        # A loader was given up on and is still inside the native call. It will
+        # clear the flag itself when it exits, so this is not permanent.
+        raise ModelLoadAbandoned(
+            "A previous model load is stuck and cannot be interrupted, so it is "
+            "still holding the model in memory. Restart the backend (Settings → "
+            "Logs → Restart backend), then try again."
+        )
+
+
+def _acquire_load_lock(deadline: float) -> bool:
+    """Take the load lock, re-checking abandonment while queued.
+
+    A caller that starts waiting while a healthy load runs has already passed
+    the up-front abandonment check. If that load is then given up on, waiting
+    out this caller's own deadline would strand it for the full load budget
+    before it hears "restart the backend". Waiting in short slices lets a
+    queued caller notice the verdict within a fraction of a second.
+    """
+    end = time.monotonic() + max(0.0, deadline)
+    while True:
+        remaining = end - time.monotonic()
+        if _model_load_thread_lock.acquire(timeout=max(0.0, min(_LOAD_WAIT_SLICE_S, remaining))):
+            return True
+        _raise_if_load_abandoned()
+        if remaining <= _LOAD_WAIT_SLICE_S:
+            return False
+
+
+def _load_model_exclusive(
+    timeout: float | None = None, ticket: _LoadTicket | None = None
+):
+    """The single cold-load leaf: reclaim, load, publish — under ONE lock.
+
+    #2394. Both cold routes reach the native `from_pretrained` through here:
+
+      - ``_load_model_with_timeout()`` runs it in the GPU pool, holding
+        ``_model_lock`` (the startup preload and server-loop ``get_model()``);
+      - ``get_model()``'s pool-worker branch runs it INLINE on that worker,
+        which cannot await ``_model_lock`` at all (#1417).
+
+    Those two exclusions were disjoint, so a generate arriving on a second
+    pool worker while a background preload was still running entered the
+    native load at the same time and the process died with a Windows access
+    violation (0xC0000005 / "exit code -1073741819"). Taking the same
+    loop-agnostic lock on both routes makes "one cold load in flight" true
+    regardless of which route got there first; the second one waits and then
+    returns the model the first one published.
+
+    The double-check inside the lock is what makes that safe: a caller that
+    queued behind another load must NOT load again, it must adopt the
+    published model. Publishing before releasing the lock is deliberate — a
+    load that finished but had not yet been assigned would let the next
+    waiter see ``None`` and start a second one.
+
+    Reclaim lives here, not in the callers: it has to happen once per real
+    load, immediately before it, on every route — including the inline one,
+    which is the route a memory-tight machine reaches first.
+
+    The lock is acquired with a deadline rather than indefinitely (#2394). A
+    plain ``with`` here converts one wedged load into a backend that can never
+    load again: the abandoned worker keeps holding the lock, and every later
+    caller would block on it for the full load budget and then be told to
+    "retry" — advice that can never work, because the load it is waiting on is
+    the one that already failed. Failing with :class:`ModelLoadAbandoned`
+    instead turns that silent dead end into an honest "restart the backend".
+
+    The ``_load_abandoned`` check is what makes that prompt rather than merely
+    bounded. Waiting out a deadline on a lock held by an abandoned loader buys
+    nothing — the waiter is not going to be woken by that load finishing in any
+    useful time, and a caller with no deadline of its own (the inline route)
+    would wait forever. So once a load is known-abandoned we refuse straight
+    away, while still never entering the critical section: exclusion against
+    the original loader is preserved, because we only ever decline, never
+    load alongside it.
+    """
+    global model
+    _raise_if_load_abandoned()
+    deadline = _model_load_timeout() if timeout is None else timeout
+    if not _acquire_load_lock(deadline):
+        # The holder is still going, but it was never abandoned (its own
+        # deadline has not passed), so waiting was correct and simply ran out
+        # here. Name that honestly rather than implying a restart.
+        raise ModelLoadAbandoned(
+            "Another model load is still running and has now passed the time "
+            "this request was willing to wait. Restart the backend (Settings → "
+            "Logs → Restart backend) if it does not finish on its own, then try "
+            "again."
+        )
+    # Reaching the lock means whoever held it has finished, so any "stuck"
+    # verdict is stale and the backend needs no restart.
+    _load_abandoned.clear()
+    try:
+        if ticket is not None:
+            ticket.loading.set()
+            if ticket.gave_up.is_set():
+                # Our caller timed out while we were queued; it already told the
+                # user and moved on. Starting a native load nobody awaits would
+                # only pin this lock for the whole load.
+                raise ModelLoadAbandoned(
+                    "This model load request had already timed out; not "
+                    "starting a load nobody is waiting for."
+                )
+        if model is not None:
+            # A load that finished while we waited.
+            return model
+        _make_room_before_tts_load()
+        model = _load_model_sync()
+        return model
+    finally:
+        # Whether this load succeeded, failed or was an abandoned one finishing
+        # late, it is no longer inside the native loader: the lock is about to
+        # be free, so nothing is stuck any more. Without this a failed
+        # abandoned load would leave every later cold load refused until the
+        # backend restarts, despite a free lock.
+        if ticket is not None:
+            ticket.done.set()
+        _load_abandoned.clear()
+        _model_load_thread_lock.release()
+
+
 async def _load_model_with_timeout():
     """Run the blocking model load on the GPU pool, bounded by a deadline.
 
@@ -2832,21 +3036,66 @@ async def _load_model_with_timeout():
     surface an actionable error instead of hanging indefinitely.
 
     This is the shared load boundary for BOTH get_model() and the startup
-    preload_model() — the memory reclaim must live here, or a memory-tight
-    machine gets protected on demand loads but OS-killed during the startup
-    preload (review finding on the original placement in get_model()).
+    preload_model() — the memory reclaim must live at this boundary, or a
+    memory-tight machine gets protected on demand loads but OS-killed during
+    the startup preload (review finding on the original placement in
+    get_model()). It now lives in ``_load_model_exclusive``, which this
+    dispatches, so the inline pool-worker route inherits it too instead of
+    keeping a private second copy.
+
+    #2394: the deadline is passed DOWN to the leaf rather than only wrapping the
+    await here. ``wait_for`` gives up on the await; the worker keeps running and
+    keeps holding the load lock. So a load abandoned at this deadline would
+    otherwise pin the lock for the next caller, who would burn a second full
+    budget waiting for it and then be told to retry — advice that cannot work,
+    because the load being waited on is the one that already failed. Handing
+    the leaf the same deadline bounds the wait and turns that into an honest
+    ModelLoadAbandoned ("restart the backend").
     """
-    _make_room_before_tts_load()
     loop = asyncio.get_running_loop()
     timeout = _model_load_timeout()
+    ticket = _LoadTicket()
     try:
         return await asyncio.wait_for(
-            loop.run_in_executor(_get_gpu_pool(), _load_model_sync),
+            loop.run_in_executor(
+                _get_gpu_pool(), _load_model_exclusive, timeout, ticket
+            ),
             timeout=timeout,
         )
     except asyncio.TimeoutError as exc:
         _set_loading("error", "Model load timed out", error="timeout")
         _reset_gpu_pool()
+        # The pool is gone but the worker is not: it is still inside the native
+        # loader and still holding the load lock. Saying "then retry" here is
+        # what strands the user, so name the real state and the real remedy.
+        #
+        # `_load_abandoned` is what makes the NEXT attempt fail immediately
+        # rather than re-waiting the full budget behind this loader — the
+        # inline route passes no deadline of its own, so without the flag it
+        # would sit on the lock indefinitely (#2394).
+        ticket.gave_up.set()
+        stuck = False
+        if ticket.loading.is_set():
+            _load_abandoned.set()
+            # Re-check after publishing: if the worker finished in between, its
+            # own clear may already have run and ours would be stale.
+            if ticket.done.is_set():
+                _load_abandoned.clear()
+            else:
+                stuck = True
+        if stuck:
+            logger.error(
+                "Model load exceeded %ss and is still running in a worker that "
+                "cannot be interrupted; the load lock stays held until it "
+                "finishes. Further cold loads will fail fast until it does.",
+                timeout,
+            )
+            raise ModelLoadAbandoned(
+                f"Model loading timed out after {int(timeout)}s and is still "
+                "stuck — it cannot be interrupted, so retrying would only "
+                "stall behind it. Restart the backend (Settings → Logs → "
+                "Restart backend), then try again."
+            ) from exc
         logger.error("Model load exceeded %ss; resetting GPU pool.", timeout)
         raise RuntimeError(
             f"Model loading timed out after {int(timeout)}s — usually a network "
@@ -2894,18 +3143,15 @@ async def get_model():
         # pins that pool to a single worker, so it would wait on itself. That
         # is the same deadlock wearing a different hat (CodeRabbit, #1418).
         #
-        # Exclusion comes from `_model_load_thread_lock` rather than the GPU
+        # Exclusion comes from `_load_model_exclusive` rather than the GPU
         # slot: holding a slot is not exclusion when the pool has more than
-        # one worker, which CUDA hosts do.
+        # one worker, which CUDA hosts do. #2394 — that leaf is now shared
+        # with the preload/`_model_lock` route, so a generate cannot enter the
+        # native load while a background preload still owns it.
         if model is None:
-            with _model_load_thread_lock:
-                if model is None:  # another thread loaded it while we waited
-                    from core.run_sentinel import touch_activity
-                    touch_activity("model_load", "omnivoice-tts")
-                    # Same reclaim `_load_model_with_timeout` performs; a
-                    # memory-tight machine needs it on this path too.
-                    _make_room_before_tts_load()
-                    model = _load_model_sync()
+            from core.run_sentinel import touch_activity
+            touch_activity("model_load", "omnivoice-tts")
+            model = _load_model_exclusive()
         return model
 
     async with _model_lock:

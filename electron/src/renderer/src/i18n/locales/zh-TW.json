@@ -2099,6 +2099,7 @@
     "starting": "正在啟動本機引擎…",
     "attaching": "正在連線至執行中的引擎…",
     "crashed": "本機引擎意外停止。",
+    "unresponsive": "本機引擎忙碌中，暫時沒有回應，工作完成後會自動恢復。",
     "failed": "無法啟動本機引擎。",
     "idle": "正在等待本機引擎…",
     "log_label": "引擎日誌",
@@ -2106,7 +2107,10 @@
     "elapsed": "已經過 {{seconds}} 秒",
     "first_run_hint": "首次執行需要準備 Python 環境，可能需要幾分鐘。",
     "port_in_use_short": "連接埠 {{port}} 已被占用",
-    "proxy_bypass_help": "完全結束 VoiceStudio，在終端機中將 HTTP_PROXY/HTTPS_PROXY 設為代理 URL，將 NO_PROXY 設為排除的主機，然後從該終端機啟動 VoiceStudio。在目前的應用程式中重試不會載入新的環境變數。"
+    "proxy_bypass_help": "完全結束 VoiceStudio，在終端機中將 HTTP_PROXY/HTTPS_PROXY 設為代理 URL，將 NO_PROXY 設為排除的主機，然後從該終端機啟動 VoiceStudio。在目前的應用程式中重試不會載入新的環境變數。",
+    "hint_spawn_blocked": "作業系統或安全性軟體拒絕啟動本機引擎。請將 VoiceStudio 的執行階段資料夾加入防毒軟體的排除項目（Windows：Windows 安全性 → 病毒與威脅防護 → 管理設定 → 排除項目），並確認它不在 OneDrive 等雲端同步資料夾內，然後重試。",
+    "hint_slow_start": "等待逾時時，引擎仍在啟動。電腦較慢（尤其是沒有獨立顯示卡），以及安裝後的第一次啟動（防毒軟體會掃描每個新檔案）可能需要幾分鐘。請關閉佔用大量記憶體的應用程式後重試；之後的啟動會快很多。",
+    "hint_synced_folder": "此位置位於雲端同步資料夾（OneDrive、Dropbox、iCloud Drive、Google Drive）內。僅限線上的預留位置檔案與檔案鎖定會破壞 Python 環境。請將 VoiceStudio 移到一般本機資料夾（例如 Windows 上的 C:\\VoiceStudio，或 macOS 與 Linux 上的 ~/VoiceStudio），然後重新設定。"
   },
   "bootstrap": {
     "checking": "正在檢查環境…",

@@ -100,14 +100,17 @@ receive a stable `docs_topic` and a safe fallback message, never private excepti
 | Topic | Recovery |
 | --- | --- |
 | `GPU_ARCH_UNSUPPORTED` | The installed PyTorch build cannot run kernels on this GPU. Select CPU in Settings → Performance & Device, or use a PyTorch build compatible with the GPU. |
+| `HOST_MEMORY_EXHAUSTED` | The machine ran out of system memory, so the engine could not finish. Close other memory-heavy apps, unload unused models with **Flush models**, render a shorter passage, or select a lighter TTS engine. On Windows, enlarging the page file also helps. A CPU-only machine has no GPU memory to free — this is RAM, not VRAM. |
 | `WINDOWS_APP_CONTROL_BLOCKED` | Windows application control blocked a required file. Ask the administrator to allow the trusted VoiceStudio runtime, then restart the app. |
 | `AUDIO_IO_FAILED` | Check the audio format, free disk space, and file permissions; review the folder in Settings → Storage. |
 | `HF_MIRROR_UNREACHABLE` | The configured Hugging Face mirror could not be reached while fetching the engine's weights. Restore the official endpoint in Settings → Models → Hugging Face mirror, then retry. |
 
 Unsupported GPU builds and application-control blocks are terminal for the current
 stream: the client does not automatically render the whole passage again. After
-correcting the cause, start a new generation. Unknown failures retain generic
-guidance; a report with only `RuntimeError` does not establish which cause applies.
+correcting the cause, start a new generation. Host RAM exhaustion is *not*
+terminal — freeing memory genuinely repairs it, so a retry can succeed.
+Unknown failures retain generic guidance; a report with only `RuntimeError` does
+not establish which cause applies.
 
 An engine downloads its weights the first time it is used, so the first
 generation with a newly selected engine can fail on the download rather than on
@@ -791,6 +794,16 @@ systemd unit, …) is already providing the same key, the panel says so instead,
 since that external value keeps winning on every future restart too, not just
 this one.
 
+**While the backend is busy, the app now stays usable.** The desktop shell polls
+the backend's `/health` endpoint while you work, and a long GPU job can hold the
+Python event loop long enough to miss those probes. The shell knows the process
+is still alive (it checks for an exit before reacting), so it now shows a
+**recoverable busy state** instead of an error: the status-bar dot pulses amber,
+your workspace stays open, and requests wait for the current job to finish
+rather than failing with "Can't reach the local backend". Nothing to do — it
+clears itself as soon as the job releases the event loop. If the dot turns
+**red** and names an exit code, that is a real crash; use the sections above.
+
 **Two things changed here** ([#1190](https://github.com/debpalash/VoiceStudio/issues/1190)):
 
 - **Waiting in line is no longer counted as compute.** The generate budget used
@@ -1328,6 +1341,42 @@ are also identified as native faults. These failures happen below Python, so a
 Python traceback may not exist; include the captured crash details and system/GPU
 information when reporting them. The name identifies the failure category, not
 its cause: it does not by itself prove a driver, model, or memory problem.
+
+### Backend would not start (Windows: `spawn UNKNOWN`, "did not answer", "environment incomplete")
+
+Three different startup failures share the same screen. The app now names the
+program it tried to launch, quotes what the backend last printed (or says it
+printed nothing, or that nothing was spawned), and adds a localized hint under
+the message:
+
+- **`Could not start <program>: spawn UNKNOWN`** — Windows (or your security
+  software) refused to run the Python runtime; `UNKNOWN` is how the OS reports a
+  blocked executable. Add VoiceStudio's runtime folder to your antivirus
+  exclusions (Windows Security → Virus & threat protection → Manage settings →
+  Exclusions) and make sure it is not inside OneDrive, then retry.
+- **`Backend did not answer on port 3900 within N s`** — the wait for the
+  backend ran out. The budget (`OMNIVOICE_STARTUP_BUDGET_S`) now starts when the
+  backend process is spawned, not when the launch began, defaults to 300 s (600 s
+  on a machine with four or fewer cores or 8 GB of RAM or less, where a PC
+  without a dedicated GPU is usually found), and is extended while the backend is
+  still printing, up to three times the budget. The runtime health probe that
+  runs before the launch also gets 180 s instead of 30 s, and a probe that merely
+  ran out of time is treated as inconclusive instead of sending an intact
+  runtime back to the setup screen. The first start after an install is the
+  slowest because antivirus scans every new file; later starts are much faster.
+- **`The Python environment in <folder> is missing or incomplete`** (running from
+  a source checkout) — run `bun run setup:api` in the repository. If the folder
+  is inside OneDrive, Dropbox, iCloud Drive or Google Drive, move the checkout to
+  a plain local folder first: online-only placeholders and file locking break
+  the Python environment.
+
+A native crash (`3221225477`, `-1073741819`) right after pressing Generate
+shortly after launch was caused by the startup preload and the first generation
+loading the TTS model at the same time. Cold loads are now serialized across both
+paths; if a load ever wedges past its deadline, retries fail immediately with a
+"restart the backend" message instead of queueing behind it. If a native crash
+persists, attach the full faulthandler dump (the `Windows fatal exception` block
+including every `Thread` section) from Settings → Logs → Backend.
 
 ### ASR initialization errors
 

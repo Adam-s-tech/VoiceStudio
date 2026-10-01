@@ -255,11 +255,18 @@ def public_exception_response(error: BaseException, *, fallback: str) -> dict[st
     HF_MIRROR_UNREACHABLE is allowed alongside it: its hint is dynamic (it
     names the configured mirror) and its trigger requires that a mirror is
     configured at all, so it cannot fire on an unrelated failure (#874).
+
+    The EXCEPTION is classified, not ``str(error)`` (#2462). The two memory
+    classes are the ones a message cannot carry — a bare ``MemoryError()`` has
+    an empty message, and the generate router re-raises OOMs as its own "ran
+    out of memory" prose — so stringifying first lost exactly the evidence that
+    identifies them. ``classify`` still accepts a plain string, so this is the
+    only behavior that changes.
     """
     from core.failure import _CONTEXT_FREE_HINT_CLASSES, classify, public_hint_for_topic
 
     try:
-        topic = classify(str(error))
+        topic = classify(error)
         if topic and topic not in _CONTEXT_FREE_HINT_CLASSES and topic != "HF_MIRROR_UNREACHABLE":
             topic = ""
         hint = public_hint_for_topic(topic) if topic else ""
