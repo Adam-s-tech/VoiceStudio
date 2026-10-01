@@ -21,7 +21,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from core import prefs
-from core.failure import is_hf_connectivity_error
+from core.failure import is_disk_full_error, is_hf_connectivity_error
 from services.hf_revisions import revision_for
 from utils import hf_progress
 from utils import download_aggregator
@@ -33,6 +33,7 @@ from .models import (  # noqa: F401
     KNOWN_MODELS,
     invalidate_cache,
     snapshot_is_complete,
+    disk_full_message,
     disk_space_error,
     _MIN_WEIGHT_BYTES,
     _WEIGHT_FLOORS,
@@ -476,6 +477,10 @@ def _is_retryable_download_error(exc: BaseException) -> bool:
 
     if isinstance(exc, _InstallCancelled):
         return False
+    if is_disk_full_error(exc):
+        # A full volume does not heal between backoff sleeps; five retries only
+        # delay the actionable message (and re-preallocate the whole file).
+        return False
     if isinstance(exc, HfHubHTTPError):
         # An auth / not-found / gone answer from the Hub is a settled verdict:
         # the token is wrong, the repo is gated, or it isn't there. Retrying
@@ -770,6 +775,8 @@ async def install_model(req: InstallModelRequest):
                         except _InstallCancelled:
                             raise
                         except Exception as _seg_err:
+                            if is_disk_full_error(_seg_err):
+                                raise  # the plain path would hit the same wall
                             _segmented_off, _seg_reraise = _segmented_retry_plan(
                                 _seg_err, _attempt, _max_attempts
                             )
@@ -915,6 +922,9 @@ async def install_model(req: InstallModelRequest):
             from core.failure import append_hint, classify
             _error = append_hint(str(e))
             _docs_topic = classify(str(e))
+            if is_disk_full_error(e):
+                _error = disk_full_message()
+                _docs_topic = "DISK_SPACE_LOW"
             # Gated catalogue entries own their recovery topic. Hugging Face
             # uses several exception wordings for the same access verdict, so
             # the UI must not depend on parsing an English 401/403 message.
@@ -931,6 +941,7 @@ async def install_model(req: InstallModelRequest):
                 "HF_AUTH_FAILED",
                 "PYANNOTE_LICENSE_REQUIRED",
                 "POCKETTTS_GATED_WEIGHTS",
+                "DISK_SPACE_LOW",  # freeing space, not waiting, is the fix
             }:
                 _install_cooldowns.pop(req.repo_id, None)
             _install_failures[req.repo_id] = {

@@ -276,6 +276,19 @@ def disk_space_error(to_download_bytes: "int | None", *, cache_dir: "str | None"
     )
 
 
+def disk_full_message(*, cache_dir: "str | None" = None) -> str:
+    """Actionable text for a download that ran out of space *mid-flight*
+    (the preflight guard can't see other writers or an unknown plan size)."""
+    cache = cache_dir or hf_cache_dir()
+    free = disk_free_bytes(cache)
+    have = f"only {free / _GIB:.1f} GB is free" if free > 0 else "the disk is full"
+    return (
+        f"The disk filled up while downloading: {have} at {cache}. Free up space "
+        "(or move the model cache to a bigger volume) and retry; the download "
+        "resumes from the part that already finished."
+    )
+
+
 def _repo_dir_name(repo_id: str) -> str:
     """HF cache dir name for a repo: 'k2-fsa/OmniVoice' → 'models--k2-fsa--OmniVoice'."""
     return "models--" + repo_id.replace("/", "--")

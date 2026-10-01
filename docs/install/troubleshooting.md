@@ -687,6 +687,10 @@ A segmented download refuses a response whose status or Content-Range does not m
 
 Segmented download resume records are reused only with an existing partial file of the expected size and valid byte-range entries. If a partial file is missing, truncated, or oversized, or its sidecar is malformed, the download fetches those bytes again instead of treating preallocated zeros as completed data. Oversized partial files are resized before restarting so old trailing bytes cannot prevent verification of the new download. Stale checkpoints are removed before resizing or recreating partial files, so a failed fetch cannot make the next retry trust stale or zero-filled bytes. If that stale checkpoint cannot be removed, the restart stops before changing the partial file or destination.
 
+**Disk filled up mid-install.** A model or engine install that runs out of space stops immediately (it is not retried with backoff) and reports how much space is free and where; free space or move the model cache to a larger volume, then retry. The download resumes from the part that already finished. During first-run setup, the one-time `uv` installer download is retried up to three times on connection resets, timeouts, and HTTP 5xx/429 before it reports failure.
+
+**Exports named after a video title.** Download and export names built from a video title replace characters Windows rejects (`< > : " / \ | ? *`, control characters, trailing dots/spaces, device names such as `CON`) with `_` on every OS, so `How to X: a guide?` exports as `How to X_ a guide_` instead of failing with `[Errno 22] Invalid argument`.
+
 **Manual fallback** (if downloads keep failing), pull the weights yourself into
 the same cache, then relaunch:
 

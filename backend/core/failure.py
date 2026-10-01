@@ -274,6 +274,38 @@ _HF_CONTEXT_MARKERS = (
 )
 
 
+_DISK_FULL_SIGNATURES = (
+    "errno 28", "no space left", "errno 122", "disk quota exceeded",
+    "winerror 112", "winerror 39", "not enough space on the disk",
+)
+
+
+def is_disk_full_error(reason: "BaseException | str | None") -> bool:
+    """True when an install/download died because the volume is full.
+
+    Accepts an exception (checks ``errno``/``winerror`` through the
+    ``__cause__``/``__context__`` chain, so a wrapped ``OSError`` still counts) or
+    the text of one. Disk-full is not transient: retrying with backoff only
+    delays the message, and the generic "network hiccup" hints are wrong for it.
+    Never raises."""
+    try:
+        if isinstance(reason, BaseException):
+            seen: set[int] = set()
+            exc: "BaseException | None" = reason
+            while exc is not None and id(exc) not in seen:
+                seen.add(id(exc))
+                if getattr(exc, "errno", None) in (28, 122) or getattr(exc, "winerror", None) in (39, 112):
+                    return True
+                if any(sig in str(exc).lower() for sig in _DISK_FULL_SIGNATURES):
+                    return True
+                exc = exc.__cause__ or exc.__context__
+            return False
+        low = (reason or "").lower()
+        return any(sig in low for sig in _DISK_FULL_SIGNATURES)
+    except Exception:
+        return False
+
+
 def is_hf_connectivity_error(reason: Optional[str]) -> bool:
     """True when *reason* looks like a network/connectivity failure of an HF
     download (DNS, refused/reset connections, timeouts, hub locate errors).

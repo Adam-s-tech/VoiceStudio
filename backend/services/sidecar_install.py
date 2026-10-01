@@ -939,6 +939,27 @@ def _job_step(job: dict, step_id: str) -> dict:
     return next(s for s in job["steps"] if s["id"] == step_id)
 
 
+_DISK_FULL_REMEDIATION = (
+    "The disk is full. Free up space (or move VoiceStudio's data directory to a "
+    "larger volume), then re-run the install — it resumes from where it stopped."
+)
+
+
+def _is_disk_full(exc: BaseException) -> bool:
+    from core.failure import is_disk_full_error
+
+    return is_disk_full_error(exc)
+
+
+def _log_shows_disk_full(job: dict, tail: int = 60) -> bool:
+    """uv reports a full volume only as log text with a bare non-zero exit."""
+    from core.failure import is_disk_full_error
+
+    with _log_lock:
+        lines = list(job["log"])[-tail:]
+    return is_disk_full_error("\n".join(lines))
+
+
 def _log(job: dict, line: str) -> None:
     line = line.rstrip()
     if line:
@@ -1163,6 +1184,8 @@ def _run_install(spec: SidecarSpec, job: dict) -> None:
                 raise
             except Exception as exc:  # noqa: BLE001 — surfaced into the job
                 step["state"] = "error"
+                if _is_disk_full(exc):
+                    raise _StepError(f"{type(exc).__name__}: {exc}", _DISK_FULL_REMEDIATION) from exc
                 raise _StepError(
                     f"{type(exc).__name__}: {exc}",
                     "Re-run the install — it resumes from where it stopped. If it "
@@ -1512,6 +1535,9 @@ def _step_install_deps(spec: SidecarSpec, job: dict) -> None:
         env=uv_subprocess_env(Path(DATA_DIR) / "engines"),
     )
     if rc != 0:
+        if _log_shows_disk_full(job):
+            raise _StepError(f"uv pip install failed (exit {rc}): no space left on device.",
+                             _DISK_FULL_REMEDIATION)
         hint = (
             "Usually a network hiccup — re-run the install to resume. Behind a "
             "proxy, set HTTPS_PROXY in Settings → Environment first."
@@ -1681,6 +1707,8 @@ def _step_fetch_weights(spec: SidecarSpec, job: dict) -> None:
         try:
             snapshot_download(**kwargs)  # nosec B615 — deliberate default-branch policy, see above
         except Exception as exc:
+            if _is_disk_full(exc):
+                raise _StepError(f"Model weight download failed: {exc}", _DISK_FULL_REMEDIATION) from exc
             raise _StepError(
                 f"Model weight download failed: {exc}",
                 "Re-run the install — the download resumes where it stopped. "
