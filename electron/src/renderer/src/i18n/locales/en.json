@@ -308,6 +308,7 @@
     "attaching": "Connecting to the running engine…",
     "ready": "Engine ready",
     "crashed": "The local engine stopped unexpectedly.",
+    "unresponsive": "The local engine is busy and not answering right now — it recovers on its own.",
     "port_in_use": "Port {{port}} is already in use by another program. Close it, or set OMNIVOICE_PORT to a free port, then retry.",
     "failed": "The local engine could not start.",
     "retry": "Retry",
@@ -324,7 +325,10 @@
     "setup_space": "Free at least 9 GiB on the app’s drive, then retry.",
     "setup_access": "Allow write access to the app’s data folder, then retry.",
     "setup_unsupported_platform": "This Intel Mac can't run the local AI backend — PyTorch ships no macOS Intel wheels. Connect a remote backend below instead; no local install is needed.",
-    "proxy_bypass_help": "Fully quit VoiceStudio, set HTTP_PROXY/HTTPS_PROXY to your proxy URL and NO_PROXY to excluded hosts in a terminal, then launch VoiceStudio from that terminal. Retrying in the current app cannot load new environment variables."
+    "proxy_bypass_help": "Fully quit VoiceStudio, set HTTP_PROXY/HTTPS_PROXY to your proxy URL and NO_PROXY to excluded hosts in a terminal, then launch VoiceStudio from that terminal. Retrying in the current app cannot load new environment variables.",
+    "hint_spawn_blocked": "Your operating system or security software refused to launch the local engine. Add VoiceStudio’s runtime folder to your antivirus exclusions (Windows: Windows Security → Virus & threat protection → Manage settings → Exclusions), make sure it is not inside a cloud-synced folder such as OneDrive, then retry.",
+    "hint_slow_start": "The engine was still starting when the wait ran out. Slow computers — especially ones without a dedicated GPU — and the first launch after an install (antivirus scans every new file) can need several minutes. Close memory-heavy apps and retry; later starts are much faster.",
+    "hint_synced_folder": "This location is inside a cloud-synced folder (OneDrive, Dropbox, iCloud Drive, Google Drive). Online-only placeholders and file locking break the Python environment. Move VoiceStudio to a plain local folder (for example C:\\VoiceStudio on Windows or ~/VoiceStudio on macOS and Linux) and set it up again."
   },
   "engines": {
     "selectCpuFallback": "{{engine}}: running on CPU — {{reason}}",
@@ -541,7 +545,9 @@
     "gpu_arch_unsupported": "This PyTorch build does not support your GPU. Choose CPU in Settings → Performance & Device, or install a compatible PyTorch build.",
     "windows_app_control_blocked": "Windows application control blocked a required file. Ask your administrator to allow the trusted VoiceStudio runtime, then restart the app.",
     "audio_io_failed": "Audio could not be read or saved. Check the file format, free disk space, and file permissions. Review the folder in Settings → Storage.",
-    "no_audio_track": "This file has no audio track, so there is no speech to transcribe, dub or clone. Choose a video or audio file that contains sound."
+    "no_audio_track": "This file has no audio track, so there is no speech to transcribe, dub or clone. Choose a video or audio file that contains sound.",
+    "transcription_media_tool": "Transcription needs ffmpeg, which VoiceStudio could not find or run. Open Settings → Audio tools and use Download/Repair, or install ffmpeg (macOS: brew install ffmpeg; Windows: winget install Gyan.FFmpeg; Linux: your package manager) and restart VoiceStudio. You can also point FFMPEG_PATH at an ffmpeg binary.",
+    "transcription_pipe_lost": "The backend lost its output pipe to the app while transcribing (broken pipe). Restart VoiceStudio and try again."
   },
   "tts": {
     "generationComplete": "Speech generation complete",
@@ -900,6 +906,7 @@
     "restore_title": "Restore all segments to the original transcribed text",
     "clean_up": "Clean Up",
     "clean_up_title": "Merge tiny fragments and adjacent short segments",
+    "mirror_delivery": "Mirror source delivery",
     "popular": "Popular",
     "all_languages": "All languages",
     "add_language": "Add language",
@@ -1044,6 +1051,11 @@
     "cleaned_other": "Cleaned {{count}} fragments",
     "segments_clean": "Segments already clean",
     "cleanup_failed": "Clean up failed: {{message}}",
+    "mirror_applied_one": "Mirrored the original delivery on {{count}} line",
+    "mirror_applied_other": "Mirrored the original delivery on {{count}} lines",
+    "mirror_none": "No lines needed a direction",
+    "mirror_insufficient": "Not enough clear speech to read the original delivery",
+    "mirror_failed": "Mirror delivery failed: {{message}}",
     "cinematic_no_llm": "This quality needs an LLM provider. Configure one in LLM Providers to continue.",
     "dialect_not_applied": "The selected dialect needs an LLM to apply. Switch the translation engine to OpenAI/Ollama, or configure an LLM in Settings → Credentials → LLM endpoint.",
     "translate_errors": "{{errorCount}}/{{totalCount}} segment(s) failed: {{firstError}}",

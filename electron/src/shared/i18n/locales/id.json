@@ -2375,7 +2375,9 @@
     "gpu_arch_unsupported": "Versi PyTorch ini tidak mendukung GPU Anda. Pilih CPU di Pengaturan → Performa & Perangkat, atau instal versi PyTorch yang kompatibel.",
     "windows_app_control_blocked": "Kontrol aplikasi Windows memblokir file yang diperlukan. Minta administrator mengizinkan runtime VoiceStudio yang tepercaya, lalu mulai ulang aplikasi.",
     "audio_io_failed": "Audio tidak dapat dibaca atau disimpan. Periksa format file, ruang disk yang tersedia, dan izin file. Periksa folder di Pengaturan → Penyimpanan.",
-    "no_audio_track": "File ini tidak memiliki trek audio, jadi tidak ada ucapan untuk ditranskripsi, di-dubbing, atau dikloning. Pilih file video atau audio yang berisi suara."
+    "no_audio_track": "File ini tidak memiliki trek audio, jadi tidak ada ucapan untuk ditranskripsi, di-dubbing, atau dikloning. Pilih file video atau audio yang berisi suara.",
+    "transcription_media_tool": "Transkripsi membutuhkan ffmpeg, yang tidak dapat ditemukan atau dijalankan VoiceStudio. Buka Pengaturan → Alat audio lalu gunakan Unduh/Perbaiki, atau instal ffmpeg (macOS: brew install ffmpeg; Windows: winget install Gyan.FFmpeg; Linux: pengelola paket Anda) dan mulai ulang VoiceStudio. Anda juga dapat mengarahkan FFMPEG_PATH ke berkas ffmpeg.",
+    "transcription_pipe_lost": "Backend kehilangan saluran keluarannya ke aplikasi saat transkripsi (broken pipe). Mulai ulang VoiceStudio dan coba lagi."
   },
   "sharing": {
     "title": "Berbagi & Akses Jarak Jauh",

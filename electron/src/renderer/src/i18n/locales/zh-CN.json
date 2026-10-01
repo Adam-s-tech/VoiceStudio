@@ -747,6 +747,7 @@
     "restore_title": "将所有片段恢复到原始转录文本",
     "clean_up": "整理",
     "clean_up_title": "合并微小片段和相邻短片段",
+    "mirror_delivery": "还原原始演绎",
     "popular": "常用",
     "all_languages": "所有语言",
     "engine_label": "引擎",
@@ -894,6 +895,11 @@
     "cleaned_other": "已清理 {{count}} 个片段",
     "segments_clean": "片段已是干净状态",
     "cleanup_failed": "清理失败：{{message}}",
+    "mirror_applied_one": "已在 {{count}} 行还原原始演绎",
+    "mirror_applied_other": "已在 {{count}} 行还原原始演绎",
+    "mirror_none": "没有需要指导的台词",
+    "mirror_insufficient": "清晰语音不足，无法读取原始演绎",
+    "mirror_failed": "还原演绎失败：{{message}}",
     "cinematic_no_llm": "此质量需要 LLM 提供商。请在“LLM 提供商”中配置后继续。",
     "dialect_not_applied": "所选方言需要 LLM 才能生效——请将翻译引擎切换为 OpenAI/Ollama，或在 设置 → 凭证 → LLM 端点 中配置 LLM。",
     "translate_errors": "{{errorCount}}/{{totalCount}} 段失败：{{firstError}}",
@@ -2134,6 +2140,7 @@
     "starting": "正在启动本地引擎…",
     "attaching": "正在连接运行中的引擎…",
     "crashed": "本地引擎意外停止。",
+    "unresponsive": "本地引擎正忙，暂时没有响应，任务结束后会自动恢复。",
     "failed": "无法启动本地引擎。",
     "idle": "正在等待本地引擎…",
     "log_label": "引擎日志",
@@ -2141,7 +2148,10 @@
     "elapsed": "已用时 {{seconds}} 秒",
     "first_run_hint": "首次运行需要准备 Python 环境，可能需要几分钟。",
     "port_in_use_short": "端口 {{port}} 已被占用",
-    "proxy_bypass_help": "完全退出 VoiceStudio，在终端中将 HTTP_PROXY/HTTPS_PROXY 设为代理 URL，将 NO_PROXY 设为排除的主机，然后从该终端启动 VoiceStudio。在当前应用中重试不会加载新的环境变量。"
+    "proxy_bypass_help": "完全退出 VoiceStudio，在终端中将 HTTP_PROXY/HTTPS_PROXY 设为代理 URL，将 NO_PROXY 设为排除的主机，然后从该终端启动 VoiceStudio。在当前应用中重试不会加载新的环境变量。",
+    "hint_spawn_blocked": "操作系统或安全软件拒绝启动本地引擎。请将 VoiceStudio 的运行时文件夹添加到杀毒软件的排除项（Windows：Windows 安全中心 → 病毒和威胁防护 → 管理设置 → 排除项），并确认它不在 OneDrive 等云同步文件夹内，然后重试。",
+    "hint_slow_start": "等待超时时，引擎仍在启动。电脑较慢（尤其是没有独立显卡）以及安装后的首次启动（杀毒软件会扫描每个新文件）可能需要几分钟。请关闭占用大量内存的应用后重试；之后的启动会快得多。",
+    "hint_synced_folder": "此位置位于云同步文件夹（OneDrive、Dropbox、iCloud Drive、Google Drive）内。仅在线的占位文件和文件锁定会破坏 Python 环境。请将 VoiceStudio 移到普通本地文件夹（例如 Windows 上的 C:\\VoiceStudio，或 macOS 和 Linux 上的 ~/VoiceStudio），然后重新设置。"
   },
   "bootstrap": {
     "checking": "正在检查环境…",
@@ -2886,7 +2896,9 @@
     "gpu_arch_unsupported": "此 PyTorch 构建不支持您的 GPU。请在设置 → 性能与设备中选择 CPU，或安装兼容的 PyTorch 构建。",
     "windows_app_control_blocked": "Windows 应用程序控制阻止了所需文件。请联系管理员允许受信任的 VoiceStudio 运行环境，然后重启应用。",
     "audio_io_failed": "无法读取或保存音频。请检查文件格式、磁盘剩余空间和文件访问权限，并在设置 → 存储中检查文件夹。",
-    "no_audio_track": "此文件没有音轨，因此没有可转录、配音或克隆的语音。请选择包含声音的视频或音频文件。"
+    "no_audio_track": "此文件没有音轨，因此没有可转录、配音或克隆的语音。请选择包含声音的视频或音频文件。",
+    "transcription_media_tool": "转录需要 ffmpeg，但 VoiceStudio 无法找到或运行它。请打开设置 → 音频工具并使用下载/修复，或安装 ffmpeg（macOS：brew install ffmpeg；Windows：winget install Gyan.FFmpeg；Linux：你的包管理器），然后重启 VoiceStudio。你也可以将 FFMPEG_PATH 指向 ffmpeg 可执行文件。",
+    "transcription_pipe_lost": "转录期间后端丢失了通往应用的输出管道（broken pipe）。请重启 VoiceStudio 后重试。"
   },
   "network": {
     "copied": "已复制",

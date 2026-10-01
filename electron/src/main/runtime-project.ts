@@ -50,13 +50,8 @@ export function rocmTorchOptIn(platform: NodeJS.Platform = process.platform): bo
     platform !== 'darwin'
   );
 }
-export const RUNTIME_REPAIR_PACKAGES = [
-  'torch',
-  'torchaudio',
-  'torchvision',
-] as const;
-export const RUNTIME_NATIVE_IMPORT_PROBE =
-  'import torch, torchaudio, torchvision';
+export const RUNTIME_REPAIR_PACKAGES = ['torch', 'torchaudio', 'torchvision'] as const;
+export const RUNTIME_NATIVE_IMPORT_PROBE = 'import torch, torchaudio, torchvision';
 export const RUNTIME_IMPORT_PROBE =
   'import fastapi, uvicorn, omnivoice, faster_whisper, sentencepiece, torch, torchaudio, torchvision';
 const RUNTIME_SCHEMA = 'electron-runtime-v2-cudnn8';
@@ -294,7 +289,35 @@ export async function runtimeInstallInterrupted(project: string): Promise<boolea
   }
 }
 
-/** Check the selected interpreter locally before trusting runtime metadata. */
+/**
+ * How long the import probe may run before it is declared inconclusive. A cold
+ * `import torch, torchaudio, torchvision` is dominated by disk and antivirus
+ * scanning of hundreds of MB of native libraries, not by the CPU: a first
+ * launch after install on a spinning disk or a scanner-contended Windows host
+ * routinely needs 40-90 s, so the old 30 s ceiling declared healthy runtimes
+ * broken (#2445, #2465).
+ */
+export const RUNTIME_PROBE_TIMEOUT_MS = 180_000;
+
+/** Node marks an `execFile` that exceeded `timeout` as killed by its signal. */
+function probeTimedOut(error: unknown): boolean {
+  const failure = error as { killed?: boolean; signal?: string | null } | null;
+  return Boolean(failure?.killed && failure.signal);
+}
+
+/**
+ * Check the selected interpreter locally before trusting runtime metadata.
+ *
+ * Only a probe that actually FAILED (a missing module, a bad DLL, an
+ * interpreter that will not start) proves the runtime broken. A probe that was
+ * still importing when the generous ceiling expired proves only that this host
+ * is slow, so it is inconclusive and the runtime is trusted: treating "slow" as
+ * "broken" is what sent working installs back to the multi-GB setup screen, or
+ * reported "environment missing or incomplete" for an intact one. If the
+ * interpreter really is wedged the backend launch that follows fails with the
+ * process's own output and the startup budget, which is a far better diagnostic
+ * than a silent false negative here.
+ */
 export async function runtimeDependenciesReady(project: string): Promise<boolean> {
   const env: NodeJS.ProcessEnv = { ...process.env };
   delete env.PYTHONHOME;
@@ -309,11 +332,11 @@ export async function runtimeDependenciesReady(project: string): Promise<boolean
       {
         cwd: project,
         windowsHide: true,
-        timeout: 30_000,
+        timeout: RUNTIME_PROBE_TIMEOUT_MS,
         maxBuffer: 256 * 1024,
         env,
       },
-      (error) => resolve(!error),
+      (error) => resolve(!error || probeTimedOut(error)),
     );
   });
 }

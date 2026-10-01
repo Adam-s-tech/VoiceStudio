@@ -39,7 +39,7 @@ def _ranged_handler(payload=PAYLOAD, *, accept_ranges=True, record=None):
         if rng and accept_ranges:
             lo, hi = rng.replace("bytes=", "").split("-")
             lo, hi = int(lo), int(hi)
-            return httpx.Response(206, content=payload[lo:hi + 1])
+            return httpx.Response(206, headers={"Content-Range": f"bytes {lo}-{hi}/{len(payload)}"}, content=payload[lo:hi + 1])
         return httpx.Response(200, content=payload)
     return handler
 
@@ -177,7 +177,7 @@ def test_concurrency_stays_at_num_connections(tmp_path, monkeypatch):
                 except asyncio.TimeoutError:
                     pass
                 lo, hi = request.headers["range"].replace("bytes=", "").split("-")
-                return httpx.Response(206, content=PAYLOAD[int(lo):int(hi) + 1])
+                return httpx.Response(206, headers={"Content-Range": f"bytes {lo}-{hi}/{len(PAYLOAD)}"}, content=PAYLOAD[int(lo):int(hi) + 1])
             finally:
                 state["inflight"] -= 1
 
@@ -215,7 +215,7 @@ def test_dropped_connection_resumes_from_manifest(tmp_path, monkeypatch):
                 raise httpx.RemoteProtocolError("peer closed connection", request=request)
         lo, hi = request.headers["range"].replace("bytes=", "").split("-")
         served.append(int(hi) - int(lo) + 1)
-        return httpx.Response(206, content=PAYLOAD[int(lo):int(hi) + 1])
+        return httpx.Response(206, headers={"Content-Range": f"bytes {lo}-{hi}/{len(PAYLOAD)}"}, content=PAYLOAD[int(lo):int(hi) + 1])
 
     with pytest.raises(httpx.RemoteProtocolError):
         _download(handler, dest, expected_size=len(PAYLOAD), num_connections=2)

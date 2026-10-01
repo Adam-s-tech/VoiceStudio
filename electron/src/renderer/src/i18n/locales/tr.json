@@ -727,6 +727,7 @@
     "restore_title": "Tüm bölümleri orijinal metne dönüştürülmüş metne geri yükleyin",
     "clean_up": "Temizleme",
     "clean_up_title": "Küçük parçaları ve bitişik kısa bölümleri birleştir",
+    "mirror_delivery": "Kaynak sunumu yansıt",
     "popular": "Popüler",
     "all_languages": "Tüm diller",
     "engine_label": "Motor",
@@ -877,6 +878,11 @@
     "cleaned_other": "{{count}} parça temizlendi",
     "segments_clean": "Segmentler zaten temiz",
     "cleanup_failed": "Temizleme başarısız oldu: {{message}}",
+    "mirror_applied_one": "Özgün sunum {{count}} satıra yansıtıldı",
+    "mirror_applied_other": "Özgün sunum {{count}} satıra yansıtıldı",
+    "mirror_none": "Hiçbir satır yönlendirme gerektirmedi",
+    "mirror_insufficient": "Özgün sunumu okumak için yeterince net konuşma yok",
+    "mirror_failed": "Sunum yansıtılamadı: {{message}}",
     "cinematic_no_llm": "Bu kalite bir LLM sağlayıcısı gerektirir. Devam etmek için LLM Sağlayıcıları bölümünde yapılandırın.",
     "dialect_not_applied": "Seçilen lehçe için LLM gerekir — motoru OpenAI/Ollama yapın veya Cinematic kalitesini seçin.",
     "translate_errors": "{{errorCount}}/{{totalCount}} segment(ler)i başarısız oldu: {{firstError}}",
@@ -2130,6 +2136,7 @@
     "starting": "Yerel motor başlatılıyor…",
     "attaching": "Çalışan motora bağlanılıyor…",
     "crashed": "Yerel motor beklenmedik şekilde durdu.",
+    "unresponsive": "Yerel motor şu anda meşgul ve yanıt vermiyor — kendiliğinden toparlanacak.",
     "failed": "Yerel motor başlatılamadı.",
     "idle": "Yerel motor bekleniyor…",
     "log_label": "Motor günlüğü",
@@ -2137,7 +2144,10 @@
     "elapsed": "{{seconds}} sn geçti",
     "first_run_hint": "Python ortamı hazırlanırken ilk çalıştırma birkaç dakika sürebilir.",
     "port_in_use_short": "{{port}} bağlantı noktası kullanımda",
-    "proxy_bypass_help": "VoiceStudio’yu tamamen kapatın, terminalde HTTP_PROXY/HTTPS_PROXY değerini proxy URL’sine ve NO_PROXY değerini hariç tutulacak sunuculara ayarlayın, ardından VoiceStudio’yu o terminalden başlatın. Açık uygulamada yeniden denemek yeni ortam değişkenlerini yüklemez."
+    "proxy_bypass_help": "VoiceStudio’yu tamamen kapatın, terminalde HTTP_PROXY/HTTPS_PROXY değerini proxy URL’sine ve NO_PROXY değerini hariç tutulacak sunuculara ayarlayın, ardından VoiceStudio’yu o terminalden başlatın. Açık uygulamada yeniden denemek yeni ortam değişkenlerini yüklemez.",
+    "hint_spawn_blocked": "İşletim sisteminiz veya güvenlik yazılımınız yerel motorun başlatılmasını reddetti. VoiceStudio çalışma zamanı klasörünü antivirüs dışlamalarınıza ekleyin (Windows: Windows Güvenliği → Virüs ve tehdit koruması → Ayarları yönet → Dışlamalar), klasörün OneDrive gibi bulutla eşitlenen bir klasörde olmadığından emin olun ve yeniden deneyin.",
+    "hint_slow_start": "Bekleme süresi dolduğunda motor hâlâ başlıyordu. Yavaş bilgisayarlar, özellikle ayrı ekran kartı olmayanlar, ve bir kurulumdan sonraki ilk başlatma (antivirüs her yeni dosyayı tarar) birkaç dakika sürebilir. Çok bellek kullanan uygulamaları kapatıp yeniden deneyin; sonraki başlatmalar çok daha hızlıdır.",
+    "hint_synced_folder": "Bu konum, bulutla eşitlenen bir klasörde (OneDrive, Dropbox, iCloud Drive, Google Drive). Yalnızca çevrimiçi yer tutucular ve dosya kilitleme Python ortamını bozar. VoiceStudio'yu normal bir yerel klasöre (örneğin Windows'ta C:\\VoiceStudio, macOS ve Linux'ta ~/VoiceStudio) taşıyın ve yeniden kurun."
   },
   "bootstrap": {
     "checking": "Ortam kontrol ediliyor…",
@@ -2882,7 +2892,9 @@
     "gpu_arch_unsupported": "Bu PyTorch derlemesi GPU’nuzu desteklemiyor. Ayarlar → Performans ve Cihaz bölümünden CPU’yu seçin veya uyumlu bir PyTorch derlemesi yükleyin.",
     "windows_app_control_blocked": "Windows uygulama denetimi gerekli bir dosyayı engelledi. Yöneticinizden güvenilir VoiceStudio çalışma ortamına izin vermesini isteyin, ardından uygulamayı yeniden başlatın.",
     "audio_io_failed": "Ses okunamadı veya kaydedilemedi. Dosya biçimini, boş disk alanını ve dosya izinlerini kontrol edin. Ayarlar → Depolama bölümündeki klasörü inceleyin.",
-    "no_audio_track": "Bu dosyada ses parçası yok, bu yüzden yazıya dökülecek, dublajlanacak veya klonlanacak konuşma yok. Ses içeren bir video veya ses dosyası seçin."
+    "no_audio_track": "Bu dosyada ses parçası yok, bu yüzden yazıya dökülecek, dublajlanacak veya klonlanacak konuşma yok. Ses içeren bir video veya ses dosyası seçin.",
+    "transcription_media_tool": "Yazıya dökme için ffmpeg gerekir, ancak VoiceStudio onu bulamadı veya çalıştıramadı. Ayarlar → Ses araçları bölümünü açıp İndir/Onar'ı kullanın ya da ffmpeg'i kurun (macOS: brew install ffmpeg; Windows: winget install Gyan.FFmpeg; Linux: paket yöneticiniz) ve VoiceStudio'yu yeniden başlatın. FFMPEG_PATH değişkenini bir ffmpeg dosyasına da yönlendirebilirsiniz.",
+    "transcription_pipe_lost": "Arka uç, yazıya dökme sırasında uygulamaya giden çıkış kanalını kaybetti (broken pipe). VoiceStudio'yu yeniden başlatıp tekrar deneyin."
   },
   "network": {
     "copied": "Kopyalandı",

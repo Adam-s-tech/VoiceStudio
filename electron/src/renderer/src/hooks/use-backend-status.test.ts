@@ -57,3 +57,44 @@ it('pauses backend queries until the native supervisor reports ready', async () 
   expect(onlineManager.isOnline()).toBe(false);
   stop();
 });
+
+// #2430: `unresponsive` is a live-but-busy backend, not a dead one. The
+// supervisor proves the child is alive before publishing it, so React Query
+// must stay online — going offline here pauses every query and leaves the
+// workspace visible but inert for the whole duration of a long generation.
+it('stays online while a live backend is only busy, and offline when it dies', async () => {
+  onlineManager.setOnline(true);
+  let push!: (status: unknown) => void;
+  vi.stubGlobal('voicestudio', {
+    backend: {
+      onStatus: (callback: typeof push) => {
+        push = callback;
+        return () => {};
+      },
+      getStatus: () => new Promise(() => {}),
+    },
+  });
+
+  const status = await import('./use-backend-status');
+  const stop = status.subscribeBackendStatus(() => {});
+  const base = status.FALLBACK_BACKEND_STATUS;
+
+  push({ ...base, stage: 'unresponsive' });
+  expect(onlineManager.isOnline()).toBe(true);
+  // ...and it recovers on its own once the job releases the event loop.
+  push({ ...base, stage: 'ready' });
+  expect(onlineManager.isOnline()).toBe(true);
+  push({ ...base, stage: 'crashed' });
+  expect(onlineManager.isOnline()).toBe(false);
+  stop();
+});
+
+it('treats only ready and unresponsive as able to answer a request (#2430)', async () => {
+  const { isBackendReachable } = await import('./use-backend-status');
+  expect(isBackendReachable('ready')).toBe(true);
+  expect(isBackendReachable('unresponsive')).toBe(true);
+  // Everything else either is not listening yet or is terminally gone.
+  for (const stage of ['crashed', 'failed', 'port_in_use', 'starting', 'attaching'] as const) {
+    expect(isBackendReachable(stage)).toBe(false);
+  }
+});

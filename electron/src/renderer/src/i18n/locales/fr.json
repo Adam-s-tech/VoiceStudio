@@ -729,6 +729,7 @@
     "restore_title": "Restaurer tous les segments dans le texte transcrit d'origine",
     "clean_up": "Nettoyer",
     "clean_up_title": "Fusionner de minuscules fragments et des segments courts adjacents",
+    "mirror_delivery": "Reproduire le jeu d'origine",
     "popular": "Populaire",
     "all_languages": "Toutes les langues",
     "engine_label": "Moteur",
@@ -879,6 +880,11 @@
     "cleaned_other": "Fragments {{count}} nettoyés",
     "segments_clean": "Segments déjà propres",
     "cleanup_failed": "Échec du nettoyage : {{message}}",
+    "mirror_applied_one": "Jeu d'origine reproduit sur {{count}} ligne",
+    "mirror_applied_other": "Jeu d'origine reproduit sur {{count}} lignes",
+    "mirror_none": "Aucune ligne n'avait besoin d'indication",
+    "mirror_insufficient": "Pas assez de parole claire pour lire le jeu d'origine",
+    "mirror_failed": "Échec de la reproduction du jeu : {{message}}",
     "cinematic_no_llm": "Cette qualité nécessite un fournisseur LLM. Configurez-le dans « Fournisseurs LLM » pour continuer.",
     "dialect_not_applied": "Le dialecte sélectionné nécessite un LLM — passez le moteur sur OpenAI/Ollama ou choisissez la qualité Cinematic.",
     "translate_errors": "Échec du ou des segments {{errorCount}}/{{totalCount}} : {{firstError}}",
@@ -2132,6 +2138,7 @@
     "starting": "Démarrage du moteur local…",
     "attaching": "Connexion au moteur en cours d’exécution…",
     "crashed": "Le moteur local s’est arrêté de manière inattendue.",
+    "unresponsive": "Le moteur local est occupé et ne répond pas pour le moment ; il reprendra de lui-même.",
     "failed": "Impossible de démarrer le moteur local.",
     "idle": "En attente du moteur local…",
     "log_label": "Journal du moteur",
@@ -2139,7 +2146,10 @@
     "elapsed": "{{seconds}} s écoulées",
     "first_run_hint": "Le premier démarrage peut prendre plusieurs minutes pendant la préparation de l’environnement Python.",
     "port_in_use_short": "Le port {{port}} est utilisé",
-    "proxy_bypass_help": "Quittez complètement VoiceStudio, définissez HTTP_PROXY/HTTPS_PROXY avec l’URL du proxy et NO_PROXY avec les hôtes exclus dans un terminal, puis lancez VoiceStudio depuis ce terminal. Réessayer dans l’application ouverte ne charge pas les nouvelles variables d’environnement."
+    "proxy_bypass_help": "Quittez complètement VoiceStudio, définissez HTTP_PROXY/HTTPS_PROXY avec l’URL du proxy et NO_PROXY avec les hôtes exclus dans un terminal, puis lancez VoiceStudio depuis ce terminal. Réessayer dans l’application ouverte ne charge pas les nouvelles variables d’environnement.",
+    "hint_spawn_blocked": "Votre système d’exploitation ou votre logiciel de sécurité a refusé de lancer le moteur local. Ajoutez le dossier d’exécution de VoiceStudio aux exclusions de votre antivirus (Windows : Sécurité Windows → Protection contre les virus et menaces → Gérer les paramètres → Exclusions), vérifiez qu’il ne se trouve pas dans un dossier synchronisé dans le cloud comme OneDrive, puis réessayez.",
+    "hint_slow_start": "Le moteur était encore en cours de démarrage lorsque l’attente a expiré. Les ordinateurs lents, surtout sans GPU dédié, et le premier lancement après une installation (l’antivirus analyse chaque nouveau fichier) peuvent demander plusieurs minutes. Fermez les applications gourmandes en mémoire puis réessayez ; les démarrages suivants sont bien plus rapides.",
+    "hint_synced_folder": "Cet emplacement se trouve dans un dossier synchronisé dans le cloud (OneDrive, Dropbox, iCloud Drive, Google Drive). Les espaces réservés en ligne uniquement et le verrouillage des fichiers cassent l’environnement Python. Déplacez VoiceStudio vers un dossier local ordinaire (par exemple C:\\VoiceStudio sous Windows ou ~/VoiceStudio sous macOS et Linux), puis configurez-le à nouveau."
   },
   "bootstrap": {
     "checking": "Vérification de l'environnement…",
@@ -2884,7 +2894,9 @@
     "gpu_arch_unsupported": "Cette version de PyTorch ne prend pas en charge votre GPU. Choisissez CPU dans Paramètres → Performances et appareil, ou installez une version compatible de PyTorch.",
     "windows_app_control_blocked": "Le contrôle des applications de Windows a bloqué un fichier nécessaire. Demandez à votre administrateur d’autoriser l’environnement d’exécution fiable de VoiceStudio, puis redémarrez l’application.",
     "audio_io_failed": "Impossible de lire ou d’enregistrer l’audio. Vérifiez le format du fichier, l’espace disque disponible et les autorisations. Vérifiez le dossier dans Paramètres → Stockage.",
-    "no_audio_track": "Ce fichier n'a pas de piste audio : il n'y a donc aucune parole à transcrire, doubler ou cloner. Choisissez un fichier vidéo ou audio qui contient du son."
+    "no_audio_track": "Ce fichier n'a pas de piste audio : il n'y a donc aucune parole à transcrire, doubler ou cloner. Choisissez un fichier vidéo ou audio qui contient du son.",
+    "transcription_media_tool": "La transcription nécessite ffmpeg, que VoiceStudio n'a pas pu trouver ou exécuter. Ouvrez Paramètres → Outils audio et utilisez Télécharger/Réparer, ou installez ffmpeg (macOS : brew install ffmpeg ; Windows : winget install Gyan.FFmpeg ; Linux : votre gestionnaire de paquets), puis redémarrez VoiceStudio. Vous pouvez aussi faire pointer FFMPEG_PATH vers un binaire ffmpeg.",
+    "transcription_pipe_lost": "Le backend a perdu son canal de sortie vers l'application pendant la transcription (broken pipe). Redémarrez VoiceStudio et réessayez."
   },
   "network": {
     "copied": "Copié",

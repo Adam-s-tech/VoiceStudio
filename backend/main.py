@@ -1857,8 +1857,59 @@ _mimetypes.add_type("audio/flac", ".flac")
 # not-ready, exactly like the connection-refused it replaces), the full body
 # once ready. No torch import pre-ready — it would block 10-20s on the very
 # import whose progress this endpoint exists to report.
+_health_device: str | None = None
+_health_device_lock = threading.Lock()
+_health_device_thread: threading.Thread | None = None
+
+
+def _probe_health_device() -> str:
+    """Name the compute device. Blocking: imports torch and may initialise the
+    CUDA driver, which can take seconds and stall behind a busy GPU."""
+    import torch
+
+    if torch.cuda.is_available():
+        return f"cuda ({torch.cuda.get_device_name(0)})"
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+def _resolve_health_device() -> None:
+    global _health_device
+    try:
+        _health_device = _probe_health_device()
+    except Exception:  # noqa: BLE001 - a liveness label must never fail a probe
+        _health_device = "unknown"
+
+
+def _cached_health_device() -> str:
+    """The device label without ever blocking the caller.
+
+    The first call starts one background resolver and answers "unknown"; every
+    later call returns the cached label. /health is the shell's liveness probe,
+    polled every 2 s for the life of the app with a 1.5 s deadline, so it must
+    cost O(1): re-asking torch/the CUDA driver on each probe, from a worker
+    thread competing with a generation for the GIL and the driver, is how a
+    healthy, busy backend got reported as "not responding" (#2490, #2491).
+    """
+    global _health_device_thread
+    if _health_device is not None:
+        return _health_device
+    with _health_device_lock:
+        if _health_device is None and _health_device_thread is None:
+            _health_device_thread = threading.Thread(
+                target=_resolve_health_device, name="health-device", daemon=True
+            )
+            _health_device_thread.start()
+    return _health_device or "unknown"
+
+
+# `async def`, deliberately: a sync route runs in the shared 40-thread worker
+# pool, where it queues behind every blocked sync route (model/status polls
+# waiting on a load lock, long synchronous handlers). The liveness probe must
+# depend on the event loop alone, because that is what it is reporting on.
 @app.get("/health")
-def health():
+async def health():
     if not _startup_progress.is_ready():
         _step, _label = _startup_progress.current_step()
         return JSONResponse(
@@ -1871,15 +1922,7 @@ def health():
             },
             headers={"Retry-After": "2"},
         )
-    import torch
-
-    device = "cpu"
-    if torch.cuda.is_available():
-        device = f"cuda ({torch.cuda.get_device_name(0)})"
-    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-        device = "mps"
-
-    return {"status": "ok", "device": device, "version": APP_VERSION}
+    return {"status": "ok", "device": _cached_health_device(), "version": APP_VERSION}
 
 
 # ── Startup progress ────────────────────────────────────────────────────
@@ -2041,6 +2084,28 @@ if __name__ == "__main__":
         )
         sys.exit(_EXIT_PORT_IN_USE)
 
+    def _fail_port_denied(exc: "OSError | None") -> None:
+        """The OS refused the bind (EACCES / WSAEACCES 10013), not "in use".
+
+        On Windows a possible cause is a TCP excluded port range reserved by
+        Hyper-V, WSL, Docker or WinNAT (an exclusive listener gives the same
+        error), so the message stays hedged. Reported through stderr so the desktop
+        shell's "Last output" shows it instead of a bare exit code.
+        """
+        print(
+            f"FATAL: the operating system refused to let VoiceStudio listen on "
+            f"port {_port} (permission denied). On Windows a possible cause is "
+            f"a reserved port range (check "
+            f"`netsh interface ipv4 show excludedportrange protocol=tcp`) or "
+            f"another program holding the port exclusively; on macOS/Linux "
+            f"ports below 1024 need elevated rights. "
+            f"Choose another port by setting OMNIVOICE_PORT to a free one."
+            + (f" Underlying error: {exc}" if exc else ""),
+            file=sys.stderr,
+            flush=True,
+        )
+        sys.exit(1)
+
     class _BindErrorWatcher(logging.Filter):
         """Remembers the EADDRINUSE uvicorn logged on its way out (#1364).
 
@@ -2053,6 +2118,9 @@ if __name__ == "__main__":
         def __init__(self) -> None:
             super().__init__()
             self.bind_error: "OSError | None" = None
+            # Permission refusals are a different problem from a taken port
+            # and get their own advice; they never set ``bind_error``.
+            self.denied_error: "OSError | None" = None
 
         def filter(self, record: logging.LogRecord) -> bool:
             msg = record.msg
@@ -2061,6 +2129,10 @@ if __name__ == "__main__":
                 or getattr(msg, "winerror", None) == 10048
             ):
                 self.bind_error = msg
+            elif isinstance(msg, OSError) and (
+                msg.errno == 13 or getattr(msg, "winerror", None) == 10013
+            ):
+                self.denied_error = msg
             return True
 
     # #1223: uvicorn does NOT let a bind failure reach the caller — it logs the
@@ -2105,4 +2177,6 @@ if __name__ == "__main__":
             _fail_port_in_use(_watcher.bind_error)
         if _port_taken(_bind_host, _port) is not None:
             _fail_port_in_use(None)
+        if _watcher.denied_error is not None:
+            _fail_port_denied(_watcher.denied_error)
         raise

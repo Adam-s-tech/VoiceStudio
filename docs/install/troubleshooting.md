@@ -67,6 +67,17 @@ your launch environment. An ordinary “address already in use” conflict still
 the existing backend-attachment/conflict flow; VoiceStudio does not stop unrelated
 processes or change firewall rules.
 
+If the backend log ends with `FATAL: the operating system refused to let
+VoiceStudio listen on port …` (`[Errno 13]` / WinError 10013), the OS denied the
+bind rather than reporting a taken port. On Windows a possible cause is a
+reserved range (Hyper-V, WSL, Docker and WinNAT reserve them); another process
+holding the port exclusively gives the same error. List the reserved ranges with
+`netsh interface ipv4 show excludedportrange protocol=tcp` and set
+`OMNIVOICE_PORT` to a port outside every range that no other app uses. On
+macOS and Linux, ports below 1024 need elevated rights. A default launch already
+skips reserved ports on its own; this message appears only when the port was
+chosen explicitly.
+
 ## Generation failure diagnosis
 
 OmniVoice's in-process and subprocess engines both reuse an installed speech
@@ -89,14 +100,17 @@ receive a stable `docs_topic` and a safe fallback message, never private excepti
 | Topic | Recovery |
 | --- | --- |
 | `GPU_ARCH_UNSUPPORTED` | The installed PyTorch build cannot run kernels on this GPU. Select CPU in Settings → Performance & Device, or use a PyTorch build compatible with the GPU. |
+| `HOST_MEMORY_EXHAUSTED` | The machine ran out of system memory, so the engine could not finish. Close other memory-heavy apps, unload unused models with **Flush models**, render a shorter passage, or select a lighter TTS engine. On Windows, enlarging the page file also helps. A CPU-only machine has no GPU memory to free — this is RAM, not VRAM. |
 | `WINDOWS_APP_CONTROL_BLOCKED` | Windows application control blocked a required file. Ask the administrator to allow the trusted VoiceStudio runtime, then restart the app. |
 | `AUDIO_IO_FAILED` | Check the audio format, free disk space, and file permissions; review the folder in Settings → Storage. |
 | `HF_MIRROR_UNREACHABLE` | The configured Hugging Face mirror could not be reached while fetching the engine's weights. Restore the official endpoint in Settings → Models → Hugging Face mirror, then retry. |
 
 Unsupported GPU builds and application-control blocks are terminal for the current
 stream: the client does not automatically render the whole passage again. After
-correcting the cause, start a new generation. Unknown failures retain generic
-guidance; a report with only `RuntimeError` does not establish which cause applies.
+correcting the cause, start a new generation. Host RAM exhaustion is *not*
+terminal — freeing memory genuinely repairs it, so a retry can succeed.
+Unknown failures retain generic guidance; a report with only `RuntimeError` does
+not establish which cause applies.
 
 An engine downloads its weights the first time it is used, so the first
 generation with a newly selected engine can fail on the download rather than on
@@ -481,6 +495,14 @@ If a running install ever reports "Media engine unavailable":
    `sudo apt install ffmpeg`, `winget install ffmpeg`) also works — press
    **Use system copy** afterwards.
 
+Transcription tells these apart from other failures. If a dub transcription
+reports that it needs ffmpeg, follow the steps above; VoiceStudio also exposes
+its resolved FFmpeg under the bare name `ffmpeg` to the engines it launches, so
+a library that runs plain `ffmpeg` no longer fails with `[Errno 2] No such file
+or directory: 'ffmpeg'`. A "lost its output pipe" (`[Errno 32] Broken pipe`)
+reply means the app that launched the backend closed or relaunched; restart
+VoiceStudio.
+
 The same panel updates **yt-dlp** (video imports): site support changes
 faster than app releases, so when video-URL imports start failing, press
 **Update** there — the new version survives app updates, and **Restore tested
@@ -709,6 +731,14 @@ order:
   - macOS/Linux: `export HF_ENDPOINT=https://hf-mirror.com`
   - Windows (PowerShell): `[Environment]::SetEnvironmentVariable("HF_ENDPOINT","https://hf-mirror.com","User")`
 
+A segmented download refuses a response whose status or Content-Range does not match the requested bytes and file size. An invalid response is not published as the model file; retry through a server or mirror that supports correct byte ranges.
+
+Segmented download resume records are reused only with an existing partial file of the expected size and valid byte-range entries. If a partial file is missing, truncated, or oversized, or its sidecar is malformed, the download fetches those bytes again instead of treating preallocated zeros as completed data. Oversized partial files are resized before restarting so old trailing bytes cannot prevent verification of the new download. Stale checkpoints are removed before resizing or recreating partial files, so a failed fetch cannot make the next retry trust stale or zero-filled bytes. If that stale checkpoint cannot be removed, the restart stops before changing the partial file or destination.
+
+**Disk filled up mid-install.** A model or engine install that runs out of space stops immediately (it is not retried with backoff) and reports how much space is free and where; free space or move the model cache to a larger volume, then retry. The download resumes from the part that already finished. During first-run setup, the one-time `uv` installer download is attempted up to three times (two retries) on connection resets, timeouts, and HTTP 5xx/429 before it reports failure.
+
+**Exports named after a video title.** Download and export names built from a video title replace characters Windows rejects (`< > : " / \ | ? *`, control characters, trailing dots/spaces, device names such as `CON`) with `_` on every OS, so `How to X: a guide?` exports as `How to X_ a guide_` instead of failing with `[Errno 22] Invalid argument`.
+
 **Manual fallback** (if downloads keep failing), pull the weights yourself into
 the same cache, then relaunch:
 
@@ -789,6 +819,16 @@ states — and if an external env var (shell profile, `.env`, Docker `-e`,
 systemd unit, …) is already providing the same key, the panel says so instead,
 since that external value keeps winning on every future restart too, not just
 this one.
+
+**While the backend is busy, the app now stays usable.** The desktop shell polls
+the backend's `/health` endpoint while you work, and a long GPU job can hold the
+Python event loop long enough to miss those probes. The shell knows the process
+is still alive (it checks for an exit before reacting), so it now shows a
+**recoverable busy state** instead of an error: the status-bar dot pulses amber,
+your workspace stays open, and requests wait for the current job to finish
+rather than failing with "Can't reach the local backend". Nothing to do — it
+clears itself as soon as the job releases the event loop. If the dot turns
+**red** and names an exit code, that is a real crash; use the sections above.
 
 **Two things changed here** ([#1190](https://github.com/debpalash/VoiceStudio/issues/1190)):
 
@@ -1273,7 +1313,7 @@ VoiceStudio pins pedalboard to `>=0.9.14,<0.9.21` while [upstream portable-wheel
 
 ### TorchCodec unavailable
 
-When torchaudio requires an unavailable TorchCodec installation, VoiceStudio writes through soundfile and reads reference audio through its FFmpeg fallback. Reference amplitude is normalized using the decoded sample representation, including 8-, 24-, and 32-bit PCM.
+When torchaudio requires an unavailable TorchCodec installation, VoiceStudio writes through soundfile and reads audio (reference clips, dub segments, cached-segment headers) through soundfile or its FFmpeg fallback, so dub assembly works on torchaudio 2.9 without TorchCodec. Reference amplitude is normalized using the decoded sample representation, including 8-, 24-, and 32-bit PCM.
 
 ### Isolated engine timeouts
 
@@ -1328,6 +1368,42 @@ Python traceback may not exist; include the captured crash details and system/GP
 information when reporting them. The name identifies the failure category, not
 its cause: it does not by itself prove a driver, model, or memory problem.
 
+### Backend would not start (Windows: `spawn UNKNOWN`, "did not answer", "environment incomplete")
+
+Three different startup failures share the same screen. The app now names the
+program it tried to launch, quotes what the backend last printed (or says it
+printed nothing, or that nothing was spawned), and adds a localized hint under
+the message:
+
+- **`Could not start <program>: spawn UNKNOWN`** — Windows (or your security
+  software) refused to run the Python runtime; `UNKNOWN` is how the OS reports a
+  blocked executable. Add VoiceStudio's runtime folder to your antivirus
+  exclusions (Windows Security → Virus & threat protection → Manage settings →
+  Exclusions) and make sure it is not inside OneDrive, then retry.
+- **`Backend did not answer on port 3900 within N s`** — the wait for the
+  backend ran out. The budget (`OMNIVOICE_STARTUP_BUDGET_S`) now starts when the
+  backend process is spawned, not when the launch began, defaults to 300 s (600 s
+  on a machine with four or fewer cores or 8 GB of RAM or less, where a PC
+  without a dedicated GPU is usually found), and is extended while the backend is
+  still printing, up to three times the budget. The runtime health probe that
+  runs before the launch also gets 180 s instead of 30 s, and a probe that merely
+  ran out of time is treated as inconclusive instead of sending an intact
+  runtime back to the setup screen. The first start after an install is the
+  slowest because antivirus scans every new file; later starts are much faster.
+- **`The Python environment in <folder> is missing or incomplete`** (running from
+  a source checkout) — run `bun run setup:api` in the repository. If the folder
+  is inside OneDrive, Dropbox, iCloud Drive or Google Drive, move the checkout to
+  a plain local folder first: online-only placeholders and file locking break
+  the Python environment.
+
+A native crash (`3221225477`, `-1073741819`) right after pressing Generate
+shortly after launch was caused by the startup preload and the first generation
+loading the TTS model at the same time. Cold loads are now serialized across both
+paths; if a load ever wedges past its deadline, retries fail immediately with a
+"restart the backend" message instead of queueing behind it. If a native crash
+persists, attach the full faulthandler dump (the `Windows fatal exception` block
+including every `Thread` section) from Settings → Logs → Backend.
+
 ### ASR initialization errors
 
 A PyTorch Whisper initialization failure can come from an import, checkpoint,
@@ -1337,3 +1413,7 @@ prove that torch and torchvision versions are mismatched. Save the diagnostic
 bundle and check package versions in the environment running the backend before
 reinstalling anything. Faster Whisper is an alternative when only transcription
 is affected; it does not diagnose or repair the original environment.
+
+## Concurrent migration backups
+
+Concurrent pre-migration database snapshots reserve distinct backup counters before copying. Reservation files are not recovery backups. A reservation left by an interrupted writer is skipped by subsequent snapshots rather than reused.

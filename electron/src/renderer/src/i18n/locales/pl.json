@@ -731,6 +731,7 @@
     "restore_title": "Przywróć wszystkie segmenty do oryginalnej transkrypcji tekstu",
     "clean_up": "Posprzątaj",
     "clean_up_title": "Połącz małe fragmenty i sąsiadujące krótkie segmenty",
+    "mirror_delivery": "Odwzoruj oryginalną interpretację",
     "popular": "Popularne",
     "all_languages": "Wszystkie języki",
     "engine_label": "Silnik",
@@ -881,6 +882,11 @@
     "cleaned_other": "Oczyszczone {{count}} fragmenty",
     "segments_clean": "Segmenty już czyste",
     "cleanup_failed": "Czyszczenie nie powiodło się: {{message}}",
+    "mirror_applied_one": "Odwzorowano oryginalną interpretację w {{count}} linii",
+    "mirror_applied_other": "Odwzorowano oryginalną interpretację w {{count}} liniach",
+    "mirror_none": "Żadna linia nie wymagała wskazówki",
+    "mirror_insufficient": "Za mało wyraźnej mowy, by odczytać oryginalną interpretację",
+    "mirror_failed": "Odwzorowanie interpretacji nie powiodło się: {{message}}",
     "cinematic_no_llm": "Ta jakość wymaga dostawcy LLM. Skonfiguruj go w sekcji Dostawcy LLM, aby kontynuować.",
     "dialect_not_applied": "Wybrany dialekt wymaga LLM — przełącz silnik na OpenAI/Ollama lub wybierz jakość Cinematic.",
     "translate_errors": "{{errorCount}}/{{totalCount}} segment(y) nie powiodły się: {{firstError}}",
@@ -2134,6 +2140,7 @@
     "starting": "Uruchamianie lokalnego silnika…",
     "attaching": "Łączenie z działającym silnikiem…",
     "crashed": "Lokalny silnik nieoczekiwanie się zatrzymał.",
+    "unresponsive": "Silnik lokalny jest zajęty i nie odpowiada — sam wróci do normy.",
     "failed": "Nie udało się uruchomić lokalnego silnika.",
     "idle": "Oczekiwanie na lokalny silnik…",
     "log_label": "Dziennik silnika",
@@ -2141,7 +2148,10 @@
     "elapsed": "Upłynęło {{seconds}} s",
     "first_run_hint": "Pierwsze uruchomienie może potrwać kilka minut podczas przygotowywania środowiska Python.",
     "port_in_use_short": "Port {{port}} jest zajęty",
-    "proxy_bypass_help": "Całkowicie zamknij VoiceStudio, ustaw w terminalu HTTP_PROXY/HTTPS_PROXY na adres proxy oraz NO_PROXY na wykluczone hosty, a następnie uruchom VoiceStudio z tego terminala. Ponowienie próby w działającej aplikacji nie wczytuje nowych zmiennych środowiskowych."
+    "proxy_bypass_help": "Całkowicie zamknij VoiceStudio, ustaw w terminalu HTTP_PROXY/HTTPS_PROXY na adres proxy oraz NO_PROXY na wykluczone hosty, a następnie uruchom VoiceStudio z tego terminala. Ponowienie próby w działającej aplikacji nie wczytuje nowych zmiennych środowiskowych.",
+    "hint_spawn_blocked": "System operacyjny lub oprogramowanie zabezpieczające odmówiło uruchomienia lokalnego silnika. Dodaj folder środowiska uruchomieniowego VoiceStudio do wyjątków programu antywirusowego (Windows: Zabezpieczenia Windows → Ochrona przed wirusami i zagrożeniami → Zarządzaj ustawieniami → Wykluczenia), upewnij się, że nie znajduje się w folderze synchronizowanym z chmurą, takim jak OneDrive, i spróbuj ponownie.",
+    "hint_slow_start": "Silnik nadal się uruchamiał, gdy skończył się czas oczekiwania. Wolne komputery, zwłaszcza bez dedykowanej karty graficznej, oraz pierwsze uruchomienie po instalacji (antywirus skanuje każdy nowy plik) mogą potrzebować kilku minut. Zamknij aplikacje zajmujące dużo pamięci i spróbuj ponownie; kolejne uruchomienia są znacznie szybsze.",
+    "hint_synced_folder": "Ta lokalizacja znajduje się w folderze synchronizowanym z chmurą (OneDrive, Dropbox, iCloud Drive, Google Drive). Symbole zastępcze tylko online i blokowanie plików psują środowisko Pythona. Przenieś VoiceStudio do zwykłego folderu lokalnego (na przykład C:\\VoiceStudio w systemie Windows lub ~/VoiceStudio w macOS i Linux) i skonfiguruj go ponownie."
   },
   "bootstrap": {
     "checking": "Sprawdzanie środowiska…",
@@ -2886,7 +2896,9 @@
     "gpu_arch_unsupported": "Ta wersja PyTorch nie obsługuje Twojego GPU. Wybierz CPU w Ustawienia → Wydajność i urządzenie lub zainstaluj zgodną wersję PyTorch.",
     "windows_app_control_blocked": "Kontrola aplikacji systemu Windows zablokowała wymagany plik. Poproś administratora o zezwolenie na uruchamianie zaufanego środowiska VoiceStudio, a następnie uruchom aplikację ponownie.",
     "audio_io_failed": "Nie można odczytać ani zapisać dźwięku. Sprawdź format pliku, wolne miejsce na dysku i uprawnienia do plików. Sprawdź folder w Ustawienia → Pamięć.",
-    "no_audio_track": "Ten plik nie ma ścieżki dźwiękowej, więc nie ma mowy do transkrypcji, dubbingu ani klonowania. Wybierz plik wideo lub audio zawierający dźwięk."
+    "no_audio_track": "Ten plik nie ma ścieżki dźwiękowej, więc nie ma mowy do transkrypcji, dubbingu ani klonowania. Wybierz plik wideo lub audio zawierający dźwięk.",
+    "transcription_media_tool": "Transkrypcja wymaga ffmpeg, którego VoiceStudio nie mogło znaleźć lub uruchomić. Otwórz Ustawienia → Narzędzia audio i użyj Pobierz/Napraw albo zainstaluj ffmpeg (macOS: brew install ffmpeg; Windows: winget install Gyan.FFmpeg; Linux: menedżer pakietów) i uruchom VoiceStudio ponownie. Możesz też wskazać plik ffmpeg w FFMPEG_PATH.",
+    "transcription_pipe_lost": "Backend utracił kanał wyjściowy do aplikacji podczas transkrypcji (broken pipe). Uruchom VoiceStudio ponownie i spróbuj jeszcze raz."
   },
   "network": {
     "copied": "Skopiowano",

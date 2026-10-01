@@ -49,6 +49,39 @@ def safe_filename(value: object) -> str:
     return name
 
 
+_PORTABLE_INVALID_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f\x7f]')
+
+
+def portable_filename(value: object, default: str = "file", max_bytes: int = 200) -> str:
+    """Turn arbitrary text (a video title, a voice name) into a filename every
+    desktop OS accepts. ``safe_filename`` *validates*; this *repairs*.
+
+    Windows rejects ``< > : " / \\ | ? *``, control characters, trailing
+    dots/spaces and device names (``CON``, ``NUL``...) with ``[Errno 22] Invalid
+    argument``; titles like ``"How to X: a guide?"`` hit that on the first
+    export. The extension survives truncation, which is by UTF-8 bytes so a CJK
+    title cannot overrun the 255-byte name limit of ext4/APFS/NTFS.
+    """
+    name = _PORTABLE_INVALID_CHARS.sub("_", str(value or "")).strip(" .")
+    stem, dot, ext = name.rpartition(".")
+    if not dot or not stem or len(ext) > 16:
+        stem, ext = name, ""
+    else:
+        ext = "." + ext
+    budget = max(2, max_bytes - len(ext.encode("utf-8")))
+
+    def _fit(text: str) -> str:
+        return text.encode("utf-8")[:budget].decode("utf-8", "ignore").rstrip(" .")
+
+    stem = _fit(stem) or default
+    if not stem.strip("_ "):
+        stem = default
+    # Check device names AFTER truncation: cutting a long stem can expose "CON".
+    if stem.split(".", 1)[0].rstrip().upper() in _WINDOWS_RESERVED_NAMES:
+        stem = _fit("_" + stem)
+    return stem + ext
+
+
 def resolve_within(root: os.PathLike[str] | str, value: os.PathLike[str] | str) -> Path:
     """Resolve *value* beneath *root*, rejecting traversal and symlink escapes.
 

@@ -231,7 +231,10 @@ export function loopWindow(startSec, endSec, durationSec) {
   const start = clamp(startSec, 0, Math.max(0, durationSec));
   const seg = Math.max(MIN_LOOP_SEC, endSec - start);
   const loopEnd = Math.min(durationSec, start + seg);
-  return { loopStart: start, loopEnd, seg: loopEnd - start };
+  // At the buffer boundary there is no room to extend forward. Use the last
+  // available samples instead so Web Audio never ignores a collapsed loop.
+  const loopStart = Math.min(start, Math.max(0, loopEnd - Math.min(MIN_LOOP_SEC, durationSec)));
+  return { loopStart, loopEnd, seg: loopEnd - loopStart };
 }
 
 export function sliceToMono(buffer, startSec, endSec) {

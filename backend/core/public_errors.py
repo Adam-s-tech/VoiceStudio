@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 _PROVIDER_DETAILS = {
@@ -70,8 +71,75 @@ def stream_failure(code: str) -> dict[str, object]:
             ),
             "retryable": True,
         },
+        "transcription_media_tool": {
+            "code": "transcription_media_tool",
+            "detail": (
+                "Transcription needs ffmpeg, which VoiceStudio could not find or "
+                "run. Open Settings → Audio tools and use Download/Repair, or "
+                "install ffmpeg (macOS: brew install ffmpeg; Windows: winget "
+                "install Gyan.FFmpeg; Linux: your package manager) and restart "
+                "VoiceStudio. You can also point FFMPEG_PATH at an ffmpeg binary."
+            ),
+            "retryable": True,
+        },
+        "transcription_pipe_lost": {
+            "code": "transcription_pipe_lost",
+            "detail": (
+                "The backend lost its output pipe to the app while transcribing "
+                "(broken pipe). Restart VoiceStudio and try again."
+            ),
+            "retryable": True,
+        },
     }
     return dict(failures.get(code, failures["generation_failed"]))
+
+
+def _exception_chain(error: object, limit: int = 8):
+    """The exception, then its ``__cause__``/``__context__`` links (bounded)."""
+    seen: set[int] = set()
+    while isinstance(error, BaseException) and id(error) not in seen and len(seen) < limit:
+        seen.add(id(error))
+        yield error
+        error = error.__cause__ or error.__context__
+
+
+def transcription_failure_code(error: object) -> str:
+    """Stable ``stream_failure`` code for a private ASR chunk exception.
+
+    Only the exception's type, errno and filename are inspected locally; the
+    caller ships a VoiceStudio-owned message for the returned code, never the
+    exception text. A missing/unrunnable ffmpeg (``[Errno 2] ... 'ffmpeg'``,
+    ``[WinError 193]``, :class:`MediaToolUnavailableError`) and a closed stdio
+    pipe (``[Errno 32] Broken pipe``) each have a different remedy, so they must
+    not collapse into the generic "check the selected ASR engine" reply (#2404,
+    #2405).
+    """
+    import errno
+
+    from services.ffmpeg_utils import MediaToolUnavailableError
+
+    pipe = False
+    for exc in _exception_chain(error):
+        if isinstance(exc, MediaToolUnavailableError):
+            return "transcription_media_tool"
+        if isinstance(exc, OSError):
+            name = os.path.basename(str(exc.filename or "")).lower()
+            if name.startswith(("ffmpeg", "ffprobe")) and (
+                exc.errno in (errno.ENOENT, errno.ENOEXEC, errno.EACCES)
+                or getattr(exc, "winerror", None) in (2, 193)
+            ):
+                return "transcription_media_tool"
+        low = str(exc).lower()
+        try:
+            from core.failure import _is_missing_media_tool
+
+            if _is_missing_media_tool(low):
+                return "transcription_media_tool"
+        except Exception:  # noqa: BLE001 — classification must never raise
+            pass
+        if isinstance(exc, BrokenPipeError) or "broken pipe" in low or "[errno 32]" in low:
+            pipe = True
+    return "transcription_pipe_lost" if pipe else "transcription_failed"
 
 
 def stream_generation_failure(error: BaseException | object) -> dict[str, object]:
@@ -187,11 +255,18 @@ def public_exception_response(error: BaseException, *, fallback: str) -> dict[st
     HF_MIRROR_UNREACHABLE is allowed alongside it: its hint is dynamic (it
     names the configured mirror) and its trigger requires that a mirror is
     configured at all, so it cannot fire on an unrelated failure (#874).
+
+    The EXCEPTION is classified, not ``str(error)`` (#2462). The two memory
+    classes are the ones a message cannot carry — a bare ``MemoryError()`` has
+    an empty message, and the generate router re-raises OOMs as its own "ran
+    out of memory" prose — so stringifying first lost exactly the evidence that
+    identifies them. ``classify`` still accepts a plain string, so this is the
+    only behavior that changes.
     """
     from core.failure import _CONTEXT_FREE_HINT_CLASSES, classify, public_hint_for_topic
 
     try:
-        topic = classify(str(error))
+        topic = classify(error)
         if topic and topic not in _CONTEXT_FREE_HINT_CLASSES and topic != "HF_MIRROR_UNREACHABLE":
             topic = ""
         hint = public_hint_for_topic(topic) if topic else ""

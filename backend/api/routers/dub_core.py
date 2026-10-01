@@ -19,7 +19,7 @@ from core.config import PREVIEW_DIR
 from core.tasks import task_manager
 from core.logging_utils import log_safe
 from core import event_bus
-from schemas.requests import DubIngestUrlRequest, ParseSubtitleTextRequest
+from schemas.requests import CleanupSegmentsRequest, DubIngestUrlRequest, ParseSubtitleTextRequest
 from services.srt_parser import CUE_SOURCE_FIELDS, CUE_SOURCE_ID
 from services.model_manager import get_model, _gpu_pool, _cpu_pool, get_diarization_pipeline, offload_tts_for_asr, restore_tts_after_asr, should_preload_tts_asr, release_device_cache
 from services.asr_backend import (
@@ -507,11 +507,21 @@ def dub_use_downloaded_captions(job_id: str):
 
 
 @router.post("/dub/cleanup-segments/{job_id}")
-def dub_cleanup_segments(job_id: str):
-    """Re-run merge/stitch passes on a job's existing segments to drop fragments."""
+def dub_cleanup_segments(job_id: str, req: Optional[CleanupSegmentsRequest] = None):
+    """Re-run merge/stitch passes to drop fragments.
+
+    Cleans the editor's segments when sent, so unsaved text, timing and
+    direction edits survive; otherwise the job's stored segments. The
+    editor's result is returned without being stored: it is an undoable edit
+    like any other, and the job keeps the segments its existing audio and
+    subtitle exports were generated from until the next generation.
+    """
     job = _get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    if req is not None:
+        cleaned = clean_up_segments(req.segments)
+        return {"segments": cleaned, "before": len(req.segments), "after": len(cleaned)}
     segments = job.get("segments") or []
     cleaned = clean_up_segments(segments)
     job["segments"] = cleaned
@@ -1574,17 +1584,18 @@ async def dub_transcribe_stream(
                     return {"chunks": shifted, "language": r.get("language"), "speaker_turns": turns}
                 except Exception as exc:
                     # Keep diagnostics local and fixed-shape. In particular,
-                    # CUDA OOM is a distinct, actionable recovery class rather
-                    # than the generic "no segments" dead end.
+                    # CUDA OOM, a missing ffmpeg and a closed stdio pipe are
+                    # distinct, actionable recovery classes rather than the
+                    # generic "no segments" dead end.
                     is_memory = isinstance(exc, torch.OutOfMemoryError)
                     logger.error(
                         "Chunk transcription failed (backend=%s; class=%s; details withheld)",
                         _asr_backend.id,
                         type(exc).__name__,
                     )
-                    from core.public_errors import stream_failure
+                    from core.public_errors import stream_failure, transcription_failure_code
                     failure = stream_failure(
-                        "transcription_memory" if is_memory else "transcription_failed"
+                        "transcription_memory" if is_memory else transcription_failure_code(exc)
                     )
                     return {
                         "chunks": [],
@@ -2251,10 +2262,10 @@ async def dub_transcribe_stream(
         try:
             async for ev in _gen_body():
                 yield ev
-        except Exception:  # noqa: BLE001 — last-resort stream finalizer
-            logger.error("Transcription stream failed unexpectedly")
-            from core.public_errors import stream_failure
-            yield _sse_event("error", stream_failure("transcription_failed"))
+        except Exception as exc:  # noqa: BLE001 — last-resort stream finalizer
+            logger.error("Transcription stream failed unexpectedly (class=%s)", type(exc).__name__)
+            from core.public_errors import stream_failure, transcription_failure_code
+            yield _sse_event("error", stream_failure(transcription_failure_code(exc)))
             yield _sse_event("done", {})
         finally:
             _asr_work.stop()

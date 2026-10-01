@@ -1,5 +1,6 @@
 import asyncio
 import errno
+import filecmp
 import logging
 from core.logging_utils import log_safe
 import os
@@ -190,6 +191,15 @@ def _binary_runs(path: str) -> bool:
     return ok
 
 
+class MediaToolUnavailableError(RuntimeError):
+    """ffmpeg/ffprobe is missing, or present but not runnable.
+
+    A ``RuntimeError`` so existing handlers keep working; the dedicated type
+    lets the transcription path pick the actionable "repair the media engine"
+    reply by class instead of by sniffing message text.
+    """
+
+
 def find_ffmpeg():
     """Locate an ffmpeg binary.
 
@@ -320,6 +330,55 @@ def find_ffprobe():
     return None
 
 
+def _bare_name_shim(real: str, tool: str) -> "str | None":
+    """Directory exposing *real* under the bare name ``<tool>[.exe]``, or None.
+
+    imageio-ffmpeg ships its binary as ``ffmpeg-<platform>-vN[.exe]``, so
+    publishing its directory on ``PATH`` never satisfies a dependency's literal
+    ``ffmpeg`` lookup (parakeet-mlx, openai-whisper, pydub, ...): they still die
+    with ``[Errno 2] No such file or directory: 'ffmpeg'``. A symlink (hardlink
+    or copy where Windows refuses symlinks) under the bare name closes that gap
+    on every platform without asking the user to install anything. Best-effort:
+    returns None when the name is already bare or the shim cannot be written.
+    """
+    exe = f"{tool}.exe" if os.name == "nt" else tool
+    if os.path.basename(real).lower() == exe:
+        return None
+    # An FFMPEG_PATH like ./tools/ffmpeg-custom is relative to the process cwd;
+    # a symlink resolves its target relative to the shims directory instead.
+    real = os.path.abspath(real)
+    try:
+        from core.config import DATA_DIR
+
+        directory = os.path.join(DATA_DIR, "media_tools", "shims")
+        link = os.path.join(directory, exe)
+        os.makedirs(directory, exist_ok=True)
+        if os.path.lexists(link):
+            try:
+                # Symlink/hardlink: same file. A copy must match byte for byte
+                # (a corrupt copy, or a changed binary of equal size, must not
+                # keep shadowing the validated one).
+                if os.path.samefile(link, real) or (
+                    not os.path.islink(link) and filecmp.cmp(link, real, shallow=False)
+                ):
+                    return directory
+            except OSError:
+                pass
+            os.unlink(link)
+        try:
+            os.symlink(real, link)
+        except (OSError, NotImplementedError):
+            try:
+                os.link(real, link)
+            except OSError:
+                shutil.copy2(real, link)
+        return directory
+    except OSError as e:
+        # errno only: the exception text carries absolute (home) paths.
+        logger.debug("bare-name %s shim unavailable (errno=%s)", tool, e.errno)
+        return None
+
+
 def ensure_media_tools_on_path() -> list[str]:
     """Put the resolved ffmpeg/ffprobe on ``PATH`` for third-party code (#1256).
 
@@ -341,16 +400,17 @@ def ensure_media_tools_on_path() -> list[str]:
     added: list[str] = []
     try:
         directories: list[str] = []
-        for resolve in (find_ffmpeg, find_ffprobe):
+        for tool, resolve in (("ffmpeg", find_ffmpeg), ("ffprobe", find_ffprobe)):
             try:
                 path = resolve()
             except Exception:
                 continue
             if not path:
                 continue
-            directory = os.path.dirname(os.path.abspath(path))
-            if directory and directory not in directories:
-                directories.append(directory)
+            shim = _bare_name_shim(path, tool)
+            for directory in (shim, os.path.dirname(os.path.abspath(path))):
+                if directory and directory not in directories:
+                    directories.append(directory)
 
         current = os.environ.get("PATH", "")
         entries = current.split(os.pathsep) if current else []
@@ -358,7 +418,9 @@ def ensure_media_tools_on_path() -> list[str]:
         # case-sensitive and "already present" must not depend on casing.
         normalize = os.path.normcase
         present = {normalize(e) for e in entries if e}
-        for directory in directories:
+        # Reversed so the first-listed directory (the validated shim) ends up
+        # first on PATH, ahead of any competing system ffmpeg/ffprobe.
+        for directory in reversed(directories):
             if normalize(directory) in present:
                 continue
             entries.insert(0, directory)
@@ -432,7 +494,9 @@ async def _spawn_thread_fallback(cmd, **kwargs):
             return out, err
 
         async def wait(self):
-            return await loop.run_in_executor(None, self._popen.wait)
+            code = await loop.run_in_executor(None, self._popen.wait)
+            self.returncode = code
+            return code
 
         def kill(self):
             self._popen.kill()

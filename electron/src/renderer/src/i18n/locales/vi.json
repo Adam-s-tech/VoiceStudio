@@ -727,6 +727,7 @@
     "restore_title": "Khôi phục tất cả các phân đoạn về văn bản được phiên âm gốc",
     "clean_up": "Dọn dẹp",
     "clean_up_title": "Hợp nhất các đoạn nhỏ và các đoạn ngắn liền kề",
+    "mirror_delivery": "Mô phỏng cách thể hiện gốc",
     "popular": "phổ biến",
     "all_languages": "Tất cả ngôn ngữ",
     "engine_label": "Động cơ",
@@ -877,6 +878,11 @@
     "cleaned_other": "Đã làm sạch {{count}} mảnh vỡ",
     "segments_clean": "Phân khúc đã sạch",
     "cleanup_failed": "Dọn dẹp không thành công: {{message}}",
+    "mirror_applied_one": "Đã mô phỏng cách thể hiện gốc cho {{count}} dòng",
+    "mirror_applied_other": "Đã mô phỏng cách thể hiện gốc cho {{count}} dòng",
+    "mirror_none": "Không có dòng nào cần chỉ đạo",
+    "mirror_insufficient": "Không đủ giọng nói rõ để đọc cách thể hiện gốc",
+    "mirror_failed": "Mô phỏng cách thể hiện thất bại: {{message}}",
     "cinematic_no_llm": "Chất lượng này cần nhà cung cấp LLM. Hãy cấu hình trong Nhà cung cấp LLM để tiếp tục.",
     "dialect_not_applied": "Phương ngữ đã chọn cần LLM để áp dụng — chuyển Engine sang OpenAI/Ollama hoặc chọn chất lượng Cinematic.",
     "translate_errors": "{{errorCount}}/{{totalCount}} phân đoạn không thành công: {{firstError}}",
@@ -2130,6 +2136,7 @@
     "starting": "Đang khởi động bộ máy cục bộ…",
     "attaching": "Đang kết nối với bộ máy đang chạy…",
     "crashed": "Bộ máy cục bộ đã dừng đột ngột.",
+    "unresponsive": "Động cơ cục bộ đang bận và tạm thời không phản hồi — nó sẽ tự phục hồi.",
     "failed": "Không thể khởi động bộ máy cục bộ.",
     "idle": "Đang chờ bộ máy cục bộ…",
     "log_label": "Nhật ký bộ máy",
@@ -2137,7 +2144,10 @@
     "elapsed": "Đã qua {{seconds}} giây",
     "first_run_hint": "Lần chạy đầu có thể mất vài phút để chuẩn bị môi trường Python.",
     "port_in_use_short": "Cổng {{port}} đang được sử dụng",
-    "proxy_bypass_help": "Thoát hoàn toàn VoiceStudio, đặt HTTP_PROXY/HTTPS_PROXY thành URL proxy và NO_PROXY thành các máy chủ được loại trừ trong terminal, rồi mở VoiceStudio từ terminal đó. Thử lại trong ứng dụng đang mở không tải các biến môi trường mới."
+    "proxy_bypass_help": "Thoát hoàn toàn VoiceStudio, đặt HTTP_PROXY/HTTPS_PROXY thành URL proxy và NO_PROXY thành các máy chủ được loại trừ trong terminal, rồi mở VoiceStudio từ terminal đó. Thử lại trong ứng dụng đang mở không tải các biến môi trường mới.",
+    "hint_spawn_blocked": "Hệ điều hành hoặc phần mềm bảo mật của bạn đã từ chối khởi chạy engine cục bộ. Hãy thêm thư mục runtime của VoiceStudio vào danh sách loại trừ của phần mềm diệt virus (Windows: Bảo mật Windows → Bảo vệ khỏi virus và mối đe dọa → Quản lý cài đặt → Loại trừ), đảm bảo thư mục này không nằm trong thư mục đồng bộ đám mây như OneDrive, rồi thử lại.",
+    "hint_slow_start": "Engine vẫn đang khởi động thì hết thời gian chờ. Máy chậm, nhất là máy không có GPU rời, và lần khởi chạy đầu tiên sau khi cài đặt (phần mềm diệt virus quét mọi tệp mới) có thể mất vài phút. Hãy đóng các ứng dụng tốn nhiều bộ nhớ rồi thử lại; những lần khởi động sau nhanh hơn nhiều.",
+    "hint_synced_folder": "Vị trí này nằm trong thư mục đồng bộ đám mây (OneDrive, Dropbox, iCloud Drive, Google Drive). Các tệp giữ chỗ chỉ có trên mạng và việc khóa tệp làm hỏng môi trường Python. Hãy chuyển VoiceStudio sang một thư mục cục bộ thông thường (ví dụ C:\\VoiceStudio trên Windows hoặc ~/VoiceStudio trên macOS và Linux) rồi thiết lập lại."
   },
   "bootstrap": {
     "checking": "Đang kiểm tra môi trường…",
@@ -2882,7 +2892,9 @@
     "gpu_arch_unsupported": "Bản dựng PyTorch này không hỗ trợ GPU của bạn. Chọn CPU trong Cài đặt → Hiệu năng và thiết bị hoặc cài đặt bản dựng PyTorch tương thích.",
     "windows_app_control_blocked": "Tính năng kiểm soát ứng dụng của Windows đã chặn một tệp cần thiết. Nhờ quản trị viên cho phép môi trường chạy VoiceStudio đáng tin cậy, rồi khởi động lại ứng dụng.",
     "audio_io_failed": "Không thể đọc hoặc lưu âm thanh. Kiểm tra định dạng tệp, dung lượng đĩa trống và quyền truy cập tệp. Kiểm tra thư mục trong Cài đặt → Lưu trữ.",
-    "no_audio_track": "Tệp này không có rãnh âm thanh nên không có lời nói để chép lời, lồng tiếng hoặc nhân bản. Hãy chọn tệp video hoặc âm thanh có tiếng."
+    "no_audio_track": "Tệp này không có rãnh âm thanh nên không có lời nói để chép lời, lồng tiếng hoặc nhân bản. Hãy chọn tệp video hoặc âm thanh có tiếng.",
+    "transcription_media_tool": "Chép lời cần ffmpeg, nhưng VoiceStudio không thể tìm thấy hoặc chạy nó. Mở Cài đặt → Công cụ âm thanh và dùng Tải xuống/Sửa chữa, hoặc cài ffmpeg (macOS: brew install ffmpeg; Windows: winget install Gyan.FFmpeg; Linux: trình quản lý gói của bạn) rồi khởi động lại VoiceStudio. Bạn cũng có thể trỏ FFMPEG_PATH tới tệp ffmpeg.",
+    "transcription_pipe_lost": "Backend đã mất kênh đầu ra tới ứng dụng khi đang chép lời (broken pipe). Hãy khởi động lại VoiceStudio và thử lại."
   },
   "network": {
     "copied": "Đã sao chép",

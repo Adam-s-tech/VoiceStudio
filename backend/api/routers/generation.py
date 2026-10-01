@@ -2884,9 +2884,23 @@ def _safe_output_path(name):
     return candidate
 
 
-def _remove_wav_if_unreferenced(conn, audio_path, exclude_ids=()):
+def _remove_deferred_wavs(paths) -> None:
+    """Delete WAVs queued by ``_remove_wav_if_unreferenced(..., defer=...)``.
+
+    Call this AFTER the ``db_conn()`` block exits (its commit succeeded): a
+    rolled-back delete must never have already unlinked the audio its
+    surviving rows still point at."""
+    for p in paths:
+        with contextlib.suppress(OSError):
+            os.remove(p)
+
+
+def _remove_wav_if_unreferenced(conn, audio_path, exclude_ids=(), defer=None):
     """Delete a history WAV from OUTPUTS_DIR — but only when no *other*
     generation_history row still references the same file.
+
+    With ``defer`` (a list) the path is appended instead of removed, so the
+    caller can unlink after its transaction commits (``_remove_deferred_wavs``).
 
     History WAVs are uniquely owned by their row (lock/save-as-profile COPY
     into VOICES_DIR, exports copy to the user's destination), so this guard is
@@ -2904,6 +2918,9 @@ def _remove_wav_if_unreferenced(conn, audio_path, exclude_ids=()):
         (audio_path, *exclude_ids),
     ).fetchone()[0]
     if others:
+        return
+    if defer is not None:
+        defer.append(p)
         return
     with contextlib.suppress(OSError):
         os.remove(p)
@@ -2936,6 +2953,7 @@ def _prune_history_over_cap(*, keep_id: str | None = None) -> int:
     cap = _history_cap()
     if cap <= 0:
         return 0  # 0 = unlimited
+    doomed: list[str] = []
     with db_conn() as conn:
         total = conn.execute("SELECT COUNT(*) FROM generation_history").fetchone()[0]
         excess = total - cap
@@ -2954,9 +2972,13 @@ def _prune_history_over_cap(*, keep_id: str | None = None) -> int:
             "DELETE FROM generation_history WHERE id=?", [(i,) for i in victim_ids]
         )
         for r in victims:
-            _remove_wav_if_unreferenced(conn, r["audio_path"], exclude_ids=victim_ids)
-        logger.info("history retention: pruned %d takes over the %d cap", len(victims), cap)
-        return len(victims)
+            _remove_wav_if_unreferenced(
+                conn, r["audio_path"], exclude_ids=victim_ids, defer=doomed
+            )
+    # Files go only after the row deletion has committed.
+    _remove_deferred_wavs(doomed)
+    logger.info("history retention: pruned %d takes over the %d cap", len(victims), cap)
+    return len(victims)
 
 
 @router.get("/history")
@@ -3033,23 +3055,29 @@ def set_history_starred(history_id: str, body: _StarBody):
 def clear_history():
     with db_conn() as conn:
         rows = conn.execute("SELECT audio_path FROM generation_history").fetchall()
-        for r in rows:
-            p = _safe_output_path(r["audio_path"])
-            if p and os.path.exists(p):
-                with contextlib.suppress(OSError):
-                    os.remove(p)
         conn.execute("DELETE FROM generation_history")
+    # Row deletion committed first: a failed commit must not leave rows whose
+    # audio is already gone.
+    for r in rows:
+        p = _safe_output_path(r["audio_path"])
+        if p and os.path.exists(p):
+            with contextlib.suppress(OSError):
+                os.remove(p)
     event_bus.emit("generation_history")
     return {"cleared": True}
 
 @router.delete("/history/{history_id}")
 def delete_single_history(history_id: str):
+    doomed: list[str] = []
     with db_conn() as conn:
         row = conn.execute("SELECT audio_path FROM generation_history WHERE id=?", (history_id,)).fetchone()
         conn.execute("DELETE FROM generation_history WHERE id=?", (history_id,))
         if row:
             # Row first, file second — the WAV goes only if no surviving take
             # still references it (see _remove_wav_if_unreferenced).
-            _remove_wav_if_unreferenced(conn, row["audio_path"], exclude_ids=(history_id,))
+            _remove_wav_if_unreferenced(
+                conn, row["audio_path"], exclude_ids=(history_id,), defer=doomed
+            )
+    _remove_deferred_wavs(doomed)  # after the commit, never before
     event_bus.emit("generation_history", {"action": "deleted", "id": history_id})
     return {"deleted": True}

@@ -727,6 +727,7 @@
     "restore_title": "Kembalikan semua segmen ke teks transkripsi asli",
     "clean_up": "Membersihkan",
     "clean_up_title": "Gabungkan fragmen kecil dan segmen pendek yang berdekatan",
+    "mirror_delivery": "Tiru pembawaan sumber",
     "popular": "Populer",
     "all_languages": "Semua bahasa",
     "engine_label": "Mesin",
@@ -877,6 +878,11 @@
     "cleaned_other": "Membersihkan pecahan {{count}}",
     "segments_clean": "Segmen sudah bersih",
     "cleanup_failed": "Pembersihan gagal: {{message}}",
+    "mirror_applied_one": "Pembawaan asli ditiru pada {{count}} baris",
+    "mirror_applied_other": "Pembawaan asli ditiru pada {{count}} baris",
+    "mirror_none": "Tidak ada baris yang perlu arahan",
+    "mirror_insufficient": "Ucapan jelas tidak cukup untuk membaca pembawaan asli",
+    "mirror_failed": "Gagal meniru pembawaan: {{message}}",
     "cinematic_no_llm": "Kualitas ini memerlukan penyedia LLM. Konfigurasikan di Penyedia LLM untuk melanjutkan.",
     "dialect_not_applied": "Dialek terpilih memerlukan LLM — ganti Engine ke OpenAI/Ollama atau pilih kualitas Cinematic.",
     "translate_errors": "{{errorCount}}/{{totalCount}} segmen gagal: {{firstError}}",
@@ -2130,6 +2136,7 @@
     "starting": "Memulai mesin lokal…",
     "attaching": "Menghubungkan ke mesin yang sedang berjalan…",
     "crashed": "Mesin lokal berhenti secara tak terduga.",
+    "unresponsive": "Mesin lokal sedang sibuk dan belum merespons — akan pulih sendiri.",
     "failed": "Mesin lokal tidak dapat dimulai.",
     "idle": "Menunggu mesin lokal…",
     "log_label": "Log mesin",
@@ -2137,7 +2144,10 @@
     "elapsed": "{{seconds}} dtk berlalu",
     "first_run_hint": "Proses pertama dapat memakan waktu beberapa menit saat lingkungan Python disiapkan.",
     "port_in_use_short": "Port {{port}} sedang digunakan",
-    "proxy_bypass_help": "Tutup VoiceStudio sepenuhnya, atur HTTP_PROXY/HTTPS_PROXY ke URL proksi dan NO_PROXY ke host yang dikecualikan di terminal, lalu jalankan VoiceStudio dari terminal itu. Mencoba lagi di aplikasi yang masih berjalan tidak memuat variabel lingkungan baru."
+    "proxy_bypass_help": "Tutup VoiceStudio sepenuhnya, atur HTTP_PROXY/HTTPS_PROXY ke URL proksi dan NO_PROXY ke host yang dikecualikan di terminal, lalu jalankan VoiceStudio dari terminal itu. Mencoba lagi di aplikasi yang masih berjalan tidak memuat variabel lingkungan baru.",
+    "hint_spawn_blocked": "Sistem operasi atau perangkat lunak keamanan Anda menolak menjalankan mesin lokal. Tambahkan folder runtime VoiceStudio ke pengecualian antivirus (Windows: Keamanan Windows → Perlindungan virus & ancaman → Kelola pengaturan → Pengecualian), pastikan folder itu tidak berada di dalam folder yang disinkronkan ke cloud seperti OneDrive, lalu coba lagi.",
+    "hint_slow_start": "Mesin masih memulai saat batas waktu tunggu habis. Komputer lambat, terutama tanpa GPU khusus, dan peluncuran pertama setelah instalasi (antivirus memindai setiap berkas baru) dapat memerlukan beberapa menit. Tutup aplikasi yang boros memori lalu coba lagi; peluncuran berikutnya jauh lebih cepat.",
+    "hint_synced_folder": "Lokasi ini berada di dalam folder yang disinkronkan ke cloud (OneDrive, Dropbox, iCloud Drive, Google Drive). Placeholder khusus daring dan penguncian berkas merusak lingkungan Python. Pindahkan VoiceStudio ke folder lokal biasa (misalnya C:\\VoiceStudio di Windows atau ~/VoiceStudio di macOS dan Linux), lalu siapkan ulang."
   },
   "bootstrap": {
     "checking": "Memeriksa lingkungan…",
@@ -2882,7 +2892,9 @@
     "gpu_arch_unsupported": "Versi PyTorch ini tidak mendukung GPU Anda. Pilih CPU di Pengaturan → Performa & Perangkat, atau instal versi PyTorch yang kompatibel.",
     "windows_app_control_blocked": "Kontrol aplikasi Windows memblokir file yang diperlukan. Minta administrator mengizinkan runtime VoiceStudio yang tepercaya, lalu mulai ulang aplikasi.",
     "audio_io_failed": "Audio tidak dapat dibaca atau disimpan. Periksa format file, ruang disk yang tersedia, dan izin file. Periksa folder di Pengaturan → Penyimpanan.",
-    "no_audio_track": "File ini tidak memiliki trek audio, jadi tidak ada ucapan untuk ditranskripsi, di-dubbing, atau dikloning. Pilih file video atau audio yang berisi suara."
+    "no_audio_track": "File ini tidak memiliki trek audio, jadi tidak ada ucapan untuk ditranskripsi, di-dubbing, atau dikloning. Pilih file video atau audio yang berisi suara.",
+    "transcription_media_tool": "Transkripsi membutuhkan ffmpeg, yang tidak dapat ditemukan atau dijalankan VoiceStudio. Buka Pengaturan → Alat audio lalu gunakan Unduh/Perbaiki, atau instal ffmpeg (macOS: brew install ffmpeg; Windows: winget install Gyan.FFmpeg; Linux: pengelola paket Anda) dan mulai ulang VoiceStudio. Anda juga dapat mengarahkan FFMPEG_PATH ke berkas ffmpeg.",
+    "transcription_pipe_lost": "Backend kehilangan saluran keluarannya ke aplikasi saat transkripsi (broken pipe). Mulai ulang VoiceStudio dan coba lagi."
   },
   "network": {
     "copied": "Disalin",

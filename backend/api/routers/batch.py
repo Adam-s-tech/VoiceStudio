@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from core.config import DATA_DIR
 from core import failure
 from core.logging_utils import log_safe
+from core.path_security import portable_filename
 from core.file_cleanup import FileCleanupError, unlink_if_present
 from services.dub_batching import (
     BATCH_WIDTH_ENV,
@@ -1157,7 +1158,7 @@ def download_batch_output(job_id: str, lang: str):
     if not path or not os.path.exists(path):
         raise HTTPException(404, f"No output for language '{lang}'")
 
-    filename = f"{os.path.splitext(job['filename'])[0]}_{lang}.mp4"
+    filename = portable_filename(f"{os.path.splitext(job['filename'])[0]}_{lang}.mp4", "output.mp4")
     return FileResponse(
         path,
         media_type="video/mp4",

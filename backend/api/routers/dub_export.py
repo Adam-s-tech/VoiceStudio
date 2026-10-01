@@ -13,7 +13,7 @@ from typing import Optional
 from core.config import DUB_DIR
 from core.http_headers import content_disposition
 from core.logging_utils import log_safe
-from core.path_security import UnsafePath, resolve_within
+from core.path_security import UnsafePath, portable_filename, resolve_within
 from core.tasks import task_manager
 from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
@@ -24,6 +24,7 @@ from services.ffmpeg_utils import (
     run_ffmpeg,
 )
 from services.karaoke_ass import build_ass, scale_words
+from services.prosody_mirror import AnalysisBudgetExceeded, SegmentSpan, mirror_file
 from services.video_retime import (
     DRIFT_TOLERANCE_S,
     RetimeError,
@@ -33,6 +34,7 @@ from services.video_retime import (
 )
 
 from api.routers.dub_core import _get_job
+from schemas.requests import ProsodyMirrorRequest
 
 router = APIRouter()
 logger = logging.getLogger("omnivoice.api")
@@ -1491,6 +1493,48 @@ async def dub_get_onsets(job_id: str):
     return payload
 
 
+@router.post("/dub/prosody-mirror/{job_id}")
+async def dub_prosody_mirror(job_id: str, req: ProsodyMirrorRequest):
+    """Suggest per-segment directions that mirror the source delivery.
+
+    Measures each line on the Demucs vocals track (the mix when separation
+    did not run) against its speaker's baseline and returns taxonomy
+    directions the editor can apply to lines without one. Read-only: nothing
+    about the job changes.
+    """
+    _job_dir_or_400(job_id)
+    job = _get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    mix = _optional_dub_artifact(job.get("audio_path"), job_id)
+    vocals = _optional_dub_artifact(job.get("vocals_path"), job_id)
+    src_path = vocals or mix
+    if not src_path:
+        raise HTTPException(status_code=404, detail="No audio track available for prosody analysis")
+    source = "vocals" if vocals and vocals != mix else "mix"
+
+    spans = [
+        SegmentSpan(id=seg.id, start=seg.start, end=seg.end, speaker_id=seg.speaker_id or "")
+        for seg in req.segments
+    ]
+    try:
+        results = await asyncio.to_thread(mirror_file, src_path, spans)
+    except AnalysisBudgetExceeded as e:
+        raise HTTPException(
+            status_code=413,
+            detail="These segments overlap far more than the source audio allows. "
+            "Remove duplicated or overlapping segments and try again.",
+        ) from e
+    except (OSError, RuntimeError, ValueError) as e:
+        logger.warning("prosody mirror failed for %s: %s", log_safe(job_id), log_safe(e))
+        raise HTTPException(
+            status_code=422,
+            detail="Prosody analysis could not read this job's audio. Re-import the source and try again.",
+        ) from e
+    return {"source": source, "segments": [result.to_dict() for result in results]}
+
+
 @router.get("/dub/thumb/{job_id}")
 async def dub_get_thumb(job_id: str):
     """Serve the extracted dub video thumbnail (jpg). 404 if not generated."""
@@ -1844,7 +1888,7 @@ async def dub_export_srt(
     srt_content = "\n".join(srt_lines)
     base_name = os.path.splitext(job.get('filename', 'video'))[0]
     suffix = "_dual" if dual else ""
-    dl_name = f"subtitles_{base_name}{suffix}.srt"
+    dl_name = portable_filename(f"subtitles_{base_name}{suffix}.srt", "subtitles")
     return Response(
         content=srt_content,
         media_type="text/plain",
@@ -1903,7 +1947,7 @@ async def dub_export_vtt(
     vtt_content = "\n".join(vtt_lines)
     base_name = os.path.splitext(job.get('filename', 'video'))[0]
     suffix = "_dual" if dual else ""
-    dl_name = f"subtitles_{base_name}{suffix}.vtt"
+    dl_name = portable_filename(f"subtitles_{base_name}{suffix}.vtt", "subtitles")
     return Response(
         content=vtt_content,
         media_type="text/vtt",
@@ -1947,7 +1991,7 @@ async def dub_export_ass(
             ]
 
     base_name = os.path.splitext(job.get('filename', 'video'))[0]
-    dl_name = f"subtitles_{base_name}_karaoke.ass"
+    dl_name = portable_filename(f"subtitles_{base_name}_karaoke.ass", "subtitles.ass")
     return Response(
         content=build_ass(segments),
         media_type="text/plain",
