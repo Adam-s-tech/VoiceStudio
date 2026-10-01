@@ -14,6 +14,59 @@ Use `bun run desktop-prod` to build and launch Electron, or `bun run dist`
 to create local installers without publishing. The app manages its backend.
 See [Electron setup](../../electron/README.md) and [migration notes](../electron-migration.md).
 
+### Windows installers
+
+Download the installer matching your PC from the
+[Releases page](https://github.com/debpalash/VoiceStudio/releases/latest):
+
+| PC | Installer |
+|---|---|
+| Intel / AMD (x64) | `VoiceStudio-Electron-<version>-win-x64.exe` |
+| Windows on ARM (Snapdragon X etc., experimental) | `VoiceStudio-Electron-<version>-win-arm64.exe` (releases without it: the x64 installer also works, under emulation) |
+
+`irm https://voicestudio.sh/install | iex` picks the right one automatically.
+
+### PCs without an NVIDIA GPU
+
+VoiceStudio is fully usable without a dedicated GPU: laptops with Intel or AMD
+integrated graphics, Ryzen/Ryzen AI parts and older desktops all run the whole
+app on the CPU, just slower (integrated graphics are not used for AI work).
+On first run the runtime installer detects that no NVIDIA driver is present and
+installs the small CPU build of PyTorch instead of the multi-GB CUDA one, so
+the download is much smaller and needs about 5 GiB free instead of 9 GiB. For
+the best experience on a CPU, pick a light voice engine (KittenTTS,
+Supertonic-3, PocketTTS) and a small Whisper model in the Model Catalogue; the
+setup screen lists them as its CPU preset. Set `OMNIVOICE_TORCH_VARIANT=cuda`
+(or `cpu`) before launching to override the detection.
+
+### Windows on ARM (Snapdragon X etc.)
+
+> [!NOTE]
+> **Experimental.** The ARM64 installer and the emulated runtime are built by
+> CI but have not yet passed an end-to-end validation on real hardware. Expect
+> rough edges and please report them.
+
+The app shell is native ARM64. PyTorch has no ARM64 Windows wheels for
+torchaudio/torchvision, so the AI backend runs as an **x64 Python under
+Windows' built-in emulation, on the CPU only** (no GPU or NPU acceleration).
+It is designed to work but will be slower than on an x64 PC; Windows 11 24H2
+or newer gives the emulator the AVX2 support PyTorch benefits from. Setup shows
+a "Windows on ARM" notice and applies the same light-engine advice as above.
+
+### Everything on an external drive (portable-style use)
+
+The Electron app has no single-file portable build. To keep it all on another
+drive (for example an external SSD):
+
+1. Run the installer and choose the external drive on its **Installation
+   Folder** page.
+2. On the setup screen, press **Change…** beside **App environment** to put the
+   Python environment on the drive.
+3. In **Settings > Storage**, move the application data folder (voices,
+   projects, settings) and the model cache to the drive.
+
+The drive must be connected when VoiceStudio starts.
+
 ## Legacy Tauri installation and troubleshooting
 
 The instructions below apply to the sunset Tauri app and existing Tauri installers.

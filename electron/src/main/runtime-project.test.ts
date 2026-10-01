@@ -62,6 +62,9 @@ function forcePlatform(platform: NodeJS.Platform) {
 beforeEach(() => {
   // Installation fixtures exercise a supported host; the Intel case overrides it.
   if (process.platform === 'darwin') vi.spyOn(process, 'arch', 'get').mockReturnValue('arm64');
+  // The baseline fixtures model an NVIDIA host (the lock's default wheels) whatever
+  // the machine running the tests has; CPU/ARM hosts are pinned explicitly below.
+  vi.stubEnv('OMNIVOICE_TORCH_VARIANT', 'cuda');
 });
 afterEach(async () => {
   vi.restoreAllMocks();

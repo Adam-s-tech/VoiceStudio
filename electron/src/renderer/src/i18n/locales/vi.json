@@ -2126,7 +2126,7 @@
     "setup_required": "Cài đặt môi trường cục bộ",
     "setup_hint": "Tải Python và các thành phần phụ thuộc của ứng dụng (vài GB). Mô hình giọng nói được cài riêng khi bạn chọn.",
     "installing": "Đang…",
-    "setup_space": "Giải phóng ít nhất 9 GiB trên ổ đĩa của ứng dụng rồi thử lại.",
+    "setup_space": "Giải phóng ít nhất {{gib}} GiB trên ổ đĩa của ứng dụng rồi thử lại.",
     "setup_access": "Cho phép ghi vào thư mục dữ liệu của ứng dụng rồi thử lại.",
     "setup_unsupported_platform": "Máy Mac Intel này không thể chạy backend AI cục bộ — PyTorch không có wheel cho macOS Intel. Hãy kết nối backend từ xa bên dưới; không cần cài đặt cục bộ.",
     "retry": "Thử lại",
@@ -2342,7 +2342,10 @@
     "still_needed": "Vẫn cần thiết:",
     "back": "Quay lại",
     "enter_studio": "Vào studio",
-    "continue_ok": "Tất cả đều tốt - tiếp tục"
+    "continue_ok": "Tất cả đều tốt - tiếp tục",
+    "check_arch_label": "Windows trên ARM",
+    "check_arch_detail": "PC Windows ARM64 — backend AI chạy dưới dạng x64 trong trình giả lập của Windows, chỉ dùng CPU (không tăng tốc GPU/NPU).",
+    "check_arch_fix": "Tạo giọng nói vẫn hoạt động nhưng chậm hơn. Nên chọn công cụ giọng nói nhẹ (KittenTTS, Supertonic-3, PocketTTS) và mô hình Whisper nhỏ."
   },
   "consent": {
     "title": "Giúp cải thiện VoiceStudio?",

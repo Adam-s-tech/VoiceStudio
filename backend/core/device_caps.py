@@ -712,6 +712,30 @@ def refresh() -> HostCaps:
     return detect_host_caps()
 
 
+# ── CPU-host precision + Windows-on-ARM detection ───────────────────────────
+
+# ── Windows-on-ARM detection ─────────────────────────────────────────────────
+
+
+def is_windows_on_arm() -> bool:
+    """True on a Windows-on-ARM machine, including an x64 interpreter running
+    under its Prism emulation layer (the only supported runtime there).
+
+    ``platform.machine()`` reports ``AMD64`` inside the emulated interpreter, so
+    it cannot tell a Snapdragon laptop from an ordinary x64 PC. Windows sets
+    ``PROCESSOR_ARCHITEW6432=ARM64`` for emulated processes; a native ARM64
+    process reports ``PROCESSOR_ARCHITECTURE=ARM64`` instead (also treated as
+    ARM — the answer to "is this an ARM Windows machine", not "is Python
+    native"). Never raises; always False off Windows.
+    """
+    if sys.platform != "win32":
+        return False
+    for key in ("PROCESSOR_ARCHITEW6432", "PROCESSOR_ARCHITECTURE"):
+        if os.environ.get(key, "").strip().upper() == "ARM64":
+            return True
+    return _platform.machine().strip().upper() == "ARM64"
+
+
 def mlx_supported() -> tuple[bool, str]:
     """``(ok, reason)``. ``ok=True`` **only** on Apple Silicon
     (``sys.platform == "darwin"`` and ``platform.machine() == "arm64"``) with
@@ -752,6 +776,7 @@ __all__ = [
     "detect_host_caps",
     "refresh",
     "mlx_supported",
+    "is_windows_on_arm",
     "arch_unsupported",
     "gfx_for_hsa_override",
     "hsa_override_for",

@@ -19,7 +19,7 @@ import sys
 from fastapi import APIRouter
 
 from api.schemas import SetupStatusResponse, PreflightResponse
-from core.device_caps import KERNEL_RISK_MARKER
+from core.device_caps import KERNEL_RISK_MARKER, is_windows_on_arm
 # MIN_FREE_GB + disk_free_bytes are single-sourced in ``.models`` (the lowest
 # module in the setup import graph) so the wizard gate, the /models header, and
 # the per-install disk guard can't drift apart.
@@ -507,6 +507,20 @@ def preflight():
             "media_tools": None,
         }
 
+    # ── Windows on ARM (Snapdragon X etc.): the Python runtime is the x64
+    # build under Windows' emulation layer (PyTorch publishes no win_arm64
+    # torchaudio/torchvision wheels), and no GPU/NPU is reachable from it.
+    # Informational, never a blocker — the app is fully usable, just slower.
+    if is_windows_on_arm():
+        checks.append({
+            "id": "arch", "label": "Windows on ARM", "status": "warn",
+            "detail": "ARM64 Windows PC — the AI backend runs as x64 under "
+                      "Windows emulation, CPU only (no GPU/NPU acceleration).",
+            "fix": "Everything works but generation is slower. Prefer a "
+                   "lightweight voice engine (KittenTTS, Supertonic-3, "
+                   "PocketTTS) and a small Whisper model.",
+        })
+
     # ── Media engine (ffmpeg/ffprobe/yt-dlp) — deliberately NOT a check row.
     # These are internal dependencies the app provisions for itself, not user
     # facts: when the resolution chain has no tier at all, preflight kicks the
@@ -562,7 +576,10 @@ def preflight():
         gpu_status = "warn"
         gpu_detail = "No compatible GPU detected — running CPU-only."
         gpu_fix = (
-            "Dubbing will work but ~10× slower than GPU. If you have an "
+            "Everything works on CPU, just ~10× slower than a GPU — integrated "
+            "graphics are not used for AI. For the best CPU experience pick a "
+            "lightweight voice engine (KittenTTS, Supertonic-3, PocketTTS) and a "
+            "small Whisper model in the Model Catalogue. If you have an "
             "NVIDIA/AMD card, check drivers are installed."
         )
     checks.append({
