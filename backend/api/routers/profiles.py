@@ -955,6 +955,7 @@ def delete_profile(profile_id: str):
         # commit must leave the rolled-back profile's files usable.
         conn.execute("UPDATE generation_history SET profile_id = NULL WHERE profile_id=?", (profile_id,))
         conn.execute("DELETE FROM voice_profiles WHERE id=?", (profile_id,))
+    failed_assets = []
     for path in dict.fromkeys(paths):
         try:
             os.remove(path)
@@ -963,6 +964,19 @@ def delete_profile(profile_id: str):
         except OSError:
             # A cleanup failure cannot roll back the committed deletion, and
             # must not prevent cleanup of the profile's remaining assets.
-            logger.warning("Deleted profile asset cleanup failed")
+            try:
+                failed_assets.append(os.path.relpath(
+                    resolve_within(VOICES_DIR, path), os.path.realpath(VOICES_DIR)
+                ))
+            except (UnsafePath, OSError, ValueError):
+                failed_assets.append("asset location unavailable (consult local backend log)")
+            logger.warning("Deleted profile asset cleanup failed: %s", path)
     event_bus.emit("profiles", {"action": "deleted", "id": profile_id})
+    if failed_assets:
+        raise HTTPException(status_code=500, detail=(
+            "The profile record was deleted, but asset cleanup is incomplete for: "
+            + ", ".join(failed_assets)
+            + ". Paths are relative to the voices folder; remove the files manually. "
+            "Consult the local backend log if an asset location is unavailable."
+        ))
     return {"deleted": profile_id}

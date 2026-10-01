@@ -45,7 +45,7 @@ def test_committed_delete_cleans_all_assets(profile):
         assert conn.execute("SELECT count(*) FROM voice_profiles").fetchone()[0] == 0
 
 
-def test_cleanup_error_after_commit_does_not_stop_other_assets(profile, monkeypatch):
+def test_cleanup_error_after_commit_does_not_stop_other_assets(profile, monkeypatch, caplog):
     from core import db
     from api.routers import profiles
     root, names = profile
@@ -55,7 +55,17 @@ def test_cleanup_error_after_commit_does_not_stop_other_assets(profile, monkeypa
             raise PermissionError("busy")
         return real_remove(path)
     monkeypatch.setattr(profiles.os, "remove", remove)
-    assert profiles.delete_profile("voice") == {"deleted": "voice"}
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    app = FastAPI()
+    app.include_router(profiles.router)
+    response = TestClient(app).delete("/profiles/voice")
+    assert response.status_code == 500
+    detail = response.json()["detail"]
+    assert "profile record was deleted" in detail
+    assert "cleanup is incomplete" in detail and "ref.wav" in detail
+    assert str(root) not in detail
+    assert str(root / "ref.wav") in caplog.text
     assert (root / "ref.wav").exists()
     assert all(not (root / name).exists() for name in names[1:])
     with db.db_conn() as conn:
@@ -75,3 +85,38 @@ def test_commit_failure_keeps_assets_and_history(profile):
     with db.db_conn() as conn:
         assert conn.execute("SELECT profile_id FROM generation_history").fetchone()[0] == "voice"
         assert conn.execute("SELECT count(*) FROM voice_profiles").fetchone()[0] == 1
+
+
+def test_busy_nested_portrait_reports_confined_relative_location(profile, monkeypatch, caplog):
+    from core import db
+    from api.routers import profiles
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    root, names = profile
+    nested = root / "portraits" / "voice.portrait.jpg"
+    nested.parent.mkdir()
+    (root / names[-1]).rename(nested)
+    try:
+        (root / names[-1]).symlink_to(nested)
+    except OSError as exc:
+        pytest.skip(f"symlinks unavailable: {exc}")
+    real_remove = profiles.os.remove
+    def remove(path):
+        if str(path) == str(nested):
+            raise PermissionError("busy nested portrait")
+        return real_remove(path)
+    monkeypatch.setattr(profiles.os, "remove", remove)
+    app = FastAPI()
+    app.include_router(profiles.router)
+    response = TestClient(app).delete("/profiles/voice")
+    assert response.status_code == 500
+    detail = response.json()["detail"]
+    assert "profile record was deleted" in detail and "cleanup is incomplete" in detail
+    assert str(nested.relative_to(root)) in detail
+    assert str(root) not in detail
+    assert str(nested) in caplog.text
+    assert nested.read_bytes() == names[-1].encode()
+    assert all(not (root / name).exists() for name in names[:-1])
+    with db.db_conn() as conn:
+        assert conn.execute("SELECT count(*) FROM voice_profiles").fetchone()[0] == 0
+        assert conn.execute("SELECT profile_id FROM generation_history").fetchone()[0] is None

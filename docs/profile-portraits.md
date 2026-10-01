@@ -122,3 +122,5 @@ Clicking in the script shows the expression picker near the caret without taking
 typing focus. The voice chooser and save-profile form share the editor width.
 
 Deleting a saved voice commits the profile and history changes before removing its reference, locked take, consent recording and portrait. A failed database transaction leaves those assets available. Cleanup after a successful deletion is best effort; one unavailable asset does not prevent cleanup of the others.
+
+If cleanup fails after the profile record is deleted, the response reports incomplete cleanup and names the remaining confined paths relative to the voices folder, including nested locations. If a location can no longer be confined, the response directs the operator to the local backend log instead of exposing a host path. The backend log records their local paths for manual cleanup. Deleting the missing profile again does not retry its former audio files; no automatic cleanup retry is promised.
