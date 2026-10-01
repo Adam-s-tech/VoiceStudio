@@ -54,6 +54,15 @@ const PROBE_TIMEOUT_MS = 1500;
 const SHUTDOWN_INTENT_TIMEOUT_MS = 1000;
 /** Consecutive supervisor probe misses (2 s apart) before a ready backend is declared gone. */
 const SUPERVISE_MISSES = 3;
+/**
+ * Stages a later successful /health probe must retire back to `ready` (#2430).
+ * `unresponsive` is a live-but-busy backend, not a failure: the supervisor
+ * already proved the process is alive, so the health loop owns clearing it.
+ */
+const RECOVERABLE_STAGES: ReadonlySet<BackendStage> = new Set<BackendStage>([
+  'failed',
+  'unresponsive',
+]);
 const LOG_RING_LINES = 200;
 const LOG_TAIL_LINES = 40;
 /** EX_CONFIG (sysexits.h): backend/main.py exits with it when the port is taken (#1223). */
@@ -1248,7 +1257,7 @@ export class BackendSupervisor extends EventEmitter<{
       }
       if (await this.probe()) {
         misses = 0;
-        if (gen === this.generation && this.stage === 'failed') {
+        if (gen === this.generation && RECOVERABLE_STAGES.has(this.stage)) {
           this.setStage('ready', { message: undefined });
         }
       } else if (++misses >= SUPERVISE_MISSES && gen === this.generation) {
@@ -1262,10 +1271,16 @@ export class BackendSupervisor extends EventEmitter<{
         // Inference can monopolize Python's event loop longer than the health
         // deadline. A missed HTTP probe is not proof of process death. Keep
         // observing our live child; its exit handler owns crash reporting.
+        //
+        // Report this as `unresponsive`, NOT `failed` (#2430): the process is
+        // demonstrably alive, so the failure channel would be a lie. `failed`
+        // tears the workspace down behind an error gate, pauses every query
+        // and dead-ends in-flight requests, all for a stall that the very next
+        // probe clears. Announced once, then left to recover on its own.
         if (this.child && this.child.exitCode === null && this.child.signalCode === null) {
           if (misses === SUPERVISE_MISSES) {
-            this.setStage('failed', {
-              message: `Backend is running but temporarily not responding on port ${this.port}. Waiting for recovery.`,
+            this.setStage('unresponsive', {
+              message: `Backend is running but busy on port ${this.port}; it is not answering health checks right now. This resolves on its own once the current job finishes.`,
             });
           }
           if (gen === this.generation) void tick();

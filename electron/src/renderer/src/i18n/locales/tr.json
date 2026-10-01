@@ -2093,6 +2093,7 @@
     "starting": "Yerel motor başlatılıyor…",
     "attaching": "Çalışan motora bağlanılıyor…",
     "crashed": "Yerel motor beklenmedik şekilde durdu.",
+    "unresponsive": "Yerel motor şu anda meşgul ve yanıt vermiyor — kendiliğinden toparlanacak.",
     "failed": "Yerel motor başlatılamadı.",
     "idle": "Yerel motor bekleniyor…",
     "log_label": "Motor günlüğü",

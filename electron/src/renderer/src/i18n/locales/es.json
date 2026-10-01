@@ -2095,6 +2095,7 @@
     "starting": "Iniciando el motor local…",
     "attaching": "Conectando con el motor en ejecución…",
     "crashed": "El motor local se detuvo inesperadamente.",
+    "unresponsive": "El motor local está ocupado y no responde ahora mismo; se recuperará por sí solo.",
     "failed": "No se pudo iniciar el motor local.",
     "idle": "Esperando al motor local…",
     "log_label": "Registro del motor",

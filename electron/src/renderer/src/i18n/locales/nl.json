@@ -2093,6 +2093,7 @@
     "starting": "Lokale engine starten…",
     "attaching": "Verbinding maken met de actieve engine…",
     "crashed": "De lokale engine is onverwacht gestopt.",
+    "unresponsive": "De lokale engine is bezet en reageert nu niet — hij komt vanzelf weer terug.",
     "failed": "De lokale engine kon niet worden gestart.",
     "idle": "Wachten op de lokale engine…",
     "log_label": "Engine-logboek",

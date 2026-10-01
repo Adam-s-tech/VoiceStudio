@@ -2095,6 +2095,7 @@
     "starting": "Démarrage du moteur local…",
     "attaching": "Connexion au moteur en cours d’exécution…",
     "crashed": "Le moteur local s’est arrêté de manière inattendue.",
+    "unresponsive": "Le moteur local est occupé et ne répond pas pour le moment ; il reprendra de lui-même.",
     "failed": "Impossible de démarrer le moteur local.",
     "idle": "En attente du moteur local…",
     "log_label": "Journal du moteur",

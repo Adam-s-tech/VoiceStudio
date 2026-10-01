@@ -2093,6 +2093,7 @@
     "starting": "Startar den lokala motorn…",
     "attaching": "Ansluter till den körande motorn…",
     "crashed": "Den lokala motorn stannade oväntat.",
+    "unresponsive": "Den lokala motorn är upptagen och svarar inte just nu — den återgår av sig själv.",
     "failed": "Den lokala motorn kunde inte startas.",
     "idle": "Väntar på den lokala motorn…",
     "log_label": "Motorlogg",
