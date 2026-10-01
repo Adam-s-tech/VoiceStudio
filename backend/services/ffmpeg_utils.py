@@ -432,7 +432,9 @@ async def _spawn_thread_fallback(cmd, **kwargs):
             return out, err
 
         async def wait(self):
-            return await loop.run_in_executor(None, self._popen.wait)
+            code = await loop.run_in_executor(None, self._popen.wait)
+            self.returncode = code
+            return code
 
         def kill(self):
             self._popen.kill()
