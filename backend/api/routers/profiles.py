@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from core.db import db_conn
 from core.config import VOICES_DIR, OUTPUTS_DIR
 from core import event_bus
+from core.scrub import scrub_text
 from core.personalities import get_personalities
 from omnivoice.utils.voice_design import heal_design_instruct, sanitize_instruct
 from core.path_security import UnsafePath, resolve_within
@@ -970,7 +971,7 @@ def delete_profile(profile_id: str):
                 ))
             except (UnsafePath, OSError, ValueError):
                 failed_assets.append("asset location unavailable (consult local backend log)")
-            logger.warning("Deleted profile asset cleanup failed: %s", path)
+            logger.warning("Deleted profile asset cleanup failed: %s", scrub_text(path))
     event_bus.emit("profiles", {"action": "deleted", "id": profile_id})
     if failed_assets:
         raise HTTPException(status_code=500, detail=(

@@ -88,22 +88,35 @@ export function useReplaceProfileAudio(): UseMutationResult<
 
 export function useDeleteProfile(): UseMutationResult<void, Error, string> {
   const queryClient = useQueryClient();
+  const forgetProfile = (id: string) => {
+    // The form must not keep pointing at a voice that no longer exists.
+    if (cloneSettingsStore.state.selectedProfileId === id) {
+      setCloneSetting('selectedProfileId', null);
+    }
+    const designDraft = readDraft();
+    if (designDraft.profileId === id) {
+      writeDraft({ ...designDraft, profileId: null });
+    }
+  };
   return useMutation({
     mutationFn: deleteProfile,
     onSuccess: (_result, id) => {
-      // The form must not keep pointing at a voice that no longer exists.
-      if (cloneSettingsStore.state.selectedProfileId === id) {
-        setCloneSetting('selectedProfileId', null);
-      }
-      const designDraft = readDraft();
-      if (designDraft.profileId === id) {
-        writeDraft({ ...designDraft, profileId: null });
-      }
+      forgetProfile(id);
       toast.success(tr('clone.profile_deleted'));
       void queryClient.invalidateQueries({ queryKey: queryKeys.profiles });
     },
-    onError: (err) => {
+    onError: async (err, id) => {
       toast.error(tr('clone.delete_profile_failed', { message: describeError(err) }));
+      try {
+        // Asset cleanup can fail after the profile deletion has committed.
+        // Confirm absence before clearing state; a rollback or unreachable
+        // backend must preserve the user's selected voice.
+        const profiles = await listProfiles();
+        queryClient.setQueryData(queryKeys.profiles, profiles);
+        if (!profiles.some((profile) => profile.id === id)) forgetProfile(id);
+      } catch {
+        // The original error is already shown; absence is still unconfirmed.
+      }
     },
   });
 }

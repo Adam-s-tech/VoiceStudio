@@ -120,3 +120,26 @@ def test_busy_nested_portrait_reports_confined_relative_location(profile, monkey
     with db.db_conn() as conn:
         assert conn.execute("SELECT count(*) FROM voice_profiles").fetchone()[0] == 0
         assert conn.execute("SELECT profile_id FROM generation_history").fetchone()[0] is None
+
+
+def test_cleanup_log_redacts_home_prefix_and_keeps_asset_suffix(profile, monkeypatch, caplog):
+    from api.routers import profiles
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    root, names = profile
+    voices = root / "Users" / "cleanup-test" / "voices"
+    voices.mkdir(parents=True)
+    for name in names:
+        (root / name).rename(voices / name)
+    monkeypatch.setattr(profiles, "VOICES_DIR", str(voices))
+    real_remove = profiles.os.remove
+    def remove(path):
+        if str(path) == str(voices / "ref.wav"):
+            raise PermissionError("busy")
+        return real_remove(path)
+    monkeypatch.setattr(profiles.os, "remove", remove)
+    app = FastAPI()
+    app.include_router(profiles.router)
+    assert TestClient(app).delete("/profiles/voice").status_code == 500
+    assert "Users/cleanup-test" not in caplog.text
+    assert "voices/ref.wav" in caplog.text
