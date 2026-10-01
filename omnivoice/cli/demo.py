@@ -522,7 +522,8 @@ def main(argv=None) -> int:
     model = OmniVoice.from_pretrained(
         checkpoint,
         device_map=device,
-        dtype=torch.float16,
+        # fp16 has no fast CPU GEMM; CPU-only hosts must load float32.
+        dtype=torch.float32 if str(device) == "cpu" else torch.float16,
         load_asr=not args.no_asr,
     )
     print("Model loaded.")

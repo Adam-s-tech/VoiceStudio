@@ -730,9 +730,9 @@ def recommendations():
     else:
         rationale = (
             "CPU preset: VoiceStudio (required) runs standalone. Optional picks favour "
-            "speed on CPU — Whisper large-v3 (int8) for accuracy, Turbo when speed "
-            "matters, Whisper Tiny (ONNX) for live dictation, KittenTTS for "
-            "instant English TTS."
+            "speed on CPU — Whisper small (int8) as the light default, large-v3 for "
+            "accuracy and Turbo when you can spare the time and RAM, Whisper Tiny "
+            "(ONNX) for live dictation, KittenTTS for instant English TTS."
         )
 
     remote_inventory = _target_repo_inventory()

@@ -231,7 +231,8 @@ def process_init(rank_queue, model_checkpoint, warmup=0):
     worker_model = OmniVoice.from_pretrained(
         model_checkpoint,
         device_map=worker_device,
-        dtype=torch.float16,
+        # fp16 has no fast CPU GEMM; CPU workers must load float32.
+        dtype=torch.float32 if worker_device == "cpu" else torch.float16,
     )
 
     if warmup > 0:

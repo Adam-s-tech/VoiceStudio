@@ -656,6 +656,52 @@ def refresh() -> HostCaps:
     return detect_host_caps()
 
 
+# ── CPU-host precision + Windows-on-ARM detection ───────────────────────────
+
+#: Precision the in-process TTS model loads in, keyed on the *device string*
+#: ``get_best_device()`` returns. fp16/bf16 halve VRAM and speed up tensor
+#: cores, but on a plain CPU torch has no fast half-precision GEMM (it falls
+#: back to a scalar path that is an order of magnitude slower than float32 on
+#: most laptops, and several kernels are unimplemented for Half on older
+#: builds) — so a CPU-only host loaded the model "successfully" and then
+#: crawled. Every non-CPU device string (``cuda``, ``xpu``, ``mps``, a DirectML
+#: ``privateuseone:N``) keeps float16, exactly as before.
+CPU_DTYPE_CHOICES: tuple[str, ...] = ("float32", "bfloat16", "float16")
+
+
+def tts_dtype_name(device: object) -> str:
+    """The torch dtype *name* the TTS model should load in on ``device``.
+
+    ``"float16"`` on every accelerator; ``"float32"`` on CPU. Power users on
+    CPUs with native bf16 (AVX512-BF16 / AMX) or short on RAM can opt into
+    ``OMNIVOICE_CPU_DTYPE=bfloat16`` (halves resident weights); unknown values
+    are ignored rather than raising — this runs on the model-load path.
+    """
+    if str(device or "cpu").strip().lower() != "cpu":
+        return "float16"
+    override = os.environ.get("OMNIVOICE_CPU_DTYPE", "").strip().lower()
+    return override if override in CPU_DTYPE_CHOICES else "float32"
+
+
+def is_windows_on_arm() -> bool:
+    """True on a Windows-on-ARM machine, including an x64 interpreter running
+    under its Prism emulation layer (the only supported runtime there).
+
+    ``platform.machine()`` reports ``AMD64`` inside the emulated interpreter, so
+    it cannot tell a Snapdragon laptop from an ordinary x64 PC. Windows sets
+    ``PROCESSOR_ARCHITEW6432=ARM64`` for emulated processes; a native ARM64
+    process reports ``PROCESSOR_ARCHITECTURE=ARM64`` instead (also treated as
+    ARM — the answer to "is this an ARM Windows machine", not "is Python
+    native"). Never raises; always False off Windows.
+    """
+    if sys.platform != "win32":
+        return False
+    for key in ("PROCESSOR_ARCHITEW6432", "PROCESSOR_ARCHITECTURE"):
+        if os.environ.get(key, "").strip().upper() == "ARM64":
+            return True
+    return _platform.machine().strip().upper() == "ARM64"
+
+
 def mlx_supported() -> tuple[bool, str]:
     """``(ok, reason)``. ``ok=True`` **only** on Apple Silicon
     (``sys.platform == "darwin"`` and ``platform.machine() == "arm64"``) with
@@ -696,6 +742,9 @@ __all__ = [
     "detect_host_caps",
     "refresh",
     "mlx_supported",
+    "tts_dtype_name",
+    "is_windows_on_arm",
+    "CPU_DTYPE_CHOICES",
     "arch_unsupported",
     "gfx_for_hsa_override",
     "hsa_override_for",
