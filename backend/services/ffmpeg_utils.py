@@ -190,6 +190,15 @@ def _binary_runs(path: str) -> bool:
     return ok
 
 
+class MediaToolUnavailableError(RuntimeError):
+    """ffmpeg/ffprobe is missing, or present but not runnable.
+
+    A ``RuntimeError`` so existing handlers keep working; the dedicated type
+    lets the transcription path pick the actionable "repair the media engine"
+    reply by class instead of by sniffing message text.
+    """
+
+
 def find_ffmpeg():
     """Locate an ffmpeg binary.
 
@@ -320,6 +329,49 @@ def find_ffprobe():
     return None
 
 
+def _bare_name_shim(real: str, tool: str) -> "str | None":
+    """Directory exposing *real* under the bare name ``<tool>[.exe]``, or None.
+
+    imageio-ffmpeg ships its binary as ``ffmpeg-<platform>-vN[.exe]``, so
+    publishing its directory on ``PATH`` never satisfies a dependency's literal
+    ``ffmpeg`` lookup (parakeet-mlx, openai-whisper, pydub, ...): they still die
+    with ``[Errno 2] No such file or directory: 'ffmpeg'``. A symlink (hardlink
+    or copy where Windows refuses symlinks) under the bare name closes that gap
+    on every platform without asking the user to install anything. Best-effort:
+    returns None when the name is already bare or the shim cannot be written.
+    """
+    exe = f"{tool}.exe" if os.name == "nt" else tool
+    if os.path.basename(real).lower() == exe:
+        return None
+    try:
+        from core.config import DATA_DIR
+
+        directory = os.path.join(DATA_DIR, "media_tools", "shims")
+        link = os.path.join(directory, exe)
+        os.makedirs(directory, exist_ok=True)
+        if os.path.lexists(link):
+            try:
+                if os.path.samefile(link, real) or (
+                    not os.path.islink(link)
+                    and os.path.getsize(link) == os.path.getsize(real)
+                ):
+                    return directory
+            except OSError:
+                pass
+            os.unlink(link)
+        try:
+            os.symlink(real, link)
+        except (OSError, NotImplementedError):
+            try:
+                os.link(real, link)
+            except OSError:
+                shutil.copy2(real, link)
+        return directory
+    except OSError as e:
+        logger.debug("bare-name %s shim unavailable: %s", tool, e)
+        return None
+
+
 def ensure_media_tools_on_path() -> list[str]:
     """Put the resolved ffmpeg/ffprobe on ``PATH`` for third-party code (#1256).
 
@@ -341,16 +393,17 @@ def ensure_media_tools_on_path() -> list[str]:
     added: list[str] = []
     try:
         directories: list[str] = []
-        for resolve in (find_ffmpeg, find_ffprobe):
+        for tool, resolve in (("ffmpeg", find_ffmpeg), ("ffprobe", find_ffprobe)):
             try:
                 path = resolve()
             except Exception:
                 continue
             if not path:
                 continue
-            directory = os.path.dirname(os.path.abspath(path))
-            if directory and directory not in directories:
-                directories.append(directory)
+            shim = _bare_name_shim(path, tool)
+            for directory in (shim, os.path.dirname(os.path.abspath(path))):
+                if directory and directory not in directories:
+                    directories.append(directory)
 
         current = os.environ.get("PATH", "")
         entries = current.split(os.pathsep) if current else []

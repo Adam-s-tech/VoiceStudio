@@ -333,11 +333,11 @@ def _decode_audio_16k_mono(audio_path: str):
 
     import numpy as np
 
-    from services.ffmpeg_utils import find_ffmpeg
+    from services.ffmpeg_utils import MediaToolUnavailableError, find_ffmpeg
 
     ffmpeg = find_ffmpeg()
     if not ffmpeg:
-        raise RuntimeError(
+        raise MediaToolUnavailableError(
             "Cannot transcribe: ffmpeg is missing or not runnable. Install "
             "ffmpeg (or let VoiceStudio's bundled binary download), then retry. "
             "On Windows a '[WinError 193]' here means the ffmpeg binary is "
@@ -354,7 +354,7 @@ def _decode_audio_16k_mono(audio_path: str):
         # Belt-and-suspenders: find_ffmpeg() already -version-validated this
         # binary, so a WinError 193 here is unexpected — surface it clearly
         # rather than letting it become "no segments".
-        raise RuntimeError(
+        raise MediaToolUnavailableError(
             f"ffmpeg at {ffmpeg!r} could not be executed ({e}). Reinstall "
             "ffmpeg or clear the imageio-ffmpeg cache."
         ) from e

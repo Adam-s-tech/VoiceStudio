@@ -1574,17 +1574,18 @@ async def dub_transcribe_stream(
                     return {"chunks": shifted, "language": r.get("language"), "speaker_turns": turns}
                 except Exception as exc:
                     # Keep diagnostics local and fixed-shape. In particular,
-                    # CUDA OOM is a distinct, actionable recovery class rather
-                    # than the generic "no segments" dead end.
+                    # CUDA OOM, a missing ffmpeg and a closed stdio pipe are
+                    # distinct, actionable recovery classes rather than the
+                    # generic "no segments" dead end.
                     is_memory = isinstance(exc, torch.OutOfMemoryError)
                     logger.error(
                         "Chunk transcription failed (backend=%s; class=%s; details withheld)",
                         _asr_backend.id,
                         type(exc).__name__,
                     )
-                    from core.public_errors import stream_failure
+                    from core.public_errors import stream_failure, transcription_failure_code
                     failure = stream_failure(
-                        "transcription_memory" if is_memory else "transcription_failed"
+                        "transcription_memory" if is_memory else transcription_failure_code(exc)
                     )
                     return {
                         "chunks": [],
@@ -2251,10 +2252,10 @@ async def dub_transcribe_stream(
         try:
             async for ev in _gen_body():
                 yield ev
-        except Exception:  # noqa: BLE001 — last-resort stream finalizer
-            logger.error("Transcription stream failed unexpectedly")
-            from core.public_errors import stream_failure
-            yield _sse_event("error", stream_failure("transcription_failed"))
+        except Exception as exc:  # noqa: BLE001 — last-resort stream finalizer
+            logger.error("Transcription stream failed unexpectedly (class=%s)", type(exc).__name__)
+            from core.public_errors import stream_failure, transcription_failure_code
+            yield _sse_event("error", stream_failure(transcription_failure_code(exc)))
             yield _sse_event("done", {})
         finally:
             _asr_work.stop()
