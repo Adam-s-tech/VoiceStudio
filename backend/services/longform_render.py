@@ -70,13 +70,15 @@ def _escape_meta(value: str) -> str:
 
 
 def prune_cache_dir(cache_dir: str, max_bytes: int = _CACHE_MAX_BYTES) -> tuple[int, int]:
-    """Evict the oldest files in ``cache_dir`` until the total size is within
+    """Evict the oldest audio/cache files in ``cache_dir`` until the total size is within
     ``max_bytes`` (LRU by mtime). The content-addressed render cache otherwise
     grows without bound — uncompressed WAVs accumulate across every render.
 
     Walks the whole tree, so chapter WAVs at the root and segment WAVs under
     ``segments/`` share ONE byte budget — the cap holds no matter which layer
-    grew. Best-effort: returns ``(remaining_bytes, removed_count)`` and never
+    grew. Bookkeeping (including the voices-root index needed to find legacy
+    WAVs after a data-dir move) is counted but never evicted. Metadata alone may
+    exceed the budget. Best-effort: returns ``(remaining_bytes, removed_count)`` and never
     raises (a missing dir / unstattable file is just skipped). Call it *before*
     writing a job's files so the fresh ones are never the eviction target.
     """
@@ -92,7 +94,8 @@ def prune_cache_dir(cache_dir: str, max_bytes: int = _CACHE_MAX_BYTES) -> tuple[
                 mtime = os.path.getmtime(p)
             except OSError:
                 continue
-            entries.append((mtime, size, p))
+            if not name.lower().endswith(".json"):
+                entries.append((mtime, size, p))
             total += size
     if total <= max_bytes:
         return (total, 0)
