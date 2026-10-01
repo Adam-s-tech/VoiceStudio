@@ -199,16 +199,18 @@ def generation_kwargs(text: str, **options) -> dict:
     control = " ".join(control.replace("(", " ").replace(")", " ").split())
     ref_text = (options.get("ref_text") or "").strip()
     continuation = bool(ref_audio and ref_text and not control)
-    # Steps come from the UI's sampling slider (1-64 for VoxCPM2); keep the
-    # upstream default of 10 when a caller sends none.
+    # Bound work per request. VoxCPM's default token cap can keep one desktop
+    # request running for many minutes, so scale the limit with utterance size.
+    max_len = min(2048, max(128, len(text) * 3))
     try:
-        inference_timesteps = int(options.get("num_step", 10))
+        inference_timesteps = int(options.get("num_step", 4))
     except (TypeError, ValueError):
-        inference_timesteps = 10
-    inference_timesteps = min(64, max(1, inference_timesteps))
+        inference_timesteps = 4
+    inference_timesteps = min(30, max(1, inference_timesteps))
     return {
         "text": f"({control}){text}" if control else text,
         "cfg_value": options.get("guidance_scale", 2.0),
+        "max_len": max_len,
         "inference_timesteps": inference_timesteps,
         # Upstream retries a "bad case" up to three whole generations, which
         # could keep one desktop request running for many minutes.
