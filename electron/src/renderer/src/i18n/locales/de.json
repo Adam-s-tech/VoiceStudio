@@ -2101,7 +2101,10 @@
     "elapsed": "{{seconds}} s vergangen",
     "first_run_hint": "Der erste Start kann mehrere Minuten dauern, während die Python-Umgebung vorbereitet wird.",
     "port_in_use_short": "Port {{port}} ist belegt",
-    "proxy_bypass_help": "Beende VoiceStudio vollständig, setze HTTP_PROXY/HTTPS_PROXY auf deine Proxy-URL und NO_PROXY auf die ausgenommenen Hosts in einem Terminal und starte VoiceStudio von dort. Ein erneuter Versuch in der laufenden App lädt keine neuen Umgebungsvariablen."
+    "proxy_bypass_help": "Beende VoiceStudio vollständig, setze HTTP_PROXY/HTTPS_PROXY auf deine Proxy-URL und NO_PROXY auf die ausgenommenen Hosts in einem Terminal und starte VoiceStudio von dort. Ein erneuter Versuch in der laufenden App lädt keine neuen Umgebungsvariablen.",
+    "hint_spawn_blocked": "Dein Betriebssystem oder deine Sicherheitssoftware hat den Start der lokalen Engine verweigert. Füge den Runtime-Ordner von VoiceStudio zu den Ausnahmen deines Virenscanners hinzu (Windows: Windows-Sicherheit → Viren- & Bedrohungsschutz → Einstellungen verwalten → Ausschlüsse), stelle sicher, dass er nicht in einem Cloud-synchronisierten Ordner wie OneDrive liegt, und versuche es dann erneut.",
+    "hint_slow_start": "Die Engine startete noch, als die Wartezeit ablief. Langsame Computer – besonders ohne dedizierte GPU – und der erste Start nach einer Installation (der Virenscanner prüft jede neue Datei) können mehrere Minuten brauchen. Schließe speicherhungrige Apps und versuche es erneut; spätere Starts sind deutlich schneller.",
+    "hint_synced_folder": "Dieser Speicherort liegt in einem Cloud-synchronisierten Ordner (OneDrive, Dropbox, iCloud Drive, Google Drive). Nur-online-Platzhalter und Dateisperren zerstören die Python-Umgebung. Verschiebe VoiceStudio in einen normalen lokalen Ordner (z. B. C:\\VoiceStudio unter Windows oder ~/VoiceStudio unter macOS und Linux) und richte es erneut ein."
   },
   "bootstrap": {
     "checking": "Umgebung wird überprüft…",

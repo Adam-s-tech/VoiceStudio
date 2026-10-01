@@ -2103,7 +2103,10 @@
     "elapsed": "{{seconds}} s trascorsi",
     "first_run_hint": "Il primo avvio può richiedere diversi minuti durante la preparazione dell’ambiente Python.",
     "port_in_use_short": "La porta {{port}} è in uso",
-    "proxy_bypass_help": "Chiudi completamente VoiceStudio, imposta HTTP_PROXY/HTTPS_PROXY con l’URL del proxy e NO_PROXY con gli host esclusi in un terminale, quindi avvia VoiceStudio da quel terminale. Riprovare nell’app aperta non carica le nuove variabili d’ambiente."
+    "proxy_bypass_help": "Chiudi completamente VoiceStudio, imposta HTTP_PROXY/HTTPS_PROXY con l’URL del proxy e NO_PROXY con gli host esclusi in un terminale, quindi avvia VoiceStudio da quel terminale. Riprovare nell’app aperta non carica le nuove variabili d’ambiente.",
+    "hint_spawn_blocked": "Il sistema operativo o il software di sicurezza ha rifiutato di avviare il motore locale. Aggiungi la cartella di runtime di VoiceStudio alle esclusioni dell’antivirus (Windows: Sicurezza di Windows → Protezione da virus e minacce → Gestisci impostazioni → Esclusioni), assicurati che non sia in una cartella sincronizzata nel cloud come OneDrive e riprova.",
+    "hint_slow_start": "Il motore era ancora in fase di avvio quando l’attesa è scaduta. I computer lenti, soprattutto senza GPU dedicata, e il primo avvio dopo un’installazione (l’antivirus analizza ogni file nuovo) possono richiedere diversi minuti. Chiudi le app che usano molta memoria e riprova; gli avvii successivi sono molto più rapidi.",
+    "hint_synced_folder": "Questa posizione si trova in una cartella sincronizzata nel cloud (OneDrive, Dropbox, iCloud Drive, Google Drive). I segnaposto solo online e il blocco dei file danneggiano l’ambiente Python. Sposta VoiceStudio in una normale cartella locale (ad esempio C:\\VoiceStudio su Windows o ~/VoiceStudio su macOS e Linux) e configuralo di nuovo."
   },
   "bootstrap": {
     "checking": "Verifica dell'ambiente…",

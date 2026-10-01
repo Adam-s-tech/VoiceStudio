@@ -2105,7 +2105,10 @@
     "elapsed": "已用时 {{seconds}} 秒",
     "first_run_hint": "首次运行需要准备 Python 环境，可能需要几分钟。",
     "port_in_use_short": "端口 {{port}} 已被占用",
-    "proxy_bypass_help": "完全退出 VoiceStudio，在终端中将 HTTP_PROXY/HTTPS_PROXY 设为代理 URL，将 NO_PROXY 设为排除的主机，然后从该终端启动 VoiceStudio。在当前应用中重试不会加载新的环境变量。"
+    "proxy_bypass_help": "完全退出 VoiceStudio，在终端中将 HTTP_PROXY/HTTPS_PROXY 设为代理 URL，将 NO_PROXY 设为排除的主机，然后从该终端启动 VoiceStudio。在当前应用中重试不会加载新的环境变量。",
+    "hint_spawn_blocked": "操作系统或安全软件拒绝启动本地引擎。请将 VoiceStudio 的运行时文件夹添加到杀毒软件的排除项（Windows：Windows 安全中心 → 病毒和威胁防护 → 管理设置 → 排除项），并确认它不在 OneDrive 等云同步文件夹内，然后重试。",
+    "hint_slow_start": "等待超时时，引擎仍在启动。电脑较慢（尤其是没有独立显卡）以及安装后的首次启动（杀毒软件会扫描每个新文件）可能需要几分钟。请关闭占用大量内存的应用后重试；之后的启动会快得多。",
+    "hint_synced_folder": "此位置位于云同步文件夹（OneDrive、Dropbox、iCloud Drive、Google Drive）内。仅在线的占位文件和文件锁定会破坏 Python 环境。请将 VoiceStudio 移到普通本地文件夹（例如 Windows 上的 C:\\VoiceStudio，或 macOS 和 Linux 上的 ~/VoiceStudio），然后重新设置。"
   },
   "bootstrap": {
     "checking": "正在检查环境…",

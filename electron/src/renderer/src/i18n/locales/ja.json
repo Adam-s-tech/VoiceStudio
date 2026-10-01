@@ -2101,7 +2101,10 @@
     "elapsed": "{{seconds}} 秒経過",
     "first_run_hint": "初回は Python 環境を準備するため、数分かかる場合があります。",
     "port_in_use_short": "ポート {{port}} は使用中です",
-    "proxy_bypass_help": "VoiceStudioを完全に終了し、ターミナルでHTTP_PROXY/HTTPS_PROXYにプロキシURL、NO_PROXYに除外するホストを設定してから、そのターミナルでVoiceStudioを起動してください。起動中のアプリで再試行しても新しい環境変数は読み込まれません。"
+    "proxy_bypass_help": "VoiceStudioを完全に終了し、ターミナルでHTTP_PROXY/HTTPS_PROXYにプロキシURL、NO_PROXYに除外するホストを設定してから、そのターミナルでVoiceStudioを起動してください。起動中のアプリで再試行しても新しい環境変数は読み込まれません。",
+    "hint_spawn_blocked": "OSまたはセキュリティソフトがローカルエンジンの起動を拒否しました。VoiceStudioのランタイムフォルダーをウイルス対策ソフトの除外に追加し（Windows: Windowsセキュリティ → ウイルスと脅威の防止 → 設定の管理 → 除外）、OneDriveなどクラウド同期フォルダー内にないことを確認してから、もう一度お試しください。",
+    "hint_slow_start": "待機時間が切れた時点で、エンジンはまだ起動中でした。低速なPC（特に専用GPUなし）やインストール後の初回起動（ウイルス対策ソフトがすべての新規ファイルをスキャンします）では、数分かかることがあります。メモリを多く使うアプリを閉じてから、もう一度お試しください。2回目以降の起動はずっと速くなります。",
+    "hint_synced_folder": "この場所はクラウド同期フォルダー（OneDrive、Dropbox、iCloud Drive、Google Drive）内にあります。オンライン専用のプレースホルダーやファイルのロックにより、Python環境が壊れます。VoiceStudioを通常のローカルフォルダー（例: WindowsではC:\\VoiceStudio、macOSとLinuxでは~/VoiceStudio）に移動して、もう一度セットアップしてください。"
   },
   "bootstrap": {
     "checking": "環境の確認中…",

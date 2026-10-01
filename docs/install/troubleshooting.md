@@ -1315,6 +1315,42 @@ Python traceback may not exist; include the captured crash details and system/GP
 information when reporting them. The name identifies the failure category, not
 its cause: it does not by itself prove a driver, model, or memory problem.
 
+### Backend would not start (Windows: `spawn UNKNOWN`, "did not answer", "environment incomplete")
+
+Three different startup failures share the same screen. The app now names the
+program it tried to launch, quotes what the backend last printed (or says it
+printed nothing, or that nothing was spawned), and adds a localized hint under
+the message:
+
+- **`Could not start <program>: spawn UNKNOWN`** — Windows (or your security
+  software) refused to run the Python runtime; `UNKNOWN` is how the OS reports a
+  blocked executable. Add VoiceStudio's runtime folder to your antivirus
+  exclusions (Windows Security → Virus & threat protection → Manage settings →
+  Exclusions) and make sure it is not inside OneDrive, then retry.
+- **`Backend did not answer on port 3900 within N s`** — the wait for the
+  backend ran out. The budget (`OMNIVOICE_STARTUP_BUDGET_S`) now starts when the
+  backend process is spawned, not when the launch began, defaults to 300 s (600 s
+  on a machine with four or fewer cores or 8 GB of RAM or less, where a PC
+  without a dedicated GPU is usually found), and is extended while the backend is
+  still printing, up to three times the budget. The runtime health probe that
+  runs before the launch also gets 180 s instead of 30 s, and a probe that merely
+  ran out of time is treated as inconclusive instead of sending an intact
+  runtime back to the setup screen. The first start after an install is the
+  slowest because antivirus scans every new file; later starts are much faster.
+- **`The Python environment in <folder> is missing or incomplete`** (running from
+  a source checkout) — run `bun run setup:api` in the repository. If the folder
+  is inside OneDrive, Dropbox, iCloud Drive or Google Drive, move the checkout to
+  a plain local folder first: online-only placeholders and file locking break
+  the Python environment.
+
+A native crash (`3221225477`, `-1073741819`) right after pressing Generate
+shortly after launch was caused by the startup preload and the first generation
+loading the TTS model at the same time. Cold loads are now serialized across both
+paths; if a load ever wedges past its deadline, retries fail immediately with a
+"restart the backend" message instead of queueing behind it. If a native crash
+persists, attach the full faulthandler dump (the `Windows fatal exception` block
+including every `Thread` section) from Settings → Logs → Backend.
+
 ### ASR initialization errors
 
 A PyTorch Whisper initialization failure can come from an import, checkpoint,

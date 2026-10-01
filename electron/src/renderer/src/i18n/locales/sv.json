@@ -2101,7 +2101,10 @@
     "elapsed": "{{seconds}} s har gått",
     "first_run_hint": "Den första starten kan ta flera minuter medan Python-miljön förbereds.",
     "port_in_use_short": "Port {{port}} används",
-    "proxy_bypass_help": "Avsluta VoiceStudio helt, ange proxyadressen i HTTP_PROXY/HTTPS_PROXY och undantagna värdar i NO_PROXY i en terminal och starta sedan VoiceStudio därifrån. Ett nytt försök i den öppna appen läser inte in nya miljövariabler."
+    "proxy_bypass_help": "Avsluta VoiceStudio helt, ange proxyadressen i HTTP_PROXY/HTTPS_PROXY och undantagna värdar i NO_PROXY i en terminal och starta sedan VoiceStudio därifrån. Ett nytt försök i den öppna appen läser inte in nya miljövariabler.",
+    "hint_spawn_blocked": "Operativsystemet eller säkerhetsprogramvaran vägrade starta den lokala motorn. Lägg till VoiceStudios körtidsmapp bland undantagen i ditt antivirusprogram (Windows: Windows-säkerhet → Virus- och hotskydd → Hantera inställningar → Undantag), kontrollera att den inte ligger i en molnsynkad mapp som OneDrive och försök igen.",
+    "hint_slow_start": "Motorn höll fortfarande på att starta när väntetiden tog slut. Långsamma datorer, särskilt utan dedikerat grafikkort, och den första starten efter en installation (antivirusprogrammet skannar varje ny fil) kan ta flera minuter. Stäng minneskrävande appar och försök igen; senare starter går mycket snabbare.",
+    "hint_synced_folder": "Den här platsen ligger i en molnsynkad mapp (OneDrive, Dropbox, iCloud Drive, Google Drive). Platshållare som bara finns online och fillåsning förstör Python-miljön. Flytta VoiceStudio till en vanlig lokal mapp (till exempel C:\\VoiceStudio i Windows eller ~/VoiceStudio i macOS och Linux) och konfigurera den på nytt."
   },
   "bootstrap": {
     "checking": "Kontrollerar miljö…",

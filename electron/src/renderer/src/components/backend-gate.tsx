@@ -26,6 +26,7 @@ import { ConfirmDialog } from '@/features/clone/confirm-dialog';
 import { RemoteBackendSettings } from '@/features/settings/remote-backend-settings';
 import { useBackendStatus } from '@/hooks/use-backend-status';
 import { isBackendBusy } from '@shared/utils/backendStage';
+import { backendFailureHints } from '@shared/utils/backendHint';
 import i18n, { APP_LANGUAGE_ITEMS, APP_LANGUAGES, setAppLanguage, type AppLocale } from '@/i18n';
 import { brandIcon } from '@/lib/brand';
 import { cn } from '@/lib/utils';
@@ -224,6 +225,13 @@ export function BackendGate({ children, repairDock }: BackendGateProps) {
                     : status.message}
               </p>
             ) : null}
+            {failed && !setup
+              ? backendFailureHints(status.message).map((key) => (
+                  <p key={key} className="text-sm text-muted-foreground" data-testid="backend-hint">
+                    {t(key)}
+                  </p>
+                ))
+              : null}
             {running ? (
               <p className="font-mono text-xs text-muted-foreground tabular-nums">
                 {t('backend.elapsed', { seconds })}

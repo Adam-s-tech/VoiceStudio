@@ -2103,7 +2103,10 @@
     "elapsed": "{{seconds}} s écoulées",
     "first_run_hint": "Le premier démarrage peut prendre plusieurs minutes pendant la préparation de l’environnement Python.",
     "port_in_use_short": "Le port {{port}} est utilisé",
-    "proxy_bypass_help": "Quittez complètement VoiceStudio, définissez HTTP_PROXY/HTTPS_PROXY avec l’URL du proxy et NO_PROXY avec les hôtes exclus dans un terminal, puis lancez VoiceStudio depuis ce terminal. Réessayer dans l’application ouverte ne charge pas les nouvelles variables d’environnement."
+    "proxy_bypass_help": "Quittez complètement VoiceStudio, définissez HTTP_PROXY/HTTPS_PROXY avec l’URL du proxy et NO_PROXY avec les hôtes exclus dans un terminal, puis lancez VoiceStudio depuis ce terminal. Réessayer dans l’application ouverte ne charge pas les nouvelles variables d’environnement.",
+    "hint_spawn_blocked": "Votre système d’exploitation ou votre logiciel de sécurité a refusé de lancer le moteur local. Ajoutez le dossier d’exécution de VoiceStudio aux exclusions de votre antivirus (Windows : Sécurité Windows → Protection contre les virus et menaces → Gérer les paramètres → Exclusions), vérifiez qu’il ne se trouve pas dans un dossier synchronisé dans le cloud comme OneDrive, puis réessayez.",
+    "hint_slow_start": "Le moteur était encore en cours de démarrage lorsque l’attente a expiré. Les ordinateurs lents, surtout sans GPU dédié, et le premier lancement après une installation (l’antivirus analyse chaque nouveau fichier) peuvent demander plusieurs minutes. Fermez les applications gourmandes en mémoire puis réessayez ; les démarrages suivants sont bien plus rapides.",
+    "hint_synced_folder": "Cet emplacement se trouve dans un dossier synchronisé dans le cloud (OneDrive, Dropbox, iCloud Drive, Google Drive). Les espaces réservés en ligne uniquement et le verrouillage des fichiers cassent l’environnement Python. Déplacez VoiceStudio vers un dossier local ordinaire (par exemple C:\\VoiceStudio sous Windows ou ~/VoiceStudio sous macOS et Linux), puis configurez-le à nouveau."
   },
   "bootstrap": {
     "checking": "Vérification de l'environnement…",

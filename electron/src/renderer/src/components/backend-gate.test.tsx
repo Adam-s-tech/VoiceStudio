@@ -251,3 +251,29 @@ it('offers a remote backend instead of a doomed local install on Intel Macs', ()
     screen.getByRole('textbox', { name: i18n.t('settings.remote_backend_url') }),
   ).toBeVisible();
 });
+
+it.each([
+  [
+    'Could not start C:\\runtime\\python.exe: spawn UNKNOWN. Install or repair the local runtime.',
+    'backend.hint_spawn_blocked',
+  ],
+  [
+    'Backend did not answer on port 3900 within 600 s (OMNIVOICE_STARTUP_BUDGET_S). It printed no output.',
+    'backend.hint_slow_start',
+  ],
+])('adds localized, actionable advice under a recognised failure (#2440, #2445)', (message, key) => {
+  backendStatus.message = message;
+
+  renderGate('failed');
+
+  expect(screen.getByText(message)).toBeInTheDocument();
+  expect(screen.getByTestId('backend-hint')).toHaveTextContent(i18n.t(key));
+});
+
+it('shows no advice for a failure it cannot classify', () => {
+  backendStatus.message = 'Backend exited unexpectedly (exit code 1).';
+
+  renderGate('failed');
+
+  expect(screen.queryByTestId('backend-hint')).not.toBeInTheDocument();
+});
