@@ -2851,7 +2851,9 @@
     "gpu_arch_unsupported": "Den här PyTorch-versionen stöder inte din GPU. Välj CPU under Inställningar → Prestanda och enhet eller installera en kompatibel PyTorch-version.",
     "windows_app_control_blocked": "Windows programkontroll blockerade en nödvändig fil. Be administratören tillåta den betrodda VoiceStudio-körmiljön och starta sedan om appen.",
     "audio_io_failed": "Ljudet kunde inte läsas eller sparas. Kontrollera filformat, ledigt diskutrymme och filbehörigheter. Kontrollera mappen under Inställningar → Lagring.",
-    "no_audio_track": "Filen saknar ljudspår, så det finns inget tal att transkribera, dubba eller klona. Välj en video- eller ljudfil som innehåller ljud."
+    "no_audio_track": "Filen saknar ljudspår, så det finns inget tal att transkribera, dubba eller klona. Välj en video- eller ljudfil som innehåller ljud.",
+    "transcription_media_tool": "Transkribering kräver ffmpeg, som VoiceStudio inte kunde hitta eller köra. Öppna Inställningar → Ljudverktyg och använd Ladda ned/Reparera, eller installera ffmpeg (macOS: brew install ffmpeg; Windows: winget install Gyan.FFmpeg; Linux: din pakethanterare) och starta om VoiceStudio. Du kan också peka FFMPEG_PATH mot en ffmpeg-fil.",
+    "transcription_pipe_lost": "Backend förlorade sin utdatakanal till appen under transkriberingen (broken pipe). Starta om VoiceStudio och försök igen."
   },
   "network": {
     "copied": "Kopierade",

@@ -6,7 +6,6 @@ import logging
 import time
 import asyncio
 import torch
-import torchaudio
 from fastapi import APIRouter, HTTPException
 
 from core.db import db_conn
@@ -19,7 +18,7 @@ from services.tts_backend import TTSBackend, resolve_generation_backend, active_
 from services.dub_batching import batch_timeout_s, native_batch_width
 from services import gpu_gateway
 from services.audio_dsp import apply_mastering, normalize_audio, apply_effects_chain, get_effect_chain
-from services.audio_io import atomic_save_wav, _safe_torchaudio_save
+from services.audio_io import atomic_save_wav, audio_info, _safe_torchaudio_save
 from services.ffmpeg_utils import (
     find_ffmpeg,
     spawn_subprocess,
@@ -639,7 +638,7 @@ async def dub_generate(job_id: str, req: DubRequest):
             if isinstance(entry[2], torch.Tensor):
                 return int(entry[2].shape[-1])
             try:
-                info = torchaudio.info(entry[2])
+                info = audio_info(entry[2])
                 return int(info.num_frames)
             except Exception:
                 from services.audio_io import load_audio
@@ -745,7 +744,7 @@ async def dub_generate(job_id: str, req: DubRequest):
                             cache = legacy
                             break
                 try:
-                    info = torchaudio.info(cache)
+                    info = audio_info(cache)
                     intact = info.num_frames > 0 and _cached_payload_intact(cache, info)
                 except Exception:
                     intact = False
@@ -925,7 +924,7 @@ async def dub_generate(job_id: str, req: DubRequest):
 
         if remote_audio and isinstance(backend, _RemoteDubBackend):
             first_remote = next(iter(remote_audio.values()))
-            backend.sample_rate = int(torchaudio.info(first_remote).sample_rate)
+            backend.sample_rate = int(audio_info(first_remote).sample_rate)
         elif isinstance(backend, _RemoteDubBackend):
             # Fit-only / cache-only reruns synthesize nothing. Keep the cached
             # track's native rate when one exists instead of resampling it to
@@ -934,7 +933,7 @@ async def dub_generate(job_id: str, req: DubRequest):
                 cached_path = _seg_lang_path(cached_id)
                 if os.path.exists(cached_path):
                     try:
-                        backend.sample_rate = int(torchaudio.info(cached_path).sample_rate)
+                        backend.sample_rate = int(audio_info(cached_path).sample_rate)
                         break
                     except Exception:
                         continue
@@ -994,7 +993,7 @@ async def dub_generate(job_id: str, req: DubRequest):
                         # with a different sample rate.
                         if strategy != "strict_slot":
                             try:
-                                cached_info = torchaudio.info(seg_wav_path)
+                                cached_info = audio_info(seg_wav_path)
                             except Exception:
                                 cached_info = None
                             if (

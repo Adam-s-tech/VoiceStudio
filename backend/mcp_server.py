@@ -598,7 +598,7 @@ def create_mcp_server(app=None):
         and personality.
         """
         profiles = await _api_get("/profiles")
-        return str(profiles)
+        return json.dumps(profiles)
 
     @mcp.tool()
     async def list_personalities() -> str:
@@ -608,7 +608,7 @@ def create_mcp_server(app=None):
         instruct text. Use the instruct text with generate_speech.
         """
         presets = await _api_get("/personalities")
-        return str(presets)
+        return json.dumps(presets)
 
     @mcp.tool()
     async def list_languages() -> str:
@@ -660,13 +660,13 @@ def create_mcp_server(app=None):
                              "application/octet-stream")},
             timeout=_post_timeout_s("transcribe"),
         )
-        return str(r.json())
+        return json.dumps(r.json())
 
     @mcp.tool()
     async def check_health() -> str:
         """Check if the VoiceStudio backend is running and what GPU device is active."""
         info = await _api_get("/health")
-        return str(info)
+        return json.dumps(info)
 
     # ── Resources ───────────────────────────────────────────────────────
 
@@ -676,14 +676,14 @@ def create_mcp_server(app=None):
         profiles = await _api_get("/profiles")
         for p in profiles:
             if p.get("id") == profile_id:
-                return str(p)
-        return f'{{"error":"Voice profile {profile_id} not found"}}'
+                return json.dumps(p)
+        return json.dumps({"error": f"Voice profile {profile_id} not found"})
 
     @mcp.resource("history://recent")
     async def get_recent_history() -> str:
         """Get the 20 most recent generation history items."""
         history = await _api_get("/history")
-        return str(history[:20])
+        return json.dumps(history[:20])
 
     @mcp.tool()
     async def clone_voice(

@@ -2851,7 +2851,9 @@
     "gpu_arch_unsupported": "Deze PyTorch-versie ondersteunt je GPU niet. Kies CPU bij Instellingen → Prestaties en apparaat of installeer een compatibele PyTorch-versie.",
     "windows_app_control_blocked": "Windows-toepassingsbeheer heeft een vereist bestand geblokkeerd. Vraag je beheerder de vertrouwde VoiceStudio-runtime toe te staan en start de app opnieuw.",
     "audio_io_failed": "De audio kon niet worden gelezen of opgeslagen. Controleer het bestandsformaat, de vrije schijfruimte en de bestandsrechten. Controleer de map bij Instellingen → Opslag.",
-    "no_audio_track": "Dit bestand heeft geen audiotrack, dus er is geen spraak om te transcriberen, na te synchroniseren of te klonen. Kies een video- of audiobestand met geluid."
+    "no_audio_track": "Dit bestand heeft geen audiotrack, dus er is geen spraak om te transcriberen, na te synchroniseren of te klonen. Kies een video- of audiobestand met geluid.",
+    "transcription_media_tool": "Voor transcriptie is ffmpeg nodig, dat VoiceStudio niet kon vinden of uitvoeren. Open Instellingen → Audiotools en gebruik Downloaden/Herstellen, of installeer ffmpeg (macOS: brew install ffmpeg; Windows: winget install Gyan.FFmpeg; Linux: je pakketbeheerder) en herstart VoiceStudio. Je kunt ook FFMPEG_PATH naar een ffmpeg-bestand laten wijzen.",
+    "transcription_pipe_lost": "De backend verloor tijdens de transcriptie zijn uitvoerkanaal naar de app (broken pipe). Herstart VoiceStudio en probeer het opnieuw."
   },
   "network": {
     "copied": "Gekopieerd",

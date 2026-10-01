@@ -2851,7 +2851,9 @@
     "gpu_arch_unsupported": "Bu PyTorch derlemesi GPU’nuzu desteklemiyor. Ayarlar → Performans ve Cihaz bölümünden CPU’yu seçin veya uyumlu bir PyTorch derlemesi yükleyin.",
     "windows_app_control_blocked": "Windows uygulama denetimi gerekli bir dosyayı engelledi. Yöneticinizden güvenilir VoiceStudio çalışma ortamına izin vermesini isteyin, ardından uygulamayı yeniden başlatın.",
     "audio_io_failed": "Ses okunamadı veya kaydedilemedi. Dosya biçimini, boş disk alanını ve dosya izinlerini kontrol edin. Ayarlar → Depolama bölümündeki klasörü inceleyin.",
-    "no_audio_track": "Bu dosyada ses parçası yok, bu yüzden yazıya dökülecek, dublajlanacak veya klonlanacak konuşma yok. Ses içeren bir video veya ses dosyası seçin."
+    "no_audio_track": "Bu dosyada ses parçası yok, bu yüzden yazıya dökülecek, dublajlanacak veya klonlanacak konuşma yok. Ses içeren bir video veya ses dosyası seçin.",
+    "transcription_media_tool": "Yazıya dökme için ffmpeg gerekir, ancak VoiceStudio onu bulamadı veya çalıştıramadı. Ayarlar → Ses araçları bölümünü açıp İndir/Onar'ı kullanın ya da ffmpeg'i kurun (macOS: brew install ffmpeg; Windows: winget install Gyan.FFmpeg; Linux: paket yöneticiniz) ve VoiceStudio'yu yeniden başlatın. FFMPEG_PATH değişkenini bir ffmpeg dosyasına da yönlendirebilirsiniz.",
+    "transcription_pipe_lost": "Arka uç, yazıya dökme sırasında uygulamaya giden çıkış kanalını kaybetti (broken pipe). VoiceStudio'yu yeniden başlatıp tekrar deneyin."
   },
   "network": {
     "copied": "Kopyalandı",
