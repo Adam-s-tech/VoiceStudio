@@ -240,6 +240,18 @@ bad:  update
 bad:  WIP
 ```
 
+Commit with a real identity (your GitHub noreply address works). The
+`commit-identity` PR check (`scripts/check_commit_identities.py`) fails when a
+PR commit's author, committer, or `Co-authored-by:`/`Signed-off-by:` email is
+a placeholder (`test@local`, `you@example.com`, `mergetest`, hostname-style
+`*.local`), an AI agent, or on the hashed block list, or when a commit message
+or the PR description credits an AI agent. Fix an identity on the listed
+commits only: `git rebase -i origin/main`, mark each listed commit `edit`, and
+at each stop run `git commit --amend --no-edit --reset-author` and
+`git rebase --continue` (a blanket `--exec` would also take over other
+people's commits); fix agent credit by rewording the commit messages (`git rebase -i`, then
+`reword`) and editing the PR description.
+
 ---
 
 ## Testing
@@ -291,6 +303,21 @@ Plenty of contributions here are built with Claude Code, Cursor, and similar
 agents — welcome, with the same quality bar as hand-written PRs (real bug,
 correct fix, regression test; see the quality gates below).
 
+You submit agent-assisted work as your own, under your own git identity. Don't
+credit agents in commits or the PR description: no `Co-authored-by:` trailer
+for an AI agent, no "Generated with …" line, no agent session or share links
+(claude.ai, chatgpt.com) and no `Claude-Session:` trailer. The
+`commit-identity` check fails PRs that carry them. Co-authors who are people
+are welcome, including people with first names that also name an agent, such
+as Claude, Jules, or Devin. Known agent email addresses remain blocked. The
+identity workflow runs the base branch's policy and publishes `Commit identity
+policy`; changing the checker or workflow in your PR does not bypass it.
+
+Keep one open PR per head commit. CLA checks reject duplicate heads because
+GitHub commit statuses are shared by SHA, even when PR descriptions or authors
+differ. Close duplicates and comment `recheck` on the survivor, then rerun its
+trusted identity workflow.
+
 One practical tip: this codebase is large, and re-explaining it to your agent
 every session burns context and tokens fast. A persistent memory layer fixes
 that — the agent recalls the architecture, conventions, and your past findings
@@ -317,29 +344,56 @@ hard rules from the first prompt.
   path — existing `omnivoice_data/` must keep working with no manual steps.
 - **Engine back-compat:** already-installed engines (model weights on disk)
   must not require reinstall or re-download.
-- **Local-first:** no new outbound calls except GitHub Issues (opt-in
-  reporting) and HuggingFace model downloads. Never log or persist secrets or
-  absolute home paths.
+- **Local-first:** no new outbound calls, and the app must work fully offline
+  with every prompt declined. The only sanctioned ones are: Hugging Face model
+  downloads (gated on install state or an explicit user action); bug reports
+  as prefilled GitHub Issue URLs opened in the user's browser; PostHog
+  analytics only after a yes at the first-run consent prompt
+  (`backend/core/analytics.py`, allowlisted content-free metadata); the
+  GitHub star count (no credentials or referrer, refreshed every 20 minutes
+  while shown); packaged-app update checks against GitHub Releases (downloads
+  wait for the user); and the Lemon Squeezy Pro licence check, only after the
+  user enters a key (`electron/src/main/pro-license.ts`). Adding to this list
+  needs owner approval. Never log or persist secrets or absolute home paths.
 - **Security posture:** the backend serves loopback HTTP — treat every
   query/path/form parameter as hostile. User-chosen filesystem destinations
   are authorized in Electron main (native save dialog), never via HTTP params.
+- **CI supply chain:** every remote action in `.github/workflows/` is pinned
+  to a full 40-char commit SHA with a trailing `# vX.Y.Z` comment
+  (`tests/test_actions_pinned.py`); Dependabot bumps the pins weekly.
 
 ## Contribution licensing
 
 VoiceStudio is **AGPL-3.0-only**, and the maintainer also offers a
-**commercial license** (see [LICENSE](LICENSE)). By submitting a contribution
-you agree that:
+**commercial license** (see [LICENSE-NOTICE.md](../LICENSE-NOTICE.md)). Before
+a pull request can merge, the person who opened it and every commit author and
+co-author sign the [Contributor License Agreement](CLA-1.0.md) once. You keep
+your copyright. The agreement lets Yupcha Softwares Private Limited, the
+company that maintains VoiceStudio, ship your work in both the AGPL-3.0 app and
+commercial builds. In return, the company commits that while your contribution
+is in the public VoiceStudio repository, it stays available there under
+AGPL-3.0 or another OSI-approved licence (CLA section 4). AI agents can't be co-authors (see
+[Contributing with AI agents](#contributing-with-ai-agents)); the person
+submitting the work signs for it.
 
-1. you have the right to submit it (your own work, or compatibly licensed);
-2. it is licensed to the project under **AGPL-3.0**; and
-3. you grant the project maintainer a perpetual, worldwide, non-exclusive
-   right to also distribute your contribution under the project's commercial
-   license terms.
+The **CLA** check comments on your pull request when someone still needs to
+sign. To sign, post this as a new comment, on its own line:
 
-This inbound grant is what keeps the dual-license model viable. If you can't
-agree to (3) for a particular contribution, say so in the PR and we'll discuss
-before merging. Adding a `Signed-off-by:` line (DCO) to your commits is
-appreciated but not required.
+```text
+I have read the VoiceStudio CLA 1.0 and I hereby sign it.
+```
+
+The signature covers your earlier and future contributions, and the check
+turns green on its own. If a maintainer folds your pull request into another
+one, you sign once there too. Contributed before and have no open pull request? Post
+the same line on the [issue labelled `cla`](https://github.com/debpalash/VoiceStudio/issues?q=label%3Acla). If it lists a commit it cannot link to a GitHub
+account, either add that commit email to your account (Settings → Emails), or
+rewrite the commits with an email that is on it (`git commit --amend
+--reset-author`, or an interactive rebase) and push again. Comment `recheck` to
+run the check without pushing. Contributing as part of your job? Your employer
+signs the [Corporate CLA](CCLA-1.0.md) first, and you still sign the CLA
+yourself. Adding a `Signed-off-by:` line (DCO) is appreciated but does not
+replace the CLA.
 
 ---
 

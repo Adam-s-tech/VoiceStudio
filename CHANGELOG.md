@@ -51,6 +51,7 @@ metadata and the backend fallback mirror it.
 - Calls workspace with a live transcript, take-over, hang-up and an after-call summary (#2305)
 - Create Story from a dub: its speakers become characters, its segments become lines, and each character keeps the voice the dub assigned — no retyping the script (#2300) — thanks @shivsin25!
 - Linux AppImages include standard update information and a published `.zsync` file so AppImageUpdate and desktop managers can download only changed bytes (#2327) — thanks @shuvashish76!
+- Pull requests ask their opener and every commit author and co-author to sign a one-time Contributor License Agreement by comment; the contributing guide explains how (#2556)
 
 ### Changed
 - Audio quality and Voice controls open as compact popovers from the Synthesize box on Clone and Voice Design (#2419)
@@ -79,6 +80,8 @@ metadata and the backend fallback mirror it.
 - Voice Clone shows upload and record side by side instead of behind a toggle (#2307)
 
 ### Docs
+- Maintainer guide for repository settings that can't live in code; the licence notice scope and the contributing guide's list of network calls match the current app (#2556)
+- Contact addresses are now hi@voicestudio.sh (general and licensing), partner@voicestudio.sh (partnerships) and security@voicestudio.sh (security reports) (#2556)
 - Chinese README now matches the Electron installation and migration guide (#2377) — thanks @lg114!
 
 - Record the supplied audio comparisons and installed-engine quality validation (#2406)
@@ -87,6 +90,11 @@ metadata and the backend fallback mirror it.
 - The Twilio guide and integration directory describe the guided setup and in-app integration pages (#2304)
 
 ### Fixed
+- Contributor audits inspect committed files and exclude submodules, while still stopping on failed file attribution (#2556)
+
+- Contributor audits stop on unreadable Git history instead of dropping affected authors (#2556)
+
+- CLA rechecks clear older approvals, reject duplicate PR heads, and block failed status updates (#2556)
 - Keep audiobook chapter boundaries when importing CR-only manuscripts (#2508) — thanks @rudycelekli!
 - Preserve busy sidecars during engine-level unload instead of terminating their active operation (#2507) — thanks @Anuj04432 and @rudycelekli!
 - Exclude downloaded caption comments while preserving spoken metadata words (#2510) — thanks @rudycelekli!
@@ -149,6 +157,10 @@ metadata and the backend fallback mirror it.
 
 - A reference longer than 20 s is transcribed with the speech-to-text model already installed, instead of failing when OmniVoice's own Whisper snapshot is not cached (#2301) — thanks @Cengokill!
 - Pronunciation dictionary entries in Japanese, Chinese and Thai apply inside a sentence, not only to a line that is the key alone (#2392) — thanks @kevin9327!
+
+### CI
+- Trusted base-branch checks reject leaked, placeholder, and AI agent identities while allowing human co-authors with names shared by agents (#2556)
+- GitHub Actions are pinned to exact commits and kept current by Dependabot (#2556)
 
 ## [0.5.6] — 2026-09-23
 
