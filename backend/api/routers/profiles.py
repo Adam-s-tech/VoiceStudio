@@ -187,41 +187,35 @@ async def create_profile(
             ref_text = await _auto_transcribe_reference(audio_path)
         used_seed = seed
     else:
-        # Saving a design profile is a pure persistence operation — it must not
-        # depend on a loaded TTS model (issue #476: on a fresh model-less Docker
-        # image the render forced a full model load + inference that 503'd, so
-        # the save failed). We try the deterministic identity sample opportunist-
-        # ically through the one shared TTS path (archetypes' renderer, never a
-        # second inference code path); if the engine isn't ready it's rendered
-        # lazily on first preview/use. The row carries vd_states + instruct, so
-        # the voice is fully usable without the sample (synthesis falls back to
-        # instruct-only conditioning — see generation.py's design path).
+        # Saving must not start a cold model load or download (#2583).
+        # Preserve the identity sample for an already resident engine; otherwise
+        # use the existing pending-sample path, rendered on explicit preview.
         from pathlib import Path
         from api.routers.archetypes import _render_archetype_wav
-        audio_filename = f"{profile_id}.wav"
-        audio_path = os.path.join(VOICES_DIR, audio_filename)
-        try:
-            await _render_archetype_wav(
-                {
-                    "language": language,
-                    "sample_script": ref_text,  # optional custom sample line
-                    "instruct": instruct,
-                },
-                Path(audio_path),
-            )
-        except Exception:
-            # Engine unavailable / OOM / inference failure — defer the sample.
-            # Store the row with no ref_audio_path; the identity sample is
-            # rendered on first preview or use. Never let this block the save.
-            import logging
-            logging.getLogger("omnivoice.profiles").info(
-                "Design profile %s saved with sample pending — "
-                "voice engine not ready; will render on first use", profile_id,
-            )
-            if os.path.exists(audio_path):  # partial/blank render: don't keep it
-                with __import__("contextlib").suppress(OSError):
-                    os.remove(audio_path)
-            audio_filename = None
+        from services.model_manager import get_model_status
+        audio_path = os.path.join(VOICES_DIR, f"{profile_id}.wav")
+        audio_filename = None
+        if get_model_status()["loaded"]:
+            try:
+                await _render_archetype_wav(
+                    {
+                        "language": language,
+                        "sample_script": ref_text,  # optional custom sample line
+                        "instruct": instruct,
+                    },
+                    Path(audio_path),
+                    allow_model_load=False,
+                )
+                audio_filename = f"{profile_id}.wav"
+            except Exception:
+                # OOM / inference failure — defer the sample, clearing partials.
+                logging.getLogger("omnivoice.profiles").info(
+                    "Design profile %s saved with sample pending — "
+                    "voice engine not ready; will render on preview", profile_id,
+                )
+                if os.path.exists(audio_path):
+                    with contextlib.suppress(OSError):
+                        os.remove(audio_path)
         used_seed = seed if seed is not None else _DESIGN_SEED
 
     try:
