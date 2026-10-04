@@ -106,6 +106,7 @@ metadata and the backend fallback mirror it.
 
 - Contributor audits stop on unreadable Git history instead of dropping affected authors (#2556)
 
+- The CLA check accepts the sign line without a final full stop and replies when a comment cannot be recorded (#2586)
 - CLA rechecks clear older approvals, reject duplicate PR heads, and block failed status updates (#2556)
 - Keep audiobook chapter boundaries when importing CR-only manuscripts (#2508) — thanks @rudycelekli!
 - Preserve busy sidecars during engine-level unload instead of terminating their active operation (#2507) — thanks @Anuj04432 and @rudycelekli!
