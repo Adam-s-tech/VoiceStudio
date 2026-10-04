@@ -80,6 +80,75 @@ describe('replaceFile', () => {
     expect(await readdir(directory)).toEqual(['take.wav']);
   });
 
+  describe('Windows rename retries (#2560)', () => {
+    const transient = () => Object.assign(new Error('operation not permitted'), { code: 'EPERM' });
+    const noWait = async () => {};
+
+    it('retries a transient EPERM on win32 until the rename succeeds', async () => {
+      const target = join(directory, 'take.wav');
+      await writeFile(target, 'old');
+      let calls = 0;
+      const flaky: ReplaceFileSystem = {
+        open,
+        rename: async (from, to) => {
+          if (++calls < 4) throw transient();
+          await rename(from, to);
+        },
+      };
+      await replaceFile(target, 'new', flaky, { platform: 'win32', sleep: noWait });
+      expect(calls).toBe(4);
+      expect(await readFile(target, 'utf8')).toBe('new');
+      expect(await readdir(directory)).toEqual(['take.wav']);
+    });
+
+    it('rejects with the last error and removes the temp file when EPERM persists', async () => {
+      const target = join(directory, 'take.wav');
+      await writeFile(target, 'old');
+      let calls = 0;
+      const delays: number[] = [];
+      const stuck: ReplaceFileSystem = {
+        open,
+        rename: async () => {
+          calls++;
+          throw transient();
+        },
+      };
+      await expect(
+        replaceFile(target, 'new', stuck, {
+          platform: 'win32',
+          sleep: async (ms) => void delays.push(ms),
+        }),
+      ).rejects.toMatchObject({ code: 'EPERM' });
+      expect(calls).toBe(8);
+      expect(delays.reduce((a, b) => a + b, 0)).toBeGreaterThanOrEqual(1000);
+      expect(delays.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(2000);
+      expect(await readFile(target, 'utf8')).toBe('old');
+      expect(await readdir(directory)).toEqual(['take.wav']);
+    });
+
+    it('does not retry on other platforms or for non-transient errors', async () => {
+      const target = join(directory, 'take.wav');
+      for (const [platform, code] of [
+        ['linux', 'EPERM'],
+        ['win32', 'ENOSPC'],
+      ] as const) {
+        let calls = 0;
+        const failing: ReplaceFileSystem = {
+          open,
+          rename: async () => {
+            calls++;
+            throw Object.assign(new Error('fail'), { code });
+          },
+        };
+        await expect(
+          replaceFile(target, 'new', failing, { platform, sleep: noWait }),
+        ).rejects.toMatchObject({ code });
+        expect(calls).toBe(1);
+        expect(await readdir(directory)).toEqual([]);
+      }
+    });
+  });
+
   it.skipIf(process.platform === 'win32')('keeps the permissions of a replaced file', async () => {
     const target = join(directory, 'take.wav');
     await writeFile(target, 'old');
