@@ -178,3 +178,25 @@ it('keeps HTTP and auth classifications when error bodies are left unread', asyn
     ),
   ).rejects.toThrow('HTTP 503');
 });
+
+it.each(['/ws/transcribe', '/ws/events', '/ws/tts'] as const)(
+  'keeps a reverse-proxy path prefix in remote WebSocket %s URLs',
+  async (path) => {
+    const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      expect(String(input)).toBe('https://gpu-box/studio/api/auth/ws-ticket');
+      expect(init?.body).toBe(JSON.stringify({ path }));
+      return json({ ticket: `ovs_ws_ticket_${'b'.repeat(43)}`, expires_in: 30 }, { status: 201 });
+    });
+    expect(
+      await remoteWebSocketUrl(
+        'https://gpu-box/studio/',
+        path,
+        { token: SESSION, expiresAt: 3601 },
+        { fetcher, now: () => 1000 },
+      ),
+    ).toBe(`wss://gpu-box/studio${path}?ws_ticket=ovs_ws_ticket_${'b'.repeat(43)}`);
+    expect(await remoteWebSocketUrl('http://gpu-box:8080/a/b', path, null)).toBe(
+      `ws://gpu-box:8080/a/b${path}`,
+    );
+  },
+);

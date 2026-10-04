@@ -237,7 +237,9 @@ export async function remoteWebSocketUrl(
   { fetcher = fetch, now = Date.now, timeoutMs = 5000 }: ProbeOptions = {},
 ): Promise<string> {
   const target = normalizeRemoteUrl(rawUrl);
-  const url = new URL(path, `${target}/`);
+  // Resolve the route relative to the base so a reverse-proxy path prefix
+  // (`https://host/studio`) survives; a leading slash would replace it.
+  const url = new URL(path.replace(/^\/+/, ''), `${target}/`);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   if (!session) return url.toString();
   if (session.expiresAt <= now() / 1000) throw new Error('Remote session expired');

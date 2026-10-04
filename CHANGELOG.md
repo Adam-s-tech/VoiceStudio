@@ -103,6 +103,7 @@ metadata and the backend fallback mirror it.
 ### Fixed
 - Streaming previews play the last chunk to its end and resume at full volume after a generation pause (#2518) — thanks @rudycelekli!
 - Remote backend checks and WebSocket sign-in time out when a server stalls mid-response instead of waiting forever (#2527) — thanks @rudycelekli!
+- Remote backends served under a reverse-proxy path prefix keep that prefix for dictation, events and speech WebSockets (#2537) — thanks @rudycelekli!
 - Elevated Windows app removal stops before deleting data and points to a normal PowerShell window or Settings (#2578)
 - Contributor audits inspect committed files and exclude submodules, while still stopping on failed file attribution (#2556)
 
