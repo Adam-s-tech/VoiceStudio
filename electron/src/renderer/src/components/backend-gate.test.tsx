@@ -1,11 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { beforeEach, expect, it, vi } from 'vitest';
 import i18n from '@/i18n';
 import type { BackendStatus } from '../../../preload/index.d';
 import { BackendGate, delimitedDiagnostic } from './backend-gate';
 
-const { backendStatus, platform } = vi.hoisted(() => ({
+const { backendStatus, platform, bridgeStub } = vi.hoisted(() => ({
+  bridgeStub: { current: null as unknown },
   backendStatus: {
     stage: 'setup_required',
     baseUrl: 'http://127.0.0.1:3900',
@@ -26,11 +27,13 @@ vi.mock('@/hooks/use-backend-status', () => ({
 }));
 
 vi.mock('./bridge', () => ({
-  getBridge: () => null,
+  getBridge: () => bridgeStub.current,
   isMac: () => platform.current === 'darwin',
 }));
 
 beforeEach(() => {
+  bridgeStub.current = null;
+  onlineManager.setOnline(true);
   backendStatus.stage = 'setup_required';
   backendStatus.elapsedMs = 0;
   backendStatus.logTail = [];
@@ -243,15 +246,28 @@ it('explains unsupported Windows proxy bypass rules before retrying setup', () =
   );
 });
 
-it('lets the user reconnect a remote whose session expired, from the gate itself', () => {
-  backendStatus.message = 'The remote backend at http://x no longer accepts this app’s credentials.';
+it('shows a populated, usable reconnect form for an expired remote session while queries are paused', async () => {
+  backendStatus.message = 'The remote backend at http://gpu-box:3900 no longer accepts this app’s credentials.';
   backendStatus.diagnosis = 'auth_required';
   backendStatus.remote = true;
+  // A failed backend takes React Query offline (use-backend-status); the saved
+  // URL must still load because it comes from IPC, not the network.
+  onlineManager.setOnline(false);
+  bridgeStub.current = {
+    backend: {
+      getConnection: async () => ({
+        remote: true,
+        url: 'http://gpu-box:3900',
+        authenticated: false,
+      }),
+    },
+  };
   try {
     renderGate('failed');
-    // The workspace (and Settings) is gated, so the reconnect form lives here.
     expect(screen.getByText(i18n.t('backend.auth_required'))).toBeVisible();
-    expect(screen.getByText(i18n.t('settings.remote_backend_key_placeholder'))).toBeVisible();
+    // Fresh renderer: the URL arrives from the saved connection, and Test/Save work.
+    expect(await screen.findByDisplayValue('http://gpu-box:3900')).toBeEnabled();
+    expect(screen.getByRole('button', { name: i18n.t('settings.remote_backend_test') })).toBeEnabled();
   } finally {
     backendStatus.remote = false;
   }

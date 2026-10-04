@@ -65,6 +65,8 @@ const SUPERVISE_MISSES = 3;
  */
 const SUPERVISE_REJECTIONS = 15;
 const REMOTE_AUTH_CHECK_TIMEOUT_MS = 5000;
+/** Healthy supervise ticks (2 s apart) between credential re-checks of an auth_required remote. */
+const AUTH_RECHECK_TICKS = 15;
 /**
  * Stages a later successful /health probe must retire back to `ready` (#2430).
  * `unresponsive` is a live-but-busy backend, not a failure: the supervisor
@@ -1421,6 +1423,8 @@ export class BackendSupervisor extends EventEmitter<{
     let refusals = 0;
     // Consecutive answered-but-unhealthy probes, counted apart from refusals.
     let rejections = 0;
+    // Healthy ticks since an auth_required remote was last re-validated.
+    let authRecheck = 0;
     const noteMiss = (): number => {
       refusals = this.lastProbeOutcome === 'refused' ? refusals + 1 : 0;
       rejections = this.lastProbeOutcome === 'rejected' ? rejections + 1 : 0;
@@ -1439,14 +1443,15 @@ export class BackendSupervisor extends EventEmitter<{
         misses = 0;
         refusals = 0;
         rejections = 0;
-        // A remote parked on auth_required needs the user to reconnect; probing
-        // it again every tick would only repeat the same rejection.
-        if (
-          gen === this.generation &&
-          RECOVERABLE_STAGES.has(this.stage) &&
-          this.diagnosis !== 'auth_required'
-        ) {
-          await this.markReady(gen, { message: undefined }, false);
+        if (gen === this.generation && RECOVERABLE_STAGES.has(this.stage)) {
+          // A remote parked on auth_required is re-validated only every Nth
+          // healthy tick: the rejection will repeat until credentials change
+          // (possibly outside this app), so checking each tick is wasted load,
+          // but never checking would leave it failed after they are fixed.
+          if (this.diagnosis !== 'auth_required' || ++authRecheck >= AUTH_RECHECK_TICKS) {
+            authRecheck = 0;
+            await this.markReady(gen, { message: undefined }, false);
+          }
         }
       } else if (noteMiss() >= SUPERVISE_MISSES && gen === this.generation) {
         // The child-exit handler owns this bounded replacement handoff. It

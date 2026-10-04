@@ -407,3 +407,28 @@ it('never asks a local backend for credentials before marking it ready', async (
     await supervisor.shutdown();
   }
 });
+
+it('re-validates an auth_required remote on a slow cadence so out-of-app fixes recover', async () => {
+  const health: Health = { mode: 'up', authRejected: true };
+  const supervisor = await remoteSupervisor(health);
+  try {
+    await supervisor.start();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(supervisor.status.diagnosis).toBe('auth_required');
+
+    // Still rejected: checked rarely, not every 2 s tick.
+    const checks = () => calls.filter((url) => url.endsWith('/system/info')).length;
+    const before = checks();
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(checks() - before).toBeLessThanOrEqual(1);
+    expect(supervisor.status.stage).toBe('failed');
+
+    // Credentials are fixed outside the app (key restored on the server).
+    health.authRejected = false;
+    await vi.advanceTimersByTimeAsync(40_000);
+    expect(supervisor.status.stage).toBe('ready');
+    expect(supervisor.status.diagnosis).toBeUndefined();
+  } finally {
+    await supervisor.shutdown();
+  }
+});
