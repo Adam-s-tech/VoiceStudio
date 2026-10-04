@@ -1389,6 +1389,8 @@ class MLXWhisperBackend(ASRBackend):
         mlx_whisper internally caches via a class-level ModelHolder singleton.
         Calling ``load_model`` triggers the download (if needed) and loads
         weights onto the GPU — subsequent transcribe() calls hit the warm cache.
+        It must warm the same source ``transcribe`` passes: the singleton is
+        keyed by that string, and a repo id asks the Hub for ``main`` (#2583).
         """
         import time
         t0 = time.perf_counter()
@@ -1397,7 +1399,7 @@ class MLXWhisperBackend(ASRBackend):
             import mlx.core as mx
             # load_model populates the class-level singleton; after this call
             # the model is resident in unified memory.
-            ModelHolder.get_model(self._model_name, dtype=mx.float16)
+            ModelHolder.get_model(_local_model_source(self._model_name), dtype=mx.float16)
             dt = time.perf_counter() - t0
             logger.info("MLX Whisper model '%s' warmed up in %.1fs", self._model_name, dt)
         except Exception as e:

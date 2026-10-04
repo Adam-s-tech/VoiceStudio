@@ -145,6 +145,29 @@ def test_faster_whisper_loads_installed_weights_by_path(installed_snapshot, no_n
     assert loaded == [installed_snapshot]
 
 
+def test_mlx_whisper_warmup_loads_the_path_transcribe_uses(installed_snapshot, no_network, monkeypatch):
+    """Startup warmup loaded by repo id: offline it could not resolve a pinned
+    install, and it warmed a different ModelHolder key than transcribe."""
+    from services import asr_backend
+
+    loaded = []
+
+    class FakeHolder:
+        @staticmethod
+        def get_model(source, dtype):
+            loaded.append(source)
+
+    mlx = types.ModuleType("mlx")
+    mlx.core = types.SimpleNamespace(float16="float16")
+    monkeypatch.setitem(sys.modules, "mlx", mlx)
+    monkeypatch.setitem(sys.modules, "mlx.core", mlx.core)
+    monkeypatch.setitem(sys.modules, "mlx_whisper", types.ModuleType("mlx_whisper"))
+    monkeypatch.setitem(sys.modules, "mlx_whisper.transcribe", types.SimpleNamespace(ModelHolder=FakeHolder))
+
+    asr_backend.MLXWhisperBackend(model_name=_REPO).warmup()
+    assert loaded == [installed_snapshot]
+
+
 def test_uninstalled_or_custom_names_keep_loading_by_name(tmp_path, monkeypatch):
     from services import asr_backend
 
