@@ -21,6 +21,7 @@ epub/pdf ingest, ACX mastering shipped; the resume UI surface remains a follow-u
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -1124,6 +1125,14 @@ async def _render_longform_sse(
     except Exception:  # resume durability is an enhancement; never block the render
         logger.debug("[%s] resume manifest write skipped", job_id, exc_info=True)
 
+    def _retire_failed(store, jid: str, reason: str) -> None:
+        """A pre-render refusal ends the job; it must not stay `running`."""
+        if store is not None:
+            try:
+                store.retire_if_active(jid, "failed", reason)
+            except Exception:
+                pass  # best-effort job history
+
     def _emit(payload: dict) -> str:
         if job_store is not None:
             try:
@@ -1133,10 +1142,12 @@ async def _render_longform_sse(
         return f"data: {json.dumps(payload)}\n\n"
 
     if not plan.chapters:
+        _retire_failed(job_store, job_id, "nothing to render (no chapters)")
         yield _emit({"type": "error", "error": "nothing to render (no chapters)"})
         return
     ffmpeg = find_ffmpeg()
     if not ffmpeg:
+        _retire_failed(job_store, job_id, "ffmpeg not available; the output needs it")
         yield _emit({"type": "error", "error": "ffmpeg not available; the output needs it"})
         return
 
@@ -1144,6 +1155,7 @@ async def _render_longform_sse(
     # the basename + realpath barrier so CodeQL sees a clean path).
     work = longform_resume.work_dir(job_type, job_id)
     if work is None:
+        _retire_failed(job_store, job_id, "invalid job id")
         yield _emit({"type": "error", "error": "invalid job id"})
         return
     os.makedirs(work, exist_ok=True)
@@ -1364,6 +1376,18 @@ async def _render_longform_sse(
                 "measured_i": measured.input_i if measured else None,
             }
         yield _emit(done)
+    except (asyncio.CancelledError, GeneratorExit):
+        # The response was cancelled (transport dropped mid-render) or its
+        # iterator was closed. Neither is an `Exception`, so the handler below
+        # never saw them and the job stayed `running` for history/job consumers
+        # (#2536). Retire it as cancelled — a no-op once it is already
+        # done/failed — keep the resume manifest, and let the cancel propagate.
+        if job_store is not None:
+            try:
+                job_store.retire_if_active(job_id, "cancelled")
+            except Exception:
+                pass  # best-effort job history
+        raise
     except Exception as e:  # surface, don't 500 the stream
         logger.exception("[%s] longform render failed", job_id)
         if job_store is not None:
@@ -1378,8 +1402,12 @@ async def _render_longform_sse(
 async def _public_longform_stream(plan, **render_kwargs):
     """Keep generator diagnostics local if setup fails before its own guard."""
     try:
-        async for event in _render_longform_sse(plan, **render_kwargs):
-            yield event
+        # aclosing: closing this stream must finalize the renderer now, not
+        # whenever the garbage collector gets to it, so its job is retired
+        # before the response is considered finished (#2536).
+        async with contextlib.aclosing(_render_longform_sse(plan, **render_kwargs)) as events:
+            async for event in events:
+                yield event
     except asyncio.CancelledError:
         raise
     except Exception as exc:
