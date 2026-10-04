@@ -101,6 +101,7 @@ metadata and the backend fallback mirror it.
 - License notice: commercial use is free under the AGPL; the paid licence is for closed-source use, with Pro plans linked (#2578)
 
 ### Fixed
+- Batch retry and delete no longer race, so a job cannot be queued twice and its files are never removed while it is active or stopping (#2547) — thanks @rudycelekli!
 - Stopping an audiobook or Stories render marks its job cancelled instead of leaving it running, and refused renders no longer stay running either (#2536) — thanks @rudycelekli!
 - Audiobook and Stories descriptions with CRLF or CR paragraph breaks keep every paragraph in the exported file (#2528) — thanks @rudycelekli!
 - Re-locking a voice to another take re-renders its audiobook and Stories audio instead of replaying the previous take (#2535) — thanks @rudycelekli!
