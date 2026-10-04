@@ -7,6 +7,7 @@ import os
 import re
 import time
 import uuid
+import weakref
 from pathlib import Path, PureWindowsPath
 from typing import Optional
 
@@ -1738,7 +1739,8 @@ async def dub_qc_pass(job_id: str, lang: str = Query(None), drift_threshold: flo
     }
 
 
-_mixed_audio_locks: dict[str, asyncio.Lock] = {}
+# Weak values: a lock lives only while a request holds or awaits it.
+_mixed_audio_locks: "weakref.WeakValueDictionary[str, asyncio.Lock]" = weakref.WeakValueDictionary()
 _LEGACY_MIX = re.compile(r"mixed_dub_[0-9A-Za-z-]+\.wav")
 # Mix paths a request has chosen but not finished serving, and superseded
 # mixes whose deletion waits for their last reader.
@@ -1801,7 +1803,10 @@ async def _mixed_dub_audio(exports_dir: str, lang: str, bg_audio: str, track_pat
     target = os.path.realpath(os.path.join(exports, f"mixed_{lang}_{key}.wav"))
     if not target.startswith(exports + os.sep):
         raise HTTPException(status_code=400, detail="Invalid export path")
-    async with _mixed_audio_locks.setdefault(target, asyncio.Lock()):
+    lock = _mixed_audio_locks.get(target)
+    if lock is None:
+        lock = _mixed_audio_locks[target] = asyncio.Lock()
+    async with lock:
         if not (os.path.isfile(target) and os.path.getsize(target) > 0):
             partial = target + ".tmp.wav"
             cmd = [
