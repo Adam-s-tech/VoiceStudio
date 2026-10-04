@@ -647,6 +647,8 @@
     "remove_cookie_file": "Cookie-Datei entfernen",
     "remove_video": "Video entfernen",
     "remove_video_confirm": "Dieses Video, sein Transkript und ungespeicherte Änderungen entfernen? Das kann nicht rückgängig gemacht werden.",
+    "remove_audio": "Audio entfernen",
+    "remove_audio_confirm": "Diese Audiodatei, ihr Transkript und ungespeicherte Änderungen entfernen? Dies kann nicht rückgängig gemacht werden.",
     "cookie_transport_error": "Cookie-Exporte erfordern HTTPS oder die lokale Desktop-App.",
     "cookie_size_error": "Der Cookie-Export darf höchstens 1 MB groß sein.",
     "save": "Speichern",

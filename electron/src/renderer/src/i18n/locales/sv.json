@@ -647,6 +647,8 @@
     "remove_cookie_file": "Ta bort cookie-filen",
     "remove_video": "Ta bort video",
     "remove_video_confirm": "Ta bort videon, transkriptet och osparade ändringar? Det går inte att ångra.",
+    "remove_audio": "Ta bort ljud",
+    "remove_audio_confirm": "Ta bort det här ljudet, dess transkription och osparade ändringar? Det går inte att ångra.",
     "cookie_transport_error": "Cookie-exporter kräver HTTPS eller den lokala skrivbordsappen.",
     "cookie_size_error": "Cookie-exporten får vara högst 1 MB.",
     "save": "Spara",

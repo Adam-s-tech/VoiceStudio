@@ -101,6 +101,7 @@ metadata and the backend fallback mirror it.
 - License notice: commercial use is free under the AGPL; the paid licence is for closed-source use, with Pro plans linked (#2578)
 
 ### Fixed
+- Dubbing keeps Remove video available after an interrupted or failed run, so a YouTube link can replace the source, and labels it Remove audio for audio files (#2584) — thanks @harrsoft-dev!
 - Audio-only dub previews reuse one background mix instead of writing a new full-length WAV on every seek, which filled the disk on long dubs (#2581) — thanks @PsychoRhythmist!
 - References longer than 20 s keep using the installed speech-to-text model when OmniVoice retries generation without its cached voice prompt (#2579) — thanks @mahdinazmi!
 - Model Catalogue disk warnings name the 10 GB kept free after each download and use the same rule as the installer (#2597) — thanks @HuntingSuccubus!

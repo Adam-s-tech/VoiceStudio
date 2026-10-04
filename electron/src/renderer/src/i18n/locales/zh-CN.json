@@ -660,6 +660,8 @@
     "remove_cookie_file": "移除 Cookie 文件",
     "remove_video": "移除视频",
     "remove_video_confirm": "要移除此视频、转录文本和未保存的编辑吗？此操作无法撤销。",
+    "remove_audio": "移除音频",
+    "remove_audio_confirm": "要移除此音频、其转录文本和未保存的编辑吗?此操作无法撤销。",
     "cookie_transport_error": "Cookie 导出文件只能通过 HTTPS 或本地桌面应用发送。",
     "cookie_size_error": "Cookie 导出文件必须小于或等于 1 MB。",
     "save": "保存",
