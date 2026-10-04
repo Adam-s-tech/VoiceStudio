@@ -27,7 +27,7 @@ import {
 } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { cpus, homedir, totalmem } from 'node:os';
-import { basename, delimiter, dirname, isAbsolute, join, resolve } from 'node:path';
+import { basename, delimiter, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { app } from 'electron';
 import type {
   BackendConnection,
@@ -383,13 +383,22 @@ export async function resolveSpawnPlan(
   // deadline and repeat that download after every restart (#2184).
   const portArg = ['--port', String(port)];
   const python = venvPython(root);
-  if (existsSync(python) && (await runtimeDependenciesReady(root))) {
+  const setup = 'Run `bun run setup:api` in the repository, wait for it to finish, then restart.';
+  if (!existsSync(python)) {
+    return {
+      error: `The Python environment in ${root} is missing (no ${relative(root, python)}). ${setup}`,
+    };
+  }
+  // Name the import that failed (#2555): "incomplete" alone cannot tell a
+  // setup that never ran from one that finished but cannot load a module.
+  let failure = '';
+  if (await runtimeDependenciesReady(root, (detail) => (failure = detail))) {
     return { argv: [python, '-m', ...UVICORN_ARGS, ...portArg], cwd: root };
   }
   return {
     error:
-      `The Python environment in ${root} is missing or incomplete. ` +
-      'Run `bun run setup:api` in the repository, wait for it to finish, then restart.',
+      `The Python environment in ${root} is incomplete${failure ? `: ${failure}` : ''}. ${setup} ` +
+      'If setup already finished without errors, include this message and the setup output in a bug report.',
   };
 }
 

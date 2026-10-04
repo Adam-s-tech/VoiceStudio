@@ -1316,11 +1316,15 @@ the message:
   ran out of time is treated as inconclusive instead of sending an intact
   runtime back to the setup screen. The first start after an install is the
   slowest because antivirus scans every new file; later starts are much faster.
-- **`The Python environment in <folder> is missing or incomplete`** (running from
-  a source checkout) — run `bun run setup:api` in the repository. If the folder
-  is inside OneDrive, Dropbox, iCloud Drive or Google Drive, move the checkout to
-  a plain local folder first: online-only placeholders and file locking break
-  the Python environment.
+- **`The Python environment in <folder> is missing`** or **`… is incomplete:
+  <reason>`** (running from a source checkout) — run `bun run setup:api` in the
+  repository and let it finish. *Missing* means no `.venv` exists yet.
+  *Incomplete* quotes the import that failed, e.g. `ModuleNotFoundError: No
+  module named 'sentencepiece'` (setup did not finish: rerun it) or `ImportError:
+  DLL load failed` (Windows: rerun setup, which installs the Visual C++
+  runtime). If the folder is inside OneDrive, Dropbox, iCloud Drive or Google
+  Drive, move the checkout to a plain local folder first: online-only
+  placeholders and file locking break the Python environment.
 
 A native crash (`3221225477`, `-1073741819`) right after pressing Generate
 shortly after launch was caused by the startup preload and the first generation
