@@ -103,6 +103,16 @@ SCRIPT_RANGES: dict[str, tuple[tuple[int, int], ...]] = {
 }
 
 
+# Han-only text is Chinese, not Japanese: real Japanese prose carries kana
+# (particles, inflections). Short all-kanji lines (names, headings) are common
+# Japanese, so only a run of this many Han letters with zero kana is rejected.
+_JA_HAN_ONLY_MIN = 6
+
+
+def _in_ranges(ch: str, ranges: tuple[tuple[int, int], ...]) -> bool:
+    return any(lo <= ord(ch) <= hi for lo, hi in ranges)
+
+
 def script_ratio(text: str, code: str) -> float:
     """Fraction of letters in ``text`` inside the scripts expected for ``code``.
 
@@ -115,9 +125,10 @@ def script_ratio(text: str, code: str) -> float:
     letters = [c for c in text if c.isalpha()]
     if not letters:
         return 1.0
-    inside = sum(
-        1 for c in letters if any(lo <= ord(c) <= hi for lo, hi in ranges)
-    )
+    if code == "ja" and not any(_in_ranges(c, _KANA_RANGES) for c in letters):
+        if sum(1 for c in letters if _in_ranges(c, _HAN_RANGES)) >= _JA_HAN_ONLY_MIN:
+            return 0.0
+    inside = sum(1 for c in letters if _in_ranges(c, ranges))
     return inside / len(letters)
 
 
