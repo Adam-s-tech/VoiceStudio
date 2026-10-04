@@ -18,8 +18,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-@pytest.mark.parametrize("group", ["cpu", "cuda"])
-def test_frozen_torch_graph_on_supported_platforms(group, tmp_path):
+def _frozen_requirements(group, tmp_path):
     uv = shutil.which("uv")
     if uv is None:
         pytest.skip("uv required to validate its frozen dependency selection")
@@ -30,13 +29,19 @@ def test_frozen_torch_graph_on_supported_platforms(group, tmp_path):
         args, cwd=ROOT, text=True, capture_output=True, check=True, timeout=30,
         env={**os.environ, "UV_CACHE_DIR": str(tmp_path / "uv"), "UV_OFFLINE": "1"},
     )
-    requirements = [
+    return [
         Requirement(line) for line in result.stdout.splitlines()
         if line.strip() and not line.lstrip().startswith(("#", "-"))
     ]
+
+
+@pytest.mark.parametrize("python_version", ["3.11", "3.12"])
+@pytest.mark.parametrize("group", ["cpu", "cuda"])
+def test_frozen_torch_graph_on_supported_platforms(group, python_version, tmp_path):
+    requirements = _frozen_requirements(group, tmp_path)
     for platform, machine in [("linux", "x86_64"), ("win32", "AMD64"), ("darwin", "arm64"), ("linux", "aarch64")]:
         env = {**default_environment(), "sys_platform": platform, "platform_machine": machine,
-               "python_full_version": "3.11.16", "python_version": "3.11"}
+               "python_full_version": f"{python_version}.1", "python_version": python_version}
         selected = {req.name: str(req.specifier) for req in requirements
                     if req.marker is None or req.marker.evaluate(env)}
         native = platform == "darwin" or machine == "aarch64"
@@ -51,6 +56,19 @@ def test_frozen_torch_graph_on_supported_platforms(group, tmp_path):
         elif platform == "linux":
             assert "nvidia-cudnn-cu12" in gpu_libs
             assert "triton" in gpu_libs
+
+
+@pytest.mark.parametrize("python_version", ["3.11", "3.12", "3.13", "3.14"])
+@pytest.mark.parametrize("group", ["cpu", "cuda"])
+def test_frozen_numpy_preserves_existing_platform_versions(group, python_version, tmp_path):
+    requirements = [req for req in _frozen_requirements(group, tmp_path) if req.name == "numpy"]
+    for platform, machine in [("linux", "x86_64"), ("win32", "AMD64"), ("darwin", "arm64"), ("linux", "aarch64")]:
+        env = {**default_environment(), "sys_platform": platform, "platform_machine": machine,
+               "python_full_version": f"{python_version}.1", "python_version": python_version}
+        selected = [str(req.specifier) for req in requirements
+                    if req.marker is None or req.marker.evaluate(env)]
+        expected = "2.0.2" if python_version == "3.12" and platform in {"linux", "win32"} else "2.2.6"
+        assert selected == [f"=={expected}"]
 
 
 @pytest.mark.parametrize("probe", ["cpu", "cuda", "rocm", "failed", "timeout"])
