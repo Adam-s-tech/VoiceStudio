@@ -111,3 +111,103 @@ def test_sweep_keeps_a_retired_file_a_profile_references_again(locked_profile):
     assert profiles.sweep_retired_voice_files(grace_s=0) == 0
     assert (locked_profile / "voice_locked.wav").read_bytes() == b"legacy"
     assert os.listdir(locked_profile / ".retired") == []
+
+
+def test_sweep_keeps_a_retired_take_an_active_render_holds(locked_profile):
+    """Age alone must not decide: a render running past the grace period still
+    reads its take, so the sweep keeps it until the render releases it."""
+    from api.routers import audiobook, profiles
+    from core import voice_leases
+
+    asyncio.run(profiles.lock_profile("voice", history_id="take1", seed=7))
+    with voice_leases.VoiceFileLease() as lease:
+        in_flight = lease.hold(audiobook._resolve_voice("voice")["ref_audio"])
+        asyncio.run(profiles.lock_profile("voice", history_id="take2", seed=7))
+
+        assert profiles.sweep_retired_voice_files(grace_s=0) == 0
+        assert open(in_flight, "rb").read() == b"first-take"
+        assert os.listdir(locked_profile / ".retired"), "marker kept for a later sweep"
+
+    assert profiles.sweep_retired_voice_files(grace_s=0) == 1
+    assert not os.path.exists(in_flight)
+    assert os.listdir(locked_profile / ".retired") == []
+
+
+def test_voice_leases_count_each_holder_and_release_once(tmp_path):
+    from core import voice_leases
+
+    path = str(tmp_path / "take.wav")
+    a, b = voice_leases.VoiceFileLease(), voice_leases.VoiceFileLease()
+    a.hold(path)
+    a.hold(path)  # one lease holds a path once
+    b.hold(path)
+    a.release()
+    a.release()
+    assert voice_leases.in_use(path)
+    b.release()
+    assert not voice_leases.in_use(path)
+    a.hold(path)  # a released lease cannot pin a file again
+    assert not voice_leases.in_use(path)
+
+
+def test_longform_render_holds_its_take_until_the_render_ends(locked_profile, tmp_path, monkeypatch):
+    """Through the real chapter renderer: a re-lock plus an overdue sweep in the
+    middle of a book must leave the in-flight take; the job's end frees it."""
+    import json
+
+    from api.routers import audiobook, profiles
+    from core import db, voice_leases
+    from services.audiobook import AudiobookPlan, Chapter, Span
+
+    monkeypatch.setattr("core.config.OUTPUTS_DIR", str(tmp_path / "outputs"))
+    # Hermetic: the mux after the chapters may fail; only the chapters matter.
+    monkeypatch.setattr("services.ffmpeg_utils.find_ffmpeg", lambda: "ffmpeg-not-run")
+    asyncio.run(profiles.lock_profile("voice", history_id="take1", seed=7))
+    in_flight = audiobook._resolve_voice("voice")["ref_audio"]
+    seen = []
+
+    def synth(text, voice_id, speed=None):
+        if not seen:  # first segment: the user re-locks; a day-late sweep runs
+            with db.db_conn() as conn:
+                conn.execute("UPDATE voice_profiles SET locked_audio_path='other.wav'")
+            profiles._retire_voice_file(os.path.basename(in_flight))
+            seen.append((profiles.sweep_retired_voice_files(grace_s=0), os.path.exists(in_flight)))
+        return torch.zeros(2400)
+
+    def build_synth(default_voice=None, language=None, opts=None, voice_map=None, lease=None):
+        return {"mode": "generic", "resolve": lambda _v: {}, "engine_id": "stub",
+                "synth": synth, "sample_rate": 24000}
+
+    monkeypatch.setattr(audiobook, "_build_synth", build_synth)
+    plan = AudiobookPlan(chapters=[
+        Chapter(title=t, spans=[Span(voice_id=None, text=t)]) for t in ("One.", "Two.")
+    ])
+
+    async def run():
+        return [json.loads(f[len("data:"):]) async for f in
+                audiobook._render_longform_sse(plan, default_voice="voice")]
+
+    events = asyncio.run(asyncio.wait_for(run(), timeout=120))
+    assert events[0]["type"] == "started"
+    assert seen == [(0, True)], "the render's take survived the overdue sweep"
+    assert not voice_leases.in_use(in_flight)
+    assert profiles.sweep_retired_voice_files(grace_s=0) == 1
+    assert not os.path.exists(in_flight)
+
+
+def test_batch_job_holds_its_voice_only_while_it_runs(tmp_path, monkeypatch):
+    from api.routers import batch
+    from core import voice_leases
+
+    path = str(tmp_path / "take.wav")
+    during = []
+
+    async def leased(job_id, job, lease):
+        lease.hold(path)
+        during.append(voice_leases.in_use(path))
+        raise RuntimeError("pipeline failed")
+
+    monkeypatch.setattr(batch, "_run_batch_pipeline_leased", leased)
+    with pytest.raises(RuntimeError):
+        asyncio.run(batch._run_batch_pipeline("job", {}))
+    assert during == [True] and not voice_leases.in_use(path)

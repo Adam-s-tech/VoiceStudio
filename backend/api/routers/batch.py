@@ -23,7 +23,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from core.config import DATA_DIR
-from core import failure
+from core import failure, voice_leases
 from core.logging_utils import log_safe
 from core.path_security import portable_filename
 from core.file_cleanup import FileCleanupError, unlink_if_present
@@ -282,6 +282,14 @@ def _batch_voice(voice_id: str | None) -> dict:
 
 async def _run_batch_pipeline(job_id: str, job: dict):
     """Full batch dub pipeline: extract → transcribe → translate → generate → mix → export."""
+    # The queue-wide voice is resolved once and its reference re-read for every
+    # segment, so hold it until the job ends: the retired-voice sweep must not
+    # delete a take this job still uses (#2535).
+    with voice_leases.VoiceFileLease() as lease:
+        await _run_batch_pipeline_leased(job_id, job, lease)
+
+
+async def _run_batch_pipeline_leased(job_id: str, job: dict, lease: voice_leases.VoiceFileLease):
     import subprocess
 
     loop = asyncio.get_running_loop()
@@ -391,6 +399,7 @@ async def _run_batch_pipeline(job_id: str, job: dict):
     # propagates to _worker()'s existing except-Exception handling, which
     # already records a structured job failure via core.failure.build_failure.
     voice = _batch_voice(job.get("voice_id"))
+    lease.hold(voice.get("ref_audio"))
     engine_id, execution_target, backend = await _resolve_batch_execution(voice)
     sr = backend.sample_rate if backend is not None else 0
     from services.performance_profiles import tts_defaults
