@@ -778,6 +778,13 @@ def _render_chapter_cached(chapter, synth, sr, engine_id, resolve, cache_dir, le
     seg_extra_sig = f"{lex_sig}\x00{expr_sig}" if expr_sig else lex_sig
     if vmap_sig:
         seg_extra_sig = f"{seg_extra_sig}\x00{vmap_sig}"
+    # The resolved synthesis language reaches every engine call, and
+    # normalization can leave two languages' text identical, so it must key
+    # BOTH layers or a French render replays the English audio (#2524). Genuine
+    # autodetect (None) adds nothing: its keys stay byte-identical.
+    if language:
+        sig["\x00language"] = language
+        seg_extra_sig = f"{seg_extra_sig}\x00language={language}"
     marking = will_mark()
     if marking:
         # Provenance-marked chapters cache under their own key (#1169): a
@@ -810,6 +817,8 @@ def _render_chapter_cached(chapter, synth, sr, engine_id, resolve, cache_dir, le
         "pronunciation lexicon": lex_sig, "expressive settings": expr_sig,
         "voice map": vmap_sig, "watermark": marking,
     }
+    if language:
+        inputs["language"] = language
     for k, v in resolved.items():
         label = f"voice {re.sub(r'[^A-Za-z0-9_-]', '', k)[:40] or '(default)'}"
         inputs[f"{label} reference audio"] = _portable_ref_audio(v.get("ref_audio"))
