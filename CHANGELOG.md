@@ -101,6 +101,7 @@ metadata and the backend fallback mirror it.
 - License notice: commercial use is free under the AGPL; the paid licence is for closed-source use, with Pro plans linked (#2578)
 
 ### Fixed
+- Re-locking a voice to another take re-renders its audiobook and Stories audio instead of replaying the previous take (#2535) — thanks @rudycelekli!
 - Longform chapters and segments are cached per synthesis language, so changing language no longer replays the previous audio (#2524) — thanks @rudycelekli!
 - Moving app data into an existing empty folder no longer fails with an EISDIR rollback (#2521) — thanks @rudycelekli!
 - Models folders with a hash, quote or backslash in the name now survive the saved-settings round trip (#2519) — thanks @rudycelekli!
