@@ -649,6 +649,7 @@
     "remove_video_confirm": "Deze video, het transcript en niet-opgeslagen wijzigingen verwijderen? Dit kan niet ongedaan worden gemaakt.",
     "remove_audio": "Audio verwijderen",
     "remove_audio_confirm": "Deze audio, het transcript en niet-opgeslagen bewerkingen verwijderen? Dit kan niet ongedaan worden gemaakt.",
+    "remove_interrupted_confirm": "Deze bron verwijderen en de onderbroken uitvoering verwerpen? Het transcript, de gedeeltelijke uitvoer en niet-opgeslagen bewerkingen gaan verloren. Dit kan niet ongedaan worden gemaakt.",
     "cookie_transport_error": "Cookie-exports vereisen HTTPS of de lokale desktop-app.",
     "cookie_size_error": "De cookie-export mag maximaal 1 MB zijn.",
     "save": "Opslaan",

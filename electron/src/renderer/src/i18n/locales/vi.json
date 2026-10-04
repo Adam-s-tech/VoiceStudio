@@ -649,6 +649,7 @@
     "remove_video_confirm": "Xóa video này, bản chép lời và các chỉnh sửa chưa lưu? Không thể hoàn tác.",
     "remove_audio": "Xóa âm thanh",
     "remove_audio_confirm": "Xóa âm thanh này, bản chép lời và các chỉnh sửa chưa lưu? Không thể hoàn tác.",
+    "remove_interrupted_confirm": "Xóa nguồn này và hủy lần chạy bị gián đoạn? Bản chép lời, kết quả một phần và các chỉnh sửa chưa lưu sẽ bị mất. Không thể hoàn tác.",
     "cookie_transport_error": "Tệp cookie xuất yêu cầu HTTPS hoặc ứng dụng máy tính cục bộ.",
     "cookie_size_error": "Tệp cookie xuất phải có dung lượng không quá 1 MB.",
     "save": "Lưu",

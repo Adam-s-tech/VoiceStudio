@@ -1909,6 +1909,19 @@ export function resetDubSession(): boolean {
   return true;
 }
 
+/** Remove the source from the UI. An interrupted run may still be executing
+ * on the backend (the window was reloaded mid-generation), so it is cancelled
+ * through ``cancelDub`` first; if the backend cannot confirm the stop the
+ * source is kept and ``cancelDub`` has already surfaced the error. */
+export async function removeDubSource(): Promise<boolean> {
+  if (controller || cancelling) return false;
+  if (dubSession.state.recovery) {
+    await cancelDub();
+    if (dubSession.state.recovery) return false;
+  }
+  return resetDubSession();
+}
+
 export async function resumeDub() {
   const { recovery, taskId, jobId } = dubSession.state;
   if (!recovery || !jobId || (recovery !== 'transcribing' && !taskId)) return;

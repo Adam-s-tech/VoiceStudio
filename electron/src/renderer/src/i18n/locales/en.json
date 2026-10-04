@@ -819,6 +819,7 @@
     "remove_video_confirm": "Remove this video, its transcript and unsaved edits? This cannot be undone.",
     "remove_audio": "Remove audio",
     "remove_audio_confirm": "Remove this audio, its transcript and unsaved edits? This cannot be undone.",
+    "remove_interrupted_confirm": "Remove this source and discard the interrupted run? Its transcript, partial output and unsaved edits will be lost. This cannot be undone.",
     "cookie_transport_error": "Cookie exports require HTTPS or the local desktop app.",
     "cookie_size_error": "The cookie export must be 1 MB or smaller.",
     "save": "Save",

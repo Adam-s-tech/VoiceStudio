@@ -647,6 +647,7 @@
     "remove_video_confirm": "이 동영상과 자막, 저장하지 않은 편집 내용을 삭제할까요? 되돌릴 수 없습니다.",
     "remove_audio": "오디오 제거",
     "remove_audio_confirm": "이 오디오와 대본, 저장하지 않은 편집 내용을 제거할까요? 되돌릴 수 없습니다.",
+    "remove_interrupted_confirm": "이 소스를 제거하고 중단된 실행을 폐기할까요? 대본, 부분 출력, 저장하지 않은 편집 내용이 사라집니다. 되돌릴 수 없습니다.",
     "cookie_transport_error": "쿠키 내보내기에는 HTTPS 또는 로컬 데스크톱 앱이 필요합니다.",
     "cookie_size_error": "쿠키 내보내기 파일은 1MB 이하여야 합니다.",
     "save": "저장",

@@ -23,6 +23,7 @@ import {
   dubCancelling,
   redoDubEdit,
   resetDubSession,
+  removeDubSource,
   dubSourceRemovable,
   translateDub,
   translateDubBatchWithAgent,
@@ -31,7 +32,10 @@ import {
   splitDubSegment,
   undoDubEdit,
 } from './dub-session';
-vi.mock('@/lib/api/client', () => ({ apiJson: vi.fn() }));
+vi.mock('@/lib/api/client', async (load) => ({
+  ...(await load<typeof import('@/lib/api/client')>()),
+  apiJson: vi.fn(),
+}));
 vi.mock('@/lib/api/event-stream', async (load) => ({
   ...(await load<typeof import('@/lib/api/event-stream')>()),
   consumeTaskStream: vi.fn(),
@@ -843,4 +847,38 @@ it('lets an interrupted job drop its source so a link can be imported (#2584)', 
   expect(resetDubSession()).toBe(true);
   expect(dubSession.state.jobId).toBeNull();
   expect(dubSession.state.recovery).toBeNull();
+});
+
+it('removing an interrupted run cancels its backend task before clearing the source (#2584)', async () => {
+  const interrupted = {
+    jobId: 'interrupted-job',
+    taskId: 'interrupted-task',
+    filename: 'talk.mp4',
+    phase: 'idle' as const,
+    recovery: 'generating' as const,
+  };
+  dubSession.setState((current) => ({ ...current, ...interrupted }));
+  vi.mocked(apiJson).mockReset();
+  vi.mocked(apiJson).mockResolvedValue({});
+
+  await expect(removeDubSource()).resolves.toBe(true);
+  const urls = vi.mocked(apiJson).mock.calls.map(([url]) => url);
+  expect(urls).toContain('/tasks/cancel/interrupted-task');
+  expect(dubSession.state.jobId).toBeNull();
+  expect(dubSession.state.taskId).toBeNull();
+  expect(dubSession.state.recovery).toBeNull();
+
+  // The backend refusing to stop keeps the source so the run is not orphaned.
+  dubSession.setState((current) => ({ ...current, ...interrupted }));
+  vi.mocked(apiJson).mockReset();
+  vi.mocked(apiJson).mockRejectedValue(new Error('offline'));
+  await expect(removeDubSource()).resolves.toBe(false);
+  expect(dubSession.state.jobId).toBe('interrupted-job');
+  expect(dubSession.state.recovery).toBe('generating');
+
+  // Without an interrupted run, removal makes no cancel request.
+  dubSession.setState((current) => ({ ...current, recovery: null, taskId: null }));
+  vi.mocked(apiJson).mockReset();
+  await expect(removeDubSource()).resolves.toBe(true);
+  expect(apiJson).not.toHaveBeenCalled();
 });
