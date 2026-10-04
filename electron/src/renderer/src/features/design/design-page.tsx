@@ -15,6 +15,7 @@ import {
   applyDescription,
   designInstruct,
   designRecipe,
+  designRequestSeed,
   editVoice,
   linkedDesignProfile,
   pickDetail,
@@ -576,7 +577,7 @@ export function DesignPage() {
                       text: draft.text,
                       instruct: designInstruct(draft, generation.instructVocabulary),
                       recipe: designRecipe(draft),
-                      seed: draft.seed,
+                      seed: designRequestSeed(draft, activeProfile),
                       profileId: activeProfile?.id ?? null,
                     })
                   }
