@@ -1641,15 +1641,17 @@ async def dub_qc_pass(job_id: str, lang: str = Query(None), drift_threshold: flo
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     tracks = job.get("dubbed_tracks", {})
-    if lang and lang in tracks:
-        wav_path = _dub_artifact(tracks[lang].get("path"), job_id, missing_detail="Dubbed audio file not found")
-    elif tracks:
-        wav_path = _dub_artifact(list(tracks.values())[0].get("path"), job_id, missing_detail="Dubbed audio file not found")
-    else:
+    track_lang = lang if (lang and lang in tracks) else next(iter(tracks), None)
+    if track_lang is None:
         raise HTTPException(status_code=400, detail="No dubbed audio track generated yet")
+    wav_path = _dub_artifact(tracks[track_lang].get("path"), job_id, missing_detail="Dubbed audio file not found")
     segments = job.get("segments") or []
     if not segments:
         raise HTTPException(status_code=400, detail="Job has no segments")
+    # Score the recognized audio against THAT track's text. `job["segments"]`
+    # holds whichever language was generated last, so QC of an earlier track
+    # compared its speech with another language and flagged every line (#2574).
+    scored_segments = _segments_for_lang(job, track_lang)
 
     # TTS-only install: no ASR model on disk → typed 409 with a download CTA,
     # BEFORE any backend load could silently auto-download whisper weights.
@@ -1696,7 +1698,7 @@ async def dub_qc_pass(job_id: str, lang: str = Query(None), drift_threshold: flo
         raise HTTPException(status_code=500, detail=f"QC transcription failed: {e}")
 
     seg_ids = job.get("seg_order") or [s.get("id", i) for i, s in enumerate(segments)]
-    scored = dub_qc.score_dub(segments, recognized, drift_threshold=drift_threshold, seg_ids=seg_ids)
+    scored = dub_qc.score_dub(scored_segments, recognized, drift_threshold=drift_threshold, seg_ids=seg_ids)
 
     # Annotate each segment (non-destructive — content text untouched).
     by_id = {q.seg_id: q for q in scored}
