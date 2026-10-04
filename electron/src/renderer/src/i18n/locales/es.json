@@ -617,7 +617,8 @@
   },
   "designWorkspace": {
     "title": "Diseñar",
-    "save_failed": "No se pudo guardar el perfil de voz"
+    "save_failed": "No se pudo guardar el perfil de voz",
+    "engine_cannot_design": "{{engine}} no puede diseñar voces porque necesita un clip de referencia. Cambia a un motor compatible con el diseño de voz, como OmniVoice, o clona una voz."
   },
   "dub": {
     "timing_label": "Sincronización",

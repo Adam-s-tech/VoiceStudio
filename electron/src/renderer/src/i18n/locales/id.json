@@ -615,7 +615,8 @@
   },
   "designWorkspace": {
     "title": "Desain",
-    "save_failed": "Gagal menyimpan profil suara"
+    "save_failed": "Gagal menyimpan profil suara",
+    "engine_cannot_design": "{{engine}} tidak dapat mendesain suara karena memerlukan klip referensi. Beralihlah ke mesin yang mendukung Desain Suara, seperti OmniVoice, atau kloning suara sebagai gantinya."
   },
   "dub": {
     "timing_label": "Pengaturan waktu",

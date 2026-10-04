@@ -23,9 +23,14 @@ vi.mock('sonner', () => ({
 }));
 vi.mock('./use-clone-readiness', () => ({ useCloneInputsReadiness: () => null }));
 vi.mock('./use-tts-readiness', () => ({ useTtsReadiness: () => null }));
-const engine = vi.hoisted(() => ({ vocabulary: undefined as 'tags' | 'freeform' | undefined }));
+const engine = vi.hoisted(() => ({
+  vocabulary: undefined as 'tags' | 'freeform' | undefined,
+  design: undefined as boolean | null | undefined,
+}));
 vi.mock('./use-engines', () => ({
-  useEngines: () => ({ activeTts: { instruct_vocabulary: engine.vocabulary } }),
+  useEngines: () => ({
+    activeTts: { instruct_vocabulary: engine.vocabulary, supports_voice_design: engine.design },
+  }),
 }));
 vi.mock('@/lib/api/generate', () => ({
   generateClone: vi.fn(),
@@ -284,5 +289,40 @@ it.each([
       expect.anything(),
     );
     engine.vocabulary = undefined;
+  },
+);
+
+it.each([
+  [false, 'design', false],
+  [null, 'none', true],
+  [true, 'none', true],
+] as const)(
+  'blocks Voice Design on an engine that declares it cannot design (supports_voice_design=%s)',
+  async (design, expectedBlocker, sends) => {
+    engine.design = design;
+    vi.mocked(generateClone).mockReset().mockRejectedValue(new Error('stop'));
+    function DesignConsumer() {
+      const state = useGenerateClone();
+      return (
+        <button onClick={() => void state.generateDesign({ text: 'Hi', instruct: 'male', seed: 1 })}>
+          blocker {state.designBlocker ?? 'none'} {String(state.canGenerateDesign)}
+        </button>
+      );
+    }
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <GenerationProvider>
+          <DesignConsumer />
+        </GenerationProvider>
+      </QueryClientProvider>,
+    );
+    const button = screen.getByText(`blocker ${expectedBlocker} ${String(sends)}`);
+    fireEvent.click(button);
+    if (sends) await waitFor(() => expect(generateClone).toHaveBeenCalled());
+    else {
+      await act(async () => {});
+      expect(generateClone).not.toHaveBeenCalled();
+    }
+    engine.design = undefined;
   },
 );

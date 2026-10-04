@@ -615,7 +615,8 @@
   },
   "designWorkspace": {
     "title": "デザイン",
-    "save_failed": "音声プロファイルの保存に失敗しました"
+    "save_failed": "音声プロファイルの保存に失敗しました",
+    "engine_cannot_design": "{{engine}} は参照クリップが必要なため、音声をデザインできません。OmniVoice などボイスデザインに対応したエンジンに切り替えるか、代わりに音声をクローンしてください。"
   },
   "dub": {
     "timing_label": "タイミング",

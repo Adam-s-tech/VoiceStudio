@@ -615,7 +615,8 @@
   },
   "designWorkspace": {
     "title": "Designa",
-    "save_failed": "Det gick inte att spara röstprofilen"
+    "save_failed": "Det gick inte att spara röstprofilen",
+    "engine_cannot_design": "{{engine}} kan inte designa röster eftersom den behöver ett referensklipp. Byt till en motor som stöder röstdesign, till exempel OmniVoice, eller klona en röst i stället."
   },
   "dub": {
     "timing_label": "Tajming",
