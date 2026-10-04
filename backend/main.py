@@ -912,6 +912,13 @@ async def _phase_b(app: FastAPI) -> None:
             logger.info("Startup: marked %d orphaned job(s) as failed.", swept)
     except Exception:
         logger.exception("Startup job-sweep failed (non-fatal).")
+    # Superseded voice takes kept for in-flight renders (#2535) past their grace.
+    try:
+        from api.routers.profiles import sweep_retired_voice_files
+
+        sweep_retired_voice_files()
+    except Exception:
+        logger.exception("Startup retired-voice sweep failed (non-fatal).")
     # #2279: note the voices root in the longform cache before anything can
     # move the data dir, so legacy-keyed chapters stay findable after a move.
     from services.longform_render import record_startup_voices_root

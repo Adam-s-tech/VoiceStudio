@@ -70,5 +70,44 @@ def test_relock_with_same_text_and_seed_re_keys_the_longform_cache(locked_profil
     render("three")
     assert calls == ["one", "two"], "segment cached for the NEW take only"
 
-    # The superseded take is cleaned up; only the current one remains.
+    # The superseded take is swept once retired; only the current one remains.
+    profiles.sweep_retired_voice_files(grace_s=0)
     assert len([p for p in os.listdir(locked_profile) if "locked" in p]) == 1
+
+
+def test_relock_and_unlock_keep_the_take_a_running_render_still_reads(locked_profile):
+    """A long-form render resolves the voice once and re-reads the reference
+    for every segment; re-locking or unlocking mid-render must not delete it."""
+    from api.routers import audiobook, profiles
+
+    asyncio.run(profiles.lock_profile("voice", history_id="take1", seed=7))
+    in_flight = audiobook._resolve_voice("voice")["ref_audio"]
+
+    asyncio.run(profiles.lock_profile("voice", history_id="take2", seed=7))
+    assert open(in_flight, "rb").read() == b"first-take"
+    second = audiobook._resolve_voice("voice")["ref_audio"]
+
+    asyncio.run(profiles.unlock_profile("voice"))
+    assert open(second, "rb").read() == b"second-take"
+
+    # Inside the grace period nothing goes; after it, both unreferenced takes do.
+    assert profiles.sweep_retired_voice_files() == 0
+    assert os.path.exists(in_flight) and os.path.exists(second)
+    assert profiles.sweep_retired_voice_files(grace_s=0) == 2
+    assert not os.path.exists(in_flight) and not os.path.exists(second)
+    assert os.listdir(locked_profile / ".retired") == []
+
+
+def test_sweep_keeps_a_retired_file_a_profile_references_again(locked_profile):
+    from api.routers import profiles
+    from core import db
+
+    (locked_profile / "voice_locked.wav").write_bytes(b"legacy")  # pre-#2535 name
+    with db.db_conn() as conn:
+        conn.execute(
+            "UPDATE voice_profiles SET locked_audio_path='voice_locked.wav', is_locked=1"
+        )
+    profiles._retire_voice_file("voice_locked.wav")
+    assert profiles.sweep_retired_voice_files(grace_s=0) == 0
+    assert (locked_profile / "voice_locked.wav").read_bytes() == b"legacy"
+    assert os.listdir(locked_profile / ".retired") == []

@@ -123,10 +123,10 @@ metadata and the backend fallback mirror it.
 - Batch retry and delete no longer race, so a job cannot be queued twice and its files are never removed while it is active or stopping (#2547) — thanks @rudycelekli!
 - Stopping an audiobook or Stories render marks its job cancelled instead of leaving it running, and refused renders no longer stay running either (#2536) — thanks @rudycelekli!
 - Audiobook and Stories descriptions with CRLF or CR paragraph breaks keep every paragraph in the exported file (#2528) — thanks @rudycelekli!
-- Re-locking a voice to another take re-renders its audiobook and Stories audio instead of replaying the previous take (#2535) — thanks @rudycelekli!
+- Re-locking a voice to another take re-renders its audiobook and Stories audio instead of replaying the previous take, and renders already running keep reading their take (#2535) — thanks @rudycelekli!
 - Longform chapters and segments are cached per synthesis language, so changing language no longer replays the previous audio (#2524) — thanks @rudycelekli!
 - Moving app data into an existing empty folder no longer fails with an EISDIR rollback (#2521) — thanks @rudycelekli!
-- Models folders with a hash, quote or backslash in the name now survive the saved-settings round trip (#2519) — thanks @rudycelekli!
+- Models folders with a hash, quote or backslash in the name now survive the saved-settings round trip, while hand-written `${HOME}` paths still expand (#2519) — thanks @rudycelekli!
 - Japanese translations written mostly in kanji are no longer rejected as the wrong script (#2576) — thanks @rudycelekli!
 - Dub quality check compares each track with its own language text, so correct multilingual dubs are no longer flagged (#2574) — thanks @rudycelekli!
 - Dub transcripts keep speech from segments the aligner could not time instead of dropping it (#2572) — thanks @rudycelekli!

@@ -132,11 +132,39 @@ def load_into_environ(path: Optional[str] = None) -> bool:
         import dotenv
     except ImportError:
         return False
-    # interpolate=False: dotenv would otherwise expand ``${...}`` even inside
-    # single quotes, corrupting a folder name that contains it.
-    dotenv.load_dotenv(path, override=True, interpolate=False)
+    # dotenv expands ``${...}`` even inside single quotes, which would corrupt
+    # a folder name containing it (#2519). Single-quoted values (the form
+    # set_user_env writes for anything non-plain) stay literal; unquoted and
+    # double-quoted ones — e.g. a hand-written ``HF_HOME=${HOME}/models`` —
+    # keep their usual expansion. App-written unquoted values never hold ``$``.
+    literal = dotenv.dotenv_values(path, interpolate=False, encoding="utf-8")
+    expanded = dotenv.dotenv_values(path, interpolate=True, encoding="utf-8")
+    single_quoted = _single_quoted_keys(path)
+    for key, value in literal.items():
+        if value is None:
+            continue
+        if key not in single_quoted and expanded.get(key) is not None:
+            value = expanded[key]
+        os.environ[key] = value
     _drop_invalid_path_keys()
     return True
+
+
+def _single_quoted_keys(path: str) -> set[str]:
+    """Keys whose effective (last) assignment in ``path`` is single-quoted."""
+    from dotenv.parser import parse_stream
+
+    keys: set[str] = set()
+    with open(path, encoding="utf-8") as f:
+        for binding in parse_stream(f):
+            if binding.key is None:
+                continue
+            rhs = binding.original.string.split("=", 1)[-1].lstrip()
+            if rhs.startswith("'"):
+                keys.add(binding.key)
+            else:
+                keys.discard(binding.key)
+    return keys
 
 
 #: Path-valued keys this file can persist. A reinstall that skipped uninstall

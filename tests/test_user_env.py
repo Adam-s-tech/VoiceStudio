@@ -99,3 +99,28 @@ def test_ordinary_values_stay_unquoted(tmp_path):
 def test_line_breaks_are_rejected(tmp_path):
     with pytest.raises(ValueError):
         user_env.set_user_env("K", "a\nb", path=str(tmp_path / "env"))
+
+
+def test_hand_written_unquoted_values_still_expand_variables(tmp_path, monkeypatch):
+    """docs/performance.md tells users to edit this file; ``${HOME}`` in an
+    unquoted or double-quoted value expands as before #2519, while the
+    single-quoted form the app writes stays literal."""
+    monkeypatch.setenv("HOME", "/home/u")
+    p = tmp_path / "env"
+    p.write_text(
+        "HF_HOME=${HOME}/models\n"
+        'OMNIVOICE_TEST_DQ="${HOME}/dq"\n'
+        "OMNIVOICE_TEST_SQ='${HOME}/sq'\n"
+        "OMNIVOICE_TEST_LAST='${HOME}/first'\n"
+        "OMNIVOICE_TEST_LAST=${HOME}/second\n"
+    )
+    user_env.set_user_env("OMNIVOICE_TEST_PATH", "/chosen/${HOME}/models", path=str(p))
+    for key in ("HF_HOME", "OMNIVOICE_TEST_DQ", "OMNIVOICE_TEST_SQ", "OMNIVOICE_TEST_LAST",
+                "OMNIVOICE_TEST_PATH"):
+        monkeypatch.delenv(key, raising=False)
+    assert user_env.load_into_environ(str(p)) is True
+    assert os.environ["HF_HOME"] == "/home/u/models"
+    assert os.environ["OMNIVOICE_TEST_DQ"] == "/home/u/dq"
+    assert os.environ["OMNIVOICE_TEST_SQ"] == "${HOME}/sq"
+    assert os.environ["OMNIVOICE_TEST_LAST"] == "/home/u/second"
+    assert os.environ["OMNIVOICE_TEST_PATH"] == "/chosen/${HOME}/models"
