@@ -1977,11 +1977,7 @@
     "save_bundle": "Diagnosepakket opslaan",
     "bundle_saved": "Diagnosepakket opgeslagen: {{filename}}",
     "title": "Over",
-    "diagnostics": "Systeem preflight",
-    "update_channel": "Updatekanaal",
-    "channel_stable": "Stabiel",
-    "channel_preview": "Voorbeeld",
-    "channel_preview_hint": "Voorbeeld volgt de nieuwste main-build — nieuwere functies, minder getest. Valt terug op stabiel als er een nieuwere stabiele release is."
+    "diagnostics": "Systeem preflight"
   },
   "privacy": {
     "translator_online": "Vertaler is online: {{provider}}",
@@ -1998,7 +1994,6 @@
     "check_now": "Controleer nu",
     "releases": "Releases",
     "current": "actueel",
-    "prerelease": "voorbeeld",
     "loading": "Releases laden…",
     "none": "Geen releases gevonden",
     "load_error": "Kan releases niet laden (offline?)",
@@ -2483,7 +2478,7 @@
     "pricing_desc": "Niveaus en prijzen worden nog afgerond.",
     "pricing_detail": "Totdat ze openbaar zijn, wordt elke commerciële implementatie afzonderlijk geciteerd, zodat we de juiste maat kunnen vinden voor uw team en werklast.",
     "request_quote": "Vraag een offerte aan",
-    "footer_email": "Vragen? Neem contact op met VoiceStudio@palash.dev",
+    "footer_email": "Vragen? Neem contact op met hi@voicestudio.sh",
     "footer_discord": "Sluit je aan bij onze Discord voor community-ondersteuning.",
     "benefit_ip": "Volledig IP-eigendom",
     "benefit_ip_desc": "U bezit elke output, elk model, elke afgeleide. Geen gedeelde huur, geen datalekken.",

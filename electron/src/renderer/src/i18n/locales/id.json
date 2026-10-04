@@ -1977,11 +1977,7 @@
     "save_bundle": "Simpan bundel diagnostik",
     "bundle_saved": "Bundel diagnostik tersimpan: {{filename}}",
     "title": "Tentang",
-    "diagnostics": "Pra-penerbangan sistem",
-    "update_channel": "Saluran pembaruan",
-    "channel_stable": "Stabil",
-    "channel_preview": "Pratinjau",
-    "channel_preview_hint": "Pratinjau mengikuti build main terbaru — fitur lebih baru, lebih sedikit diuji. Kembali ke stabil jika ada rilis stabil yang lebih baru."
+    "diagnostics": "Pra-penerbangan sistem"
   },
   "privacy": {
     "translator_online": "Penerjemah sedang online: {{provider}}",
@@ -1998,7 +1994,6 @@
     "check_now": "Periksa sekarang",
     "releases": "Rilis",
     "current": "saat ini",
-    "prerelease": "pratinjau",
     "loading": "Memuat rilis…",
     "none": "Tidak ada rilis yang ditemukan",
     "load_error": "Tidak dapat memuat rilis (offline?)",
@@ -2483,7 +2478,7 @@
     "pricing_desc": "Tingkatan dan harga masih dalam tahap penyelesaian.",
     "pricing_detail": "Sebelum dipublikasikan, setiap penerapan komersial akan dikutip satu per satu sehingga kami dapat menyesuaikan ukurannya untuk tim dan beban kerja Anda.",
     "request_quote": "Minta penawaran",
-    "footer_email": "Pertanyaan? Hubungi VoiceStudio@palash.dev",
+    "footer_email": "Pertanyaan? Hubungi hi@voicestudio.sh",
     "footer_discord": "Bergabunglah dengan Discord kami untuk mendapatkan dukungan komunitas.",
     "benefit_ip": "Kepemilikan IP penuh",
     "benefit_ip_desc": "Anda memiliki setiap keluaran, setiap model, setiap turunan. Tidak ada sewa bersama, tidak ada kebocoran data.",

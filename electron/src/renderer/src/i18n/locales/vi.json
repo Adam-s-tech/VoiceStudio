@@ -604,7 +604,7 @@
     "history_reuse": "Tái sử dụng tập lệnh",
     "characters_one": "Ký tự {{count}}",
     "cancel_generation": "Hủy tạo",
-    "duration_seconds": "{{seconds}}",
+    "duration_seconds": "{{seconds}} giây",
     "download_failed": "Không thể lưu tệp: {{message}}",
     "history_clear_confirm": "Xóa mọi cảnh quay khỏi lịch sử? Các tập tin âm thanh cũng bị xóa.",
     "edit_voice": "Chỉnh sửa giọng",
@@ -1977,11 +1977,7 @@
     "save_bundle": "Lưu gói chẩn đoán",
     "bundle_saved": "Đã lưu gói chẩn đoán: {{filename}}",
     "title": "Giới thiệu",
-    "diagnostics": "Đèn chiếu trước hệ thống",
-    "update_channel": "Kênh cập nhật",
-    "channel_stable": "Ổn định",
-    "channel_preview": "Xem trước",
-    "channel_preview_hint": "Bản xem trước theo dõi bản dựng main mới nhất — tính năng mới hơn, ít được kiểm thử hơn. Quay lại bản ổn định nếu có bản phát hành ổn định mới hơn."
+    "diagnostics": "Đèn chiếu trước hệ thống"
   },
   "privacy": {
     "translator_online": "Người dịch đang trực tuyến: {{provider}}",
@@ -1998,7 +1994,6 @@
     "check_now": "Kiểm tra ngay",
     "releases": "Bản phát hành",
     "current": "hiện tại",
-    "prerelease": "xem trước",
     "loading": "Đang tải bản phát hành…",
     "none": "Không tìm thấy bản phát hành nào",
     "load_error": "Không thể tải bản phát hành (ngoại tuyến?)",
@@ -2483,7 +2478,7 @@
     "pricing_desc": "Các cấp độ và giá cả vẫn đang được hoàn thiện.",
     "pricing_detail": "Cho đến khi chúng được công khai, mọi hoạt động triển khai thương mại đều được báo giá riêng lẻ để chúng tôi có thể điều chỉnh quy mô phù hợp với nhóm và khối lượng công việc của bạn.",
     "request_quote": "Yêu cầu báo giá",
-    "footer_email": "Câu hỏi? Hãy liên hệ tại VoiceStudio@palash.dev",
+    "footer_email": "Câu hỏi? Hãy liên hệ tại hi@voicestudio.sh",
     "footer_discord": "Tham gia Discord của chúng tôi để được hỗ trợ cộng đồng.",
     "benefit_ip": "Quyền sở hữu IP đầy đủ",
     "benefit_ip_desc": "Bạn sở hữu mọi đầu ra, mọi mô hình, mọi công cụ phái sinh. Không có thuê chung, không có rò rỉ dữ liệu.",

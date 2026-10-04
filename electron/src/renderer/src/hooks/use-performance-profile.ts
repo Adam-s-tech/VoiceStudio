@@ -15,6 +15,8 @@ export interface PerformanceProfileState {
   families: PerformanceFamily[];
   implemented_families: PerformanceFamily[];
   applicable_families?: PerformanceFamily[];
+  /** TTS engines whose sampling the tiers tune (backend-owned list). */
+  tts_tiered_engines?: string[];
   targets: Record<
     PerformanceFamily,
     {
@@ -94,7 +96,8 @@ export function usePerformanceProfile() {
       });
       const target = state.targets.tts;
       if (
-        ['omnivoice', 'omnivoice-isolated'].includes(state.selections.tts.engine) &&
+        // Backends before 0.5.7 don't report the list; they tier only OmniVoice.
+        (state.tts_tiered_engines ?? ['omnivoice', 'omnivoice-subprocess']).includes(state.selections.tts.engine) &&
         typeof target.steps === 'number' &&
         typeof target.postprocess === 'boolean'
       ) {

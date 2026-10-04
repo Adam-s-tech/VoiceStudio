@@ -1979,11 +1979,7 @@
     "save_bundle": "Salva pacchetto diagnostico",
     "bundle_saved": "Pacchetto diagnostico salvato: {{filename}}",
     "title": "Informazioni",
-    "diagnostics": "Verifica preliminare del sistema",
-    "update_channel": "Canale di aggiornamento",
-    "channel_stable": "Stabile",
-    "channel_preview": "Anteprima",
-    "channel_preview_hint": "L'anteprima segue l'ultima build di main: funzionalità più recenti, meno testate. Torna alla versione stabile se una release stabile è più avanti."
+    "diagnostics": "Verifica preliminare del sistema"
   },
   "privacy": {
     "translator_online": "Il traduttore è online: {{provider}}",
@@ -2000,7 +1996,6 @@
     "check_now": "Controlla ora",
     "releases": "Rilasci",
     "current": "corrente",
-    "prerelease": "anteprima",
     "loading": "Caricamento versioni…",
     "none": "Nessuna versione trovata",
     "load_error": "Impossibile caricare le versioni (offline?)",
@@ -2485,7 +2480,7 @@
     "pricing_desc": "Livelli e prezzi sono ancora in fase di definizione.",
     "pricing_detail": "Fino a quando non saranno pubbliche, ogni implementazione commerciale verrà quotata individualmente in modo da poter dimensionare correttamente il tuo team e il tuo carico di lavoro.",
     "request_quote": "Richiedi un preventivo",
-    "footer_email": "Domande? Contatta VoiceStudio@palash.dev",
+    "footer_email": "Domande? Contatta hi@voicestudio.sh",
     "footer_discord": "Unisciti al nostro Discord per il supporto della comunità.",
     "benefit_ip": "Proprietà IP completa",
     "benefit_ip_desc": "Possiedi ogni risultato, ogni modello, ogni derivato. Nessuna locazione condivisa, nessuna fuga di dati.",

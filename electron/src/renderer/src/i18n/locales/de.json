@@ -1977,11 +1977,7 @@
     "save_bundle": "Diagnosepaket speichern",
     "bundle_saved": "Diagnosepaket gespeichert: {{filename}}",
     "title": "Über",
-    "diagnostics": "System-Preflight",
-    "update_channel": "Update-Kanal",
-    "channel_stable": "Stabil",
-    "channel_preview": "Vorschau",
-    "channel_preview_hint": "Die Vorschau folgt dem neuesten main-Build – neuere Funktionen, weniger getestet. Wechselt zurück zu Stabil, wenn eine stabile Version voraus ist."
+    "diagnostics": "System-Preflight"
   },
   "privacy": {
     "translator_online": "Übersetzer ist online: {{provider}}",
@@ -1998,7 +1994,6 @@
     "check_now": "Jetzt prüfen",
     "releases": "Veröffentlichungen",
     "current": "aktuell",
-    "prerelease": "Vorschau",
     "loading": "Veröffentlichungen werden geladen…",
     "none": "Keine Veröffentlichungen gefunden",
     "load_error": "Veröffentlichungen konnten nicht geladen werden (offline?)",
@@ -2483,7 +2478,7 @@
     "pricing_desc": "Stufen und Preise werden noch finalisiert.",
     "pricing_detail": "Bis zur Veröffentlichung wird für jede kommerzielle Bereitstellung ein individuelles Angebot erstellt, damit wir die richtige Größe für Ihr Team und Ihre Arbeitslast festlegen können.",
     "request_quote": "Fordern Sie ein Angebot an",
-    "footer_email": "Fragen? Kontaktieren Sie uns unter VoiceStudio@palash.dev",
+    "footer_email": "Fragen? Kontaktieren Sie uns unter hi@voicestudio.sh",
     "footer_discord": "Treten Sie unserem Discord bei, um Community-Unterstützung zu erhalten.",
     "benefit_ip": "Vollständiges IP-Eigentum",
     "benefit_ip_desc": "Sie besitzen jede Ausgabe, jedes Modell, jedes Derivat. Keine gemeinsame Miete, keine Datenlecks.",

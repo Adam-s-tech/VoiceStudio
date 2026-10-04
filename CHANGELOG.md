@@ -39,7 +39,7 @@ metadata and the backend fallback mirror it.
 
 ### Added
 
-- Arch Linux users can install from the AUR (`voicestudio-bin`); `VOICESTUDIO_DISABLE_UPDATER=1` turns off the in-app updater for package-managed installs (#2557)
+- `VOICESTUDIO_DISABLE_UPDATER=1` turns off the in-app updater for package-managed installs, and the Linux guide lists the community AUR package (#2557)
 - MCP agents can design a voice from a text description and reuse it by `profile_id` (`describe_voice`, `design_voice`) (#2368) — thanks @thelselutopia!
 - Dictation vocabulary hint in Settings → Dictation shortcut: names and jargon that Faster Whisper, MLX Whisper and OpenAI-compatible engines should expect (#2395) — thanks @m061i6!
 - Cheaper Inference is available as an optional LLM provider (#2325) — thanks @aiapienthusiast!
@@ -52,6 +52,7 @@ metadata and the backend fallback mirror it.
 - Calls workspace with a live transcript, take-over, hang-up and an after-call summary (#2305)
 - Create Story from a dub: its speakers become characters, its segments become lines, and each character keeps the voice the dub assigned — no retyping the script (#2300) — thanks @shivsin25!
 - Linux AppImages include standard update information and a published `.zsync` file so AppImageUpdate and desktop managers can download only changed bytes (#2327) — thanks @shuvashish76!
+- Pull requests ask their opener and every commit author and co-author to sign a one-time Contributor License Agreement by comment; the contributing guide explains how (#2556)
 
 ### Changed
 - Audio quality and Voice controls open as compact popovers from the Synthesize box on Clone and Voice Design (#2419)
@@ -78,16 +79,35 @@ metadata and the backend fallback mirror it.
 - Footer sponsor hover details show dated GitHub reach, and its X opens the Pro page (#2302)
 - Linux AppImages use the static runtime so launching them no longer needs libfuse2 (#2328) — thanks @shuvashish76!
 - Voice Clone shows upload and record side by side instead of behind a toggle (#2307)
+- Removed the Preview update channel, which never had a published feed; a saved Preview choice moves to Stable (#2578)
+- Docker Compose and the Docker quick starts pull the `:stable` and `:stable-rocm` release images (#2578)
+- `OMNIVOICE_UI_PORT` is the one UI-port setting (`VOICESTUDIO_UI_PORT` still works), and ports are no longer saved to settings (#2578)
+- `OMNIVOICE_PROGRESS_EXTENSION_CAP_S` replaces `OMNIVOICE_MODEL_LOAD_TIMEOUT_S`, which is still accepted (#2578)
+- The backend no longer accepts the retired Tauri app's web origins, and installs no longer pull PyInstaller (#2578)
+- `backend.speech_client` dictation control commands, which drove the retired Tauri app, now exit with an explanation (#2578)
+- Removed three hidden settings that nothing could set; the `OMNIVOICE_PRONUNCIATION` and `OMNIVOICE_TEXT_NORMALIZATION` switches remain (#2578)
 
 ### Docs
+- Maintainer guide for repository settings that can't live in code; the licence notice scope and the contributing guide's list of network calls match the current app (#2556)
+- Contact addresses are now hi@voicestudio.sh (general and licensing), partner@voicestudio.sh (partnerships) and security@voicestudio.sh (security reports) (#2556)
 - Chinese README now matches the Electron installation and migration guide (#2377) — thanks @lg114!
 
 - Record the supplied audio comparisons and installed-engine quality validation (#2406)
 
 - New call agent guide covering setup, disclosure, recording consent and safeguards (#2306)
 - The Twilio guide and integration directory describe the guided setup and in-app integration pages (#2304)
+- Install guides cover the Electron app: real download names, Linux AppImage and `.deb`, current source builds and uninstall folders (#2578)
+- Docker docs: the model-cache mount that works, what each image tag means, and opt-in analytics (#2578)
+- Security, contributing, release, structure and update-channel docs match the current app; the security policy supports the latest 0.5.x (#2578)
+- License notice: commercial use is free under the AGPL; the paid licence is for closed-source use, with Pro plans linked (#2578)
 
 ### Fixed
+- Elevated Windows app removal stops before deleting data and points to a normal PowerShell window or Settings (#2578)
+- Contributor audits inspect committed files and exclude submodules, while still stopping on failed file attribution (#2556)
+
+- Contributor audits stop on unreadable Git history instead of dropping affected authors (#2556)
+
+- CLA rechecks clear older approvals, reject duplicate PR heads, and block failed status updates (#2556)
 - Keep audiobook chapter boundaries when importing CR-only manuscripts (#2508) — thanks @rudycelekli!
 - Preserve busy sidecars during engine-level unload instead of terminating their active operation (#2507) — thanks @Anuj04432 and @rudycelekli!
 - Exclude downloaded caption comments while preserving spoken metadata words (#2510) — thanks @rudycelekli!
@@ -150,6 +170,27 @@ metadata and the backend fallback mirror it.
 
 - A reference longer than 20 s is transcribed with the speech-to-text model already installed, instead of failing when OmniVoice's own Whisper snapshot is not cached (#2301) — thanks @Cengokill!
 - Pronunciation dictionary entries in Japanese, Chinese and Thai apply inside a sentence, not only to a line that is the key alone (#2392) — thanks @kevin9327!
+- Speed/quality tiers apply to the crash-isolated OmniVoice engine too (#2578)
+- A browser UI on another origin receives each take's id, seed, timing and routing details (#2578)
+- Long or queued generations no longer show a failure after 21 minutes while the backend is still working (#2578)
+- The desktop backend starts on Windows when the user profile path has non-English characters (#1783, #2578)
+- Runtime setup continues to Python verification when an optional startup-path repair fails (#2578)
+- Uninstall scripts remove the Electron app's runtime, logs and updater cache (#2578)
+- The in-app Docker instructions reuse your model cache at the path the image reads (#2578)
+- Recording durations show their unit again in Japanese, Korean, Polish, Thai and Vietnamese (#2578)
+- `bun run dev:api` binds to loopback by default and follows `OMNIVOICE_PORT` (#2578)
+- New bug and install reports land in the `needs-triage` queue (#2578)
+
+### CI
+- Pull requests fail when a commit uses a leaked personal email, a placeholder identity, or an AI agent identity, or when a commit or the description credits an AI agent (#2556)
+- GitHub Actions are pinned to exact commits and kept current by Dependabot (#2556)
+- Release Docker images publish when the GitHub Release is published; `:latest` only ever comes from `main` (#2578)
+- One bun, TypeScript and Playwright version and one lockfile across the workspace; frontend unit tests run in the required check (#2578)
+- Tests keep the review-bot configs, issue-template labels and locale catalogs consistent (#2578)
+
+### CI
+- Trusted base-branch checks reject leaked, placeholder, and AI agent identities while allowing human co-authors with names shared by agents (#2556)
+- GitHub Actions are pinned to exact commits and kept current by Dependabot (#2556)
 
 ## [0.5.6] — 2026-09-23
 

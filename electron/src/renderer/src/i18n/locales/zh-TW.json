@@ -1977,11 +1977,7 @@
     "save_bundle": "儲存診斷套件",
     "bundle_saved": "診斷套件已儲存：{{filename}}",
     "title": "關於軟體",
-    "diagnostics": "系統預檢",
-    "update_channel": "更新通道",
-    "channel_stable": "穩定版",
-    "channel_preview": "預覽版",
-    "channel_preview_hint": "預覽版追蹤最新的 main 組建——功能較新，但測試較少。若穩定版較新，則回退至穩定版。"
+    "diagnostics": "系統預檢"
   },
   "privacy": {
     "translator_online": "譯者在線：{{provider}}",
@@ -1998,7 +1994,6 @@
     "check_now": "立即檢查",
     "releases": "發布",
     "current": "目前",
-    "prerelease": "預覽",
     "loading": "正在載入版本...",
     "none": "未找到任何版本",
     "load_error": "無法載入版本（離線？）",
@@ -2483,7 +2478,7 @@
     "pricing_desc": "等級和定價仍在最終確定中。",
     "pricing_detail": "在公開之前，每個商業部署都會單獨報價，以便我們可以根據您的團隊和工作負載調整規模。",
     "request_quote": "索取報價",
-    "footer_email": "有問題嗎？請透過 VoiceStudio@palash.dev 聯繫",
+    "footer_email": "有問題嗎？請透過 hi@voicestudio.sh 聯繫",
     "footer_discord": "加入我們的 Discord 以獲得社群支持。",
     "benefit_ip": "完全IP所有權",
     "benefit_ip_desc": "您擁有每一個輸出、每一個模型、每一個衍生品。無共享租賃，無資料外洩。",
