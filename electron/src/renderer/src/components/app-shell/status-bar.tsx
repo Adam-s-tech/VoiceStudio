@@ -364,7 +364,9 @@ export function StatusBar({
           ? t('backend.unresponsive_remote')
           : status.diagnosis === 'unhealthy'
             ? t('backend.unhealthy')
-            : t(`backend.${status.stage}`)
+            : status.diagnosis === 'auth_required'
+              ? t('backend.auth_required')
+              : t(`backend.${status.stage}`)
       : runtimeHealth === 'checking'
         ? t('preferences.loading')
         : runtimeHealth === 'unavailable'

@@ -160,7 +160,9 @@ export function BackendGate({ children, repairDock }: BackendGateProps) {
           ? t('backend.port_in_use', { port: status.port })
           : status.diagnosis === 'unhealthy'
             ? t('backend.unhealthy')
-            : t(`backend.${status.stage === 'idle' ? 'starting' : status.stage}`);
+            : status.diagnosis === 'auth_required'
+              ? t('backend.auth_required')
+              : t(`backend.${status.stage === 'idle' ? 'starting' : status.stage}`);
 
   const retry = async () => {
     setRestarting(true);
@@ -241,6 +243,13 @@ export function BackendGate({ children, repairDock }: BackendGateProps) {
                   </p>
                 ))
               : null}
+            {failed && status.diagnosis === 'auth_required' ? (
+              // The workspace is gated, so Settings is unreachable: reconnecting
+              // with the API key has to be possible right here.
+              <div className="w-full pt-2 text-left">
+                <RemoteBackendSettings />
+              </div>
+            ) : null}
             {running ? (
               <p className="font-mono text-xs text-muted-foreground tabular-nums">
                 {t('backend.elapsed', { seconds })}

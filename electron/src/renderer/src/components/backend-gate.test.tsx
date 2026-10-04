@@ -243,6 +243,20 @@ it('explains unsupported Windows proxy bypass rules before retrying setup', () =
   );
 });
 
+it('lets the user reconnect a remote whose session expired, from the gate itself', () => {
+  backendStatus.message = 'The remote backend at http://x no longer accepts this app’s credentials.';
+  backendStatus.diagnosis = 'auth_required';
+  backendStatus.remote = true;
+  try {
+    renderGate('failed');
+    // The workspace (and Settings) is gated, so the reconnect form lives here.
+    expect(screen.getByText(i18n.t('backend.auth_required'))).toBeVisible();
+    expect(screen.getByText(i18n.t('settings.remote_backend_key_placeholder'))).toBeVisible();
+  } finally {
+    backendStatus.remote = false;
+  }
+});
+
 it('offers a remote backend instead of a doomed local install on Intel Macs', () => {
   backendStatus.setupIssue = 'unsupported_platform';
   render(

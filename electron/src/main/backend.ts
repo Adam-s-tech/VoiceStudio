@@ -64,6 +64,7 @@ const SUPERVISE_MISSES = 3;
  * itself as soon as a probe comes back healthy.
  */
 const SUPERVISE_REJECTIONS = 15;
+const REMOTE_AUTH_CHECK_TIMEOUT_MS = 5000;
 /**
  * Stages a later successful /health probe must retire back to `ready` (#2430).
  * `unresponsive` is a live-but-busy backend, not a failure: the supervisor
@@ -642,8 +643,7 @@ export class BackendSupervisor extends EventEmitter<{
       if (await this.probe()) {
         if (gen !== this.generation) return;
         this.runtimeInterrupted = false;
-        this.setStage('ready');
-        this.supervise(gen);
+        await this.markReady(gen, {}, true);
         return;
       }
       if (gen !== this.generation) return;
@@ -676,8 +676,7 @@ export class BackendSupervisor extends EventEmitter<{
         if (gen !== this.generation) return;
         if (attached) {
           this.runtimeInterrupted = false;
-          this.setStage('ready');
-          this.supervise(gen);
+          await this.markReady(gen, {}, true);
           return;
         }
       }
@@ -715,8 +714,7 @@ export class BackendSupervisor extends EventEmitter<{
           const attached = await this.probe();
           if (gen !== this.generation) return;
           if (attached) {
-            this.setStage('ready');
-            this.supervise(gen);
+            await this.markReady(gen, {}, true);
             return;
           }
           if (identifiedBackend) {
@@ -1237,8 +1235,7 @@ export class BackendSupervisor extends EventEmitter<{
         this.exitCode = undefined;
         this.exitSignal = undefined;
         this.pushLog('out', 'Attached to the replacement VoiceStudio backend.');
-        this.setStage('ready', { managed: false, message: undefined });
-        this.supervise(gen);
+        await this.markReady(gen, { managed: false, message: undefined }, true);
         return;
       }
       if (Date.now() >= deadline) break;
@@ -1310,11 +1307,61 @@ export class BackendSupervisor extends EventEmitter<{
       if (gen !== this.generation || this.stage !== 'failed') return;
       if (await this.probe()) {
         if (gen !== this.generation || this.stage !== 'failed') return;
-        this.setStage('ready', { message: undefined });
-        this.supervise(gen);
+        await this.markReady(gen, { message: undefined }, true);
         return;
       }
     }
+  }
+
+  /**
+   * Whether a remote refuses this client's credentials. /health needs no admin
+   * session, so it can answer while every authenticated call fails (the session
+   * expired during an outage, or the key was rotated). Same check the remote
+   * probe applies when connecting: an authenticated /system/info. Only 401/403
+   * count; any other failure is left to the health supervision.
+   */
+  private async remoteRejectsCredentials(): Promise<boolean> {
+    if (!this.remoteUrl) return false;
+    try {
+      const res = await fetch(`${this.baseUrl}/system/info`, {
+        headers: this.requestHeaders(),
+        signal: AbortSignal.timeout(REMOTE_AUTH_CHECK_TIMEOUT_MS),
+        redirect: 'follow',
+      });
+      return res.status === 401 || res.status === 403;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * The one place a backend that just answered /health becomes `ready`. A local
+   * backend is trusted on /health alone; a remote must also accept this
+   * client's credentials, otherwise the workspace would resume while every
+   * authenticated API and WebSocket call fails. When it does not, the status
+   * stays `failed` with the auth diagnosis (supervision still starts, so the
+   * state keeps tracking the remote). Returns whether the stage is now `ready`.
+   */
+  private async markReady(
+    gen: number,
+    patch: { managed?: boolean; message?: string | undefined },
+    superviseAfter: boolean,
+  ): Promise<boolean> {
+    const rejected = await this.remoteRejectsCredentials();
+    if (gen !== this.generation) return false;
+    if (rejected) {
+      if (this.diagnosis !== 'auth_required' || this.stage !== 'failed') {
+        this.setStage('failed', {
+          managed: false,
+          message: `The remote backend at ${this.baseUrl} no longer accepts this app's credentials (its admin session expired or the key changed). Reconnect it with the API key.`,
+          diagnosis: 'auth_required',
+        });
+      }
+    } else {
+      this.setStage('ready', patch);
+    }
+    if (superviseAfter) this.supervise(gen);
+    return !rejected;
   }
 
   /** Poll /health until ready, retiring the launch when the budget expires. */
@@ -1338,8 +1385,7 @@ export class BackendSupervisor extends EventEmitter<{
       // starting to attaching must retire this launch's readiness deadline.
       if (gen !== this.generation || this.stage !== waitingStage) return;
       if (ready) {
-        this.setStage('ready', { message: undefined });
-        this.supervise(gen);
+        await this.markReady(gen, { message: undefined }, true);
         return;
       }
       if (gen !== this.generation || (this.stage !== 'starting' && this.stage !== 'attaching')) {
@@ -1393,8 +1439,14 @@ export class BackendSupervisor extends EventEmitter<{
         misses = 0;
         refusals = 0;
         rejections = 0;
-        if (gen === this.generation && RECOVERABLE_STAGES.has(this.stage)) {
-          this.setStage('ready', { message: undefined });
+        // A remote parked on auth_required needs the user to reconnect; probing
+        // it again every tick would only repeat the same rejection.
+        if (
+          gen === this.generation &&
+          RECOVERABLE_STAGES.has(this.stage) &&
+          this.diagnosis !== 'auth_required'
+        ) {
+          await this.markReady(gen, { message: undefined }, false);
         }
       } else if (noteMiss() >= SUPERVISE_MISSES && gen === this.generation) {
         // The child-exit handler owns this bounded replacement handoff. It

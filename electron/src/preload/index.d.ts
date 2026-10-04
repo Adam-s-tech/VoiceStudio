@@ -65,7 +65,7 @@ export interface BackendStatus {
    * whose wording the renderer localizes: a remote backend whose health checks
    * time out, and a backend that keeps answering /health unhealthy.
    */
-  diagnosis?: 'remote_unreachable' | 'unhealthy';
+  diagnosis?: 'remote_unreachable' | 'unhealthy' | 'auth_required';
   exitCode?: number | null;
   /** Termination signal for the current backend run, never the persisted crash journal. */
   exitSignal?: string | null;

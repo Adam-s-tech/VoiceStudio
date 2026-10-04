@@ -43,6 +43,7 @@ vi.mock('./runtime-project', () => ({
 import { BackendSupervisor } from './backend';
 
 afterEach(() => {
+  calls.length = 0;
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
@@ -54,17 +55,27 @@ afterEach(() => {
  * loop (the kernel still accepts, so the probe's deadline fires), `up` an
  * answering backend.
  */
-type Health = { mode: 'down' | 'busy' | 'rejected' | 'up' };
+type Health = {
+  mode: 'down' | 'busy' | 'rejected' | 'up';
+  /** The remote's authenticated /system/info answers 401 (expired session). */
+  authRejected?: boolean;
+};
+
+const calls: string[] = [];
 
 /** /health answers only in `up`. */
 function stubHealth(health: Health): void {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () => {
+    vi.fn(async (input: unknown) => {
+      calls.push(String(input));
       if (health.mode === 'busy') throw new DOMException('timed out', 'TimeoutError');
       if (health.mode === 'down') throw new TypeError('fetch failed');
       if (health.mode === 'rejected') {
         return new Response('{}', { status: 503, headers: { 'x-omnivoice-backend': 'test' } });
+      }
+      if (String(input).endsWith('/system/info') && health.authRejected) {
+        return new Response('{}', { status: 401 });
       }
       return new Response(JSON.stringify({ status: 'ok', version: 'test' }), {
         headers: { 'x-omnivoice-backend': 'test' },
@@ -306,6 +317,92 @@ it('resumes supervising a remote after a Retry made while it was down', async ()
     health.mode = 'busy';
     await vi.advanceTimersByTimeAsync(10_000);
     expect(supervisor.status.stage).toBe('unresponsive');
+  } finally {
+    await supervisor.shutdown();
+  }
+});
+
+async function remoteSupervisor(health: Health): Promise<BackendSupervisor> {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+  vi.stubEnv('OMNIVOICE_PORT', '');
+  vi.stubEnv('OMNIVOICE_BACKEND_CMD', '');
+  vi.stubEnv('VOICESTUDIO_SKIP_BACKEND', '');
+  stubHealth(health);
+  const supervisor = new BackendSupervisor();
+  (supervisor as unknown as { remoteUrl: string }).remoteUrl = 'http://remote.example:3900';
+  return supervisor;
+}
+
+it('does not mark a remote ready on /health alone when its session is no longer accepted', async () => {
+  const health: Health = { mode: 'up', authRejected: true };
+  const supervisor = await remoteSupervisor(health);
+  try {
+    await supervisor.start();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(supervisor.status.stage).toBe('failed');
+    expect(supervisor.status.diagnosis).toBe('auth_required');
+    expect(supervisor.status.message).toMatch(/no longer accepts/);
+
+    // Reconnecting with a fresh session clears it.
+    health.authRejected = false;
+    await supervisor.restart();
+    expect(supervisor.status.stage).toBe('ready');
+    expect(supervisor.status.diagnosis).toBeUndefined();
+  } finally {
+    await supervisor.shutdown();
+  }
+});
+
+it('keeps a recovered remote failed when its session expired during the outage', async () => {
+  const health: Health = { mode: 'up' };
+  const supervisor = await remoteSupervisor(health);
+  try {
+    await supervisor.start();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(supervisor.status.stage).toBe('ready');
+
+    // Outage: Retry while down parks it failed with the recovery probe running.
+    health.mode = 'down';
+    await supervisor.restart();
+    expect(supervisor.status.stage).toBe('failed');
+
+    // The server returns, but the session did not survive the outage.
+    health.mode = 'up';
+    health.authRejected = true;
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(supervisor.status.stage).toBe('failed');
+    expect(supervisor.status.diagnosis).toBe('auth_required');
+  } finally {
+    await supervisor.shutdown();
+  }
+});
+
+it('keeps an unresponsive remote failed on auth when /health recovers before its session', async () => {
+  const health: Health = { mode: 'up' };
+  const supervisor = await remoteSupervisor(health);
+  try {
+    await supervisor.start();
+    await vi.advanceTimersByTimeAsync(1_000);
+    health.mode = 'busy';
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(supervisor.status.stage).toBe('unresponsive');
+
+    health.mode = 'up';
+    health.authRejected = true;
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(supervisor.status.stage).toBe('failed');
+    expect(supervisor.status.diagnosis).toBe('auth_required');
+  } finally {
+    await supervisor.shutdown();
+  }
+});
+
+it('never asks a local backend for credentials before marking it ready', async () => {
+  const health: Health = { mode: 'up', authRejected: true };
+  const supervisor = await attachedSupervisor(health);
+  try {
+    expect(supervisor.status.stage).toBe('ready');
+    expect(calls.some((url) => url.endsWith('/system/info'))).toBe(false);
   } finally {
     await supervisor.shutdown();
   }
