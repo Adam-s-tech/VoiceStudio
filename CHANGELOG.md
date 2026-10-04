@@ -103,6 +103,8 @@ metadata and the backend fallback mirror it.
 - License notice: commercial use is free under the AGPL; the paid licence is for closed-source use, with Pro plans linked (#2578)
 
 ### Fixed
+
+- A busy attached backend shows as unresponsive instead of crashed, and background status polls no longer starve the backend worker pool (#2608)
 - Elevated Windows app removal stops before deleting data and points to a normal PowerShell window or Settings (#2578)
 - Contributor audits inspect committed files and exclude submodules, while still stopping on failed file attribution (#2556)
 
