@@ -287,6 +287,40 @@ def _profile_instruct(row):
     return heal_design_instruct(row["instruct"], vd)
 
 
+def _design_instruct_key(value):
+    """Order-, case- and spacing-insensitive identity of an instruct.
+
+    Clients rebuild a design voice's tags in their own order (the sanitizer
+    sorts by category), so string equality would call an unchanged voice
+    edited.
+    """
+    return frozenset(
+        item.strip().casefold()
+        for item in re.split(r"[,\uff0c]", str(value or ""))  # ASCII or full-width comma
+        if item.strip()
+    )
+
+
+def _design_request_diverges(row, *, instruct=None, seed=None):
+    """True when a request edits a design profile instead of re-rendering it.
+
+    A design profile's rendered sample *is* the voice it was saved with. A
+    request that sends a different instruct or seed asks for a different
+    voice; cloning the old sample would drown the new attributes, which is
+    how "Male" kept coming back female once a design was saved. An omitted
+    instruct or seed means "the profile's", so it never diverges.
+    """
+    if instruct and str(instruct).strip():
+        requested = _design_instruct_key(instruct)
+        stored = {
+            _design_instruct_key(row["instruct"]),
+            _design_instruct_key(_profile_instruct(row)),
+        }
+        if requested not in stored:
+            return True
+    return seed is not None and row["seed"] is not None and int(seed) != int(row["seed"])
+
+
 def _resolve_profile_conditioning(row, *, ref_text=None, instruct=None,
                                   seed=None, language=None):
     """Resolve a ``voice_profiles`` row into generation conditioning.
@@ -306,6 +340,9 @@ def _resolve_profile_conditioning(row, *, ref_text=None, instruct=None,
         "ref_audio_path": None, "ref_text": ref_text, "instruct": instruct,
         "seed": seed, "language": language, "kind": None,
         "persist_ref_text": False, "language_from_profile": False,
+        # True when the request edits a design profile rather than
+        # re-rendering it: its saved sample no longer describes the voice.
+        "diverged": False,
     }
     # `kind` is authoritative (0005): 'design' profiles condition on their
     # deterministic rendered sample + instruct; 'clone' on the user's
@@ -319,7 +356,17 @@ def _resolve_profile_conditioning(row, *, ref_text=None, instruct=None,
             row["instruct"] and not row["is_locked"] and not row["ref_audio_path"]
         ) else "clone"
     out["kind"] = profile_kind
-    if row["is_locked"] and row["locked_audio_path"]:
+    if profile_kind == "design" and _design_request_diverges(
+        row, instruct=instruct, seed=seed,
+    ):
+        # Design from the request's attributes and seed; only the gaps it
+        # left (an omitted instruct or seed) come from the profile.
+        out["diverged"] = True
+        if not out["instruct"]:
+            out["instruct"] = _profile_instruct(row)
+        if out["seed"] is None and row["seed"] is not None:
+            out["seed"] = row["seed"]
+    elif row["is_locked"] and row["locked_audio_path"]:
         out["ref_audio_path"] = os.path.join(VOICES_DIR, row["locked_audio_path"])
         if not out["ref_text"]:
             out["ref_text"] = row["ref_text"]
@@ -1949,7 +1996,6 @@ async def generate_speech(
         with db_conn() as conn:
             row = conn.execute("SELECT * FROM voice_profiles WHERE id=?", (profile_id,)).fetchone()
         if row:
-            resolved_profile_id = profile_id
             # Shared with POST /convert — see _resolve_profile_conditioning
             # for the resolution rules (kind-authoritative, lock wins, #533
             # language fill, #1032 transcript-cache signal).
@@ -1957,6 +2003,8 @@ async def generate_speech(
                 row, ref_text=ref_text, instruct=instruct, seed=used_seed,
                 language=language,
             )
+            # An edited design is a new voice, not a take of this profile.
+            resolved_profile_id = None if _cond["diverged"] else profile_id
             history_mode = _cond["kind"]
             ref_audio_path = _cond["ref_audio_path"]
             ref_text = _cond["ref_text"]

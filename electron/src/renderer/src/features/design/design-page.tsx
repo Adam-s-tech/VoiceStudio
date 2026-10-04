@@ -15,6 +15,8 @@ import {
   applyDescription,
   designInstruct,
   designRecipe,
+  editVoice,
+  linkedDesignProfile,
   pickDetail,
   readDraft,
   replaceRecipe,
@@ -83,7 +85,8 @@ export function DesignPage() {
   const profiles = useProfiles();
   const savedProfilesRef = useRef<HTMLDetailsElement>(null);
   const designProfiles = profiles.data?.filter((profile) => profile.kind === 'design') ?? [];
-  const activeProfile = designProfiles.find((profile) => profile.id === draft.profileId);
+  // The saved voice this draft still is; any edit turns it into a new design.
+  const activeProfile = linkedDesignProfile(draft, profiles.data);
   const editingProfile = profiles.data?.find((profile) => profile.id === editingId);
   useEffect(() => {
     const restore = (event: Event) => {
@@ -190,7 +193,7 @@ export function DesignPage() {
                   disabled={generation.isGenerating || mapper.pending}
                   onClick={() => {
                     // Reset drops the picks so the description alone decides again.
-                    setDraft((current) => ({ ...current, picks: {} }));
+                    setDraft((current) => ({ ...current, picks: {}, profileId: null }));
                     mapper.reset(description);
                   }}
                 >
@@ -208,7 +211,7 @@ export function DesignPage() {
               placeholder={t('clone.describe_placeholder')}
               onChange={(event) => {
                 const value = event.target.value;
-                setDraft((current) => ({ ...current, description: value }));
+                setDraft((current) => editVoice(current, { description: value }));
                 // Mapping runs for every engine so the details stay in step
                 // with the description when switching back to OmniVoice.
                 mapper.describe(value);
@@ -246,9 +249,9 @@ export function DesignPage() {
                 <div key={profile.id} className="flex items-center gap-1">
                   <Button
                     className="min-w-0 flex-1 justify-start truncate"
-                    variant={draft.profileId === profile.id ? 'secondary' : 'ghost'}
+                    variant={activeProfile?.id === profile.id ? 'secondary' : 'ghost'}
                     size="sm"
-                    aria-pressed={draft.profileId === profile.id}
+                    aria-pressed={activeProfile?.id === profile.id}
                     disabled={generation.isGenerating}
                     onClick={() => {
                       mapper.cancel();
@@ -387,7 +390,7 @@ export function DesignPage() {
                   onChange={(event) => {
                     const seed = Number(event.target.value);
                     if (Number.isInteger(seed) && seed >= 0 && seed <= 2147483647)
-                      setDraft((current) => ({ ...current, seed }));
+                      setDraft((current) => editVoice(current, { seed }));
                   }}
                 />
                 <Button
@@ -396,10 +399,7 @@ export function DesignPage() {
                   disabled={generation.isGenerating}
                   aria-label={t('clone.seed_reroll')}
                   onClick={() =>
-                    setDraft((current) => ({
-                      ...current,
-                      seed: pickDesignSeed(false, null),
-                    }))
+                    setDraft((current) => editVoice(current, { seed: pickDesignSeed(false, null) }))
                   }
                 >
                   <ShuffleIcon />
@@ -549,11 +549,7 @@ export function DesignPage() {
                       instruct: designInstruct(draft, generation.instructVocabulary),
                       recipe: designRecipe(draft),
                       seed: draft.seed,
-                      profileId: profiles.data?.some(
-                        (profile) => profile.id === draft.profileId && profile.kind === 'design',
-                      )
-                        ? draft.profileId
-                        : null,
+                      profileId: activeProfile?.id ?? null,
                     })
                   }
                 >

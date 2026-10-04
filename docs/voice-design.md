@@ -151,6 +151,14 @@ On every engine, a detail you pick holds until your description says something
 different about it, and **Reset to description** drops all picks. Choosing a
 saved voice or a starting point replaces the description.
 
+Choosing a saved designed voice re-renders it from its saved sample, so it
+sounds the same every time. Changing a detail, the description or the seed
+turns the draft back into an unsaved design: takes follow your new settings,
+and you can save them as a new voice. Through the API, a `/generate` request
+whose `instruct` or `seed` differs from the design profile's designs from the
+request instead of cloning the saved sample, and the take is not filed under
+that profile.
+
 Reopening a take restores the description, picks and details it was made with;
 they are kept with the take in your local history. Takes made before this was
 recorded come back with their full instruction as the description, so they
