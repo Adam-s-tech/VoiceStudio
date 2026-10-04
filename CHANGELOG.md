@@ -110,6 +110,15 @@ metadata and the backend fallback mirror it.
 - Apple Silicon Macs running the Intel build are pointed to the Apple Silicon download instead of failing setup on PyTorch (#2598) — thanks @igiteam!
 - Source checkouts that cannot start the backend say whether `.venv` is missing or which Python import failed (#2555) — thanks @spvn81!
 - Native backend crashes name the faulting frame and report the VoiceStudio frames and other threads that were running (#2382, #2250, #2187) — thanks @quan0pek and @geogjaime!
+- Streaming previews play the last chunk to its end and resume at full volume after a generation pause (#2518) — thanks @rudycelekli!
+- Remote backend checks and WebSocket sign-in time out when a server stalls mid-response instead of waiting forever (#2527) — thanks @rudycelekli!
+- Remote backends served under a reverse-proxy path prefix keep that prefix for dictation, events and speech WebSockets (#2537) — thanks @rudycelekli!
+- Cancelling dictation while it connects no longer hijacks the next dictation's connection (#2533) — thanks @rudycelekli!
+- Deleting one dictation transcript no longer removes other transcripts saved in the same moment (#2538) — thanks @rudycelekli!
+- Reusing a Clone take restores its WAV precision and Even out volume choice (#2526) — thanks @rudycelekli!
+- Compare voices and voice-profile previews warn when part of the text produced no speech (#2548) — thanks @rudycelekli!
+- Saving an export over an existing file keeps the old file intact if the new write fails (#2560) — thanks @rudycelekli!
+- First-run setup shows the right download size and active package when similarly named packages download together (#2562) — thanks @rudycelekli!
 - Elevated Windows app removal stops before deleting data and points to a normal PowerShell window or Settings (#2578)
 - Contributor audits inspect committed files and exclude submodules, while still stopping on failed file attribution (#2556)
 

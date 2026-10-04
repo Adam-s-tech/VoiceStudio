@@ -31,11 +31,10 @@ import { beginAppActivity } from '@/lib/app-activity';
 import { useTtsReadiness } from './use-tts-readiness';
 import { useEngines } from './use-engines';
 import { recordActionBreadcrumb } from '@/lib/report-breadcrumb';
+import { announceDroppedSpeech } from '@/lib/dropped-speech';
 
 const TIMER_TICK_MS = 100;
 const PROGRESS_THROTTLE_MS = 100;
-const DROPPED_TOAST_MS = 8000;
-const DROPPED_TEXT_PREVIEW_CHARS = 120;
 const MODEL_NOT_DOWNLOADED = 'model_not_downloaded';
 
 // One synthesis at a time across every mounted hook instance: the backend
@@ -103,18 +102,7 @@ function announceInstructWarnings(free: string): string {
 }
 
 function announceResultNotices(result: GenerateResult): void {
-  // Some of the text rendered to no audio: the take is clean but short, and
-  // nothing else would ever tell the user — so quote what was lost.
-  if (result.dropped) {
-    const preview = result.dropped.text.trim().slice(0, DROPPED_TEXT_PREVIEW_CHARS);
-    const count = result.dropped.count;
-    toast.warning(
-      preview
-        ? tr('tts.droppedChunksWithText', { count, text: preview })
-        : tr('tts.droppedChunks', { count }),
-      { duration: DROPPED_TOAST_MS },
-    );
-  }
+  announceDroppedSpeech(result.dropped);
   // The backend only sets the routing headers on cpu_fallback / accelerated-
   // with-caveat, so their presence is the signal.
   if (result.routing && result.routing.status !== lastRoutingStatus) {
