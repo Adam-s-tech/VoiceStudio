@@ -1332,7 +1332,10 @@ loading the TTS model at the same time. Cold loads are now serialized across bot
 paths; if a load ever wedges past its deadline, retries fail immediately with a
 "restart the backend" message instead of queueing behind it. If a native crash
 persists, attach the full faulthandler dump (the `Windows fatal exception` block
-including every `Thread` section) from Settings → Logs → Backend.
+including every `Thread` section) from Settings → Logs → Backend. Bug reports
+already carry a condensed copy: the crash message names the faulting frame, and
+the report keeps the faulting thread's VoiceStudio frames (which model or job
+was loading) plus the frame each other thread was running.
 
 ### ASR initialization errors
 

@@ -103,6 +103,7 @@ metadata and the backend fallback mirror it.
 ### Fixed
 - Apple Silicon Macs running the Intel build are pointed to the Apple Silicon download instead of failing setup on PyTorch (#2598) — thanks @igiteam!
 - Source checkouts that cannot start the backend say whether `.venv` is missing or which Python import failed (#2555) — thanks @spvn81!
+- Native backend crashes name the faulting frame and report the VoiceStudio frames and other threads that were running (#2382, #2250, #2187) — thanks @quan0pek and @geogjaime!
 - Elevated Windows app removal stops before deleting data and points to a normal PowerShell window or Settings (#2578)
 - Contributor audits inspect committed files and exclude submodules, while still stopping on failed file attribution (#2556)
 

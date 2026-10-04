@@ -11,6 +11,7 @@ import {
 } from './runtime-project';
 import { asciiSafePthFiles } from './pth-ascii';
 import { CrashJournal } from './crash-journal';
+import { nativeFaultSummary } from '../shared/utils/crashReport';
 import { availableBackendPort } from './backend-port';
 import { legacyStorageEnv } from './legacy-storage';
 import { spawn, spawnSync, type ChildProcess, type StdioOptions } from 'node:child_process';
@@ -1251,7 +1252,7 @@ export class BackendSupervisor extends EventEmitter<{
     // End every readiness/supervisor loop for the dead ownership generation
     // before publishing the terminal result.
     this.generation++;
-    this.crashes.record(code, signal, Date.now() - this.startedAt, this.log);
+    const recorded = this.crashes.record(code, signal, Date.now() - this.startedAt, this.log);
     this.exitCode = code;
     this.exitSignal = signal;
     if (code === EXIT_PORT_IN_USE) {
@@ -1260,7 +1261,11 @@ export class BackendSupervisor extends EventEmitter<{
       });
       return;
     }
-    const lastLine = this.childLog.at(-1);
+    // A native fault's last line is whatever followed the dump: the stdlib
+    // frame that started the process, an extension-module list or an access
+    // log line. Name the fault and where it happened instead (#2382, #2187).
+    const lastLine =
+      nativeFaultSummary(recorded?.logTail.join('\n') ?? '') || this.childLog.at(-1);
     const why = signal ? `signal ${signal}` : `exit code ${code}`;
     this.setStage('crashed', {
       message: `Backend exited unexpectedly (${why}).${lastLine ? ` Last output: ${lastLine}` : ''}`,
