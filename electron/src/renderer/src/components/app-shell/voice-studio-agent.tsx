@@ -122,6 +122,29 @@ export function VoiceStudioAgent() {
     };
   }, [bridge]);
 
+  // A CLI installed while the app was running must appear without a restart.
+  useEffect(() => {
+    if (!bridge || !open) return;
+    let alive = true;
+    void bridge.repair
+      .list()
+      .then((found) => {
+        if (!alive) return;
+        setAgents(found);
+        setSelected((current) =>
+          found.some((agent) => agent.id === current && agent.available)
+            ? current
+            : (found.find((agent) => agent.available)?.id ?? current),
+        );
+      })
+      .catch(() => {
+        // Keep the previous list; the initial load reports failures.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [bridge, open]);
+
   useEffect(() => {
     const receive = (request?: RepairAgentRequest | null) => {
       setOpen(true);

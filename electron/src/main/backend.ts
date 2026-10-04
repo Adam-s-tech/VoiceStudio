@@ -28,7 +28,7 @@ import {
 } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { cpus, homedir, totalmem } from 'node:os';
-import { basename, delimiter, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { app } from 'electron';
 import type {
   BackendConnection,
@@ -44,6 +44,7 @@ import {
   saveRemoteBackend,
   type RemoteSession,
 } from './remote-backend';
+import { toolSearchDirs } from './tool-path';
 import { SetupProgressTracker, cleanProcessLine } from './setup-progress';
 import { scrubText } from '../shared/utils/scrub';
 
@@ -249,15 +250,7 @@ function findUv(): string | null {
     if (usableFile(bundled)) return bundled;
   }
   const names = process.platform === 'win32' ? ['uv.exe', 'uv'] : ['uv'];
-  const home = homedir();
-  // A GUI launch (Finder, Explorer, a .desktop file) does not see the shell's
-  // PATH additions, so the standard uv install locations are checked too.
-  const dirs = [
-    ...(process.env.PATH ?? '').split(delimiter).filter(Boolean),
-    join(home, '.local', 'bin'),
-    join(home, '.cargo', 'bin'),
-    ...(process.platform === 'win32' ? [] : ['/opt/homebrew/bin', '/usr/local/bin']),
-  ];
+  const dirs = toolSearchDirs();
   for (const dir of dirs) {
     for (const name of names) {
       const candidate = join(dir, name);

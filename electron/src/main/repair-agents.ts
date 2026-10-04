@@ -16,6 +16,7 @@ import type { BackendSupervisor } from './backend';
 import { startRepairApiBridge, type RepairApiBridge } from './repair-api-bridge';
 import { isTrustedRenderer } from './trusted-renderer';
 import { agentUsesAppWorkspace, featureGuidance, validateAgentWorkspace } from '../shared/agent-workspace';
+import { envWithToolPath } from './tool-path';
 import { sendToLiveWindow } from './window-safety';
 import { startLlmAgentBridge } from './llm-agent-bridge';
 import type {
@@ -133,7 +134,11 @@ function trusted(event: IpcMainInvokeEvent, owner: BrowserWindow | null) {
 
 function locate(command: string): LaunchCommand | null {
   const finder = process.platform === 'win32' ? 'where.exe' : 'which';
-  const found = spawnSync(finder, [command], { encoding: 'utf8', windowsHide: true });
+  const found = spawnSync(finder, [command], {
+    encoding: 'utf8',
+    env: envWithToolPath(),
+    windowsHide: true,
+  });
   const paths =
     found.status === 0
       ? found.stdout
@@ -178,6 +183,7 @@ function versionOf(command: LaunchCommand): string {
   const result = spawnSync(command.executable, [...command.prefix, '--version'], {
     encoding: 'utf8',
     timeout: 4_000,
+    env: envWithToolPath(),
     windowsHide: true,
   });
   return `${result.stdout || result.stderr || ''}`.trim().split(/\r?\n/)[0]?.slice(0, 120) || '';
@@ -685,14 +691,14 @@ export async function registerRepairAgents(
     workspacePath: workspaceRoot ?? undefined,
   };
   const commands = new Map<RepairAgentId, LaunchCommand>();
-  let agentCache: RepairAgentInfo[] | null = null;
 
   const emit = (event: RepairAgentEvent) => {
     sendToLiveWindow(getMainWindow(), REPAIR_CHANNELS.event, event);
   };
   const list = (): RepairAgentInfo[] => {
-    if (agentCache) return agentCache;
-    agentCache = DEFINITIONS.map((definition) => {
+    // Re-scan on every call: a CLI installed after launch must appear the next
+    // time the panel opens, without restarting the app.
+    return DEFINITIONS.map((definition) => {
       const command = locate(definition.command);
       if (command) commands.set(definition.id, command);
       return {
@@ -702,7 +708,6 @@ export async function registerRepairAgents(
         version: command ? versionOf(command) : '',
       };
     });
-    return agentCache;
   };
 
   ipcMain.handle(REPAIR_CHANNELS.list, (event) => {
@@ -801,7 +806,7 @@ export async function registerRepairAgents(
       child = spawn(command.executable, args, {
         cwd: sourceRoot ?? dirname(apiBridge.contextFile),
         env: {
-          ...process.env,
+          ...envWithToolPath(),
           NO_COLOR: '1',
           FORCE_COLOR: '0',
           VOICESTUDIO_REPAIR_CONTEXT_FILE: apiBridge.contextFile,
@@ -946,7 +951,7 @@ export async function registerRepairAgents(
         translationChild = spawn(command.executable, args, {
           cwd: translationTemp!,
           env: {
-            ...process.env,
+            ...envWithToolPath(),
             // Agent subprocesses must not inherit the backend-only capability.
             VOICESTUDIO_LLM_AGENT_TOKEN: undefined,
             VOICESTUDIO_LLM_AGENT_URL: undefined,

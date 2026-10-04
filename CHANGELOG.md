@@ -101,6 +101,7 @@ metadata and the backend fallback mirror it.
 - License notice: commercial use is free under the AGPL; the paid licence is for closed-source use, with Pro plans linked (#2578)
 
 ### Fixed
+- Fix it with an agent finds Claude Code and other agent CLIs installed in user folders (~/.local/bin, Homebrew, npm global) when launched from Finder or a desktop entry, and rechecks each time the panel opens — thanks @flatlinebb on Discord!
 - YouTube downloads no longer fail with Errno 22 or Broken pipe when the app's stdout is closed; yt-dlp progress and messages now go to the log — thanks @marioteka and @shizzy_prod on Discord!
 - Offline NLLB translation accepts every language in the dubbing pickers (Nepali, Catalan, Latvian, Georgian, Punjabi, Norwegian and about 50 more) for both target and auto-detected source — thanks @lamomg on Discord!
 - Saving a voice design skips cold engine loading and downloads, including when a warm engine unloads during the save (#2583) — thanks @simoncheese!
