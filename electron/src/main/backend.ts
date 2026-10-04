@@ -57,15 +57,6 @@ const SHUTDOWN_INTENT_TIMEOUT_MS = 1000;
 /** Consecutive supervisor probe misses (2 s apart) before a ready backend is declared gone. */
 const SUPERVISE_MISSES = 3;
 /**
- * How long an attached (not shell-owned) backend may keep ACCEPTING connections
- * yet not answer /health before it is declared gone (#2601). A dead process
- * refuses the connection outright; one that accepts and then stays silent has a
- * blocked event loop (a long generation holding the GIL), which is the same
- * stall the managed path already waits out. Bounded, because without a child
- * handle the shell cannot see a process that is truly wedged forever.
- */
-const ATTACHED_BUSY_PATIENCE_MS = 10 * 60_000;
-/**
  * Stages a later successful /health probe must retire back to `ready` (#2430).
  * `unresponsive` is a live-but-busy backend, not a failure: the supervisor
  * already proved the process is alive, so the health loop owns clearing it.
@@ -533,11 +524,12 @@ export class BackendSupervisor extends EventEmitter<{
   /** A generation owns at most one health loop, even if readiness is observed twice. */
   private supervisingGeneration: number | null = null;
   /**
-   * Whether the last failed probe timed out rather than being refused. The
-   * kernel accepts a TCP connection for a live process whose event loop is
-   * blocked, so a timeout means "alive but busy" and a refusal/reset means gone.
+   * How the latest probe failed. Only `refused` — no listener, or another
+   * service on the port — is evidence the backend is gone. A `timeout` means
+   * the kernel accepted the connection while the event loop was blocked (a
+   * long job can hold it for hours), and `rejected` means it answered unhealthy.
    */
-  private lastProbeTimedOut = false;
+  private lastProbeOutcome: 'ok' | 'timeout' | 'refused' | 'rejected' = 'ok';
   private shuttingDown = false;
   private setupIssue: BackendStatus['setupIssue'];
   private setupRequiredGib: number | undefined;
@@ -1255,7 +1247,7 @@ export class BackendSupervisor extends EventEmitter<{
   }
 
   private async probe(baseUrl = this.baseUrl, identityOnly = false): Promise<boolean> {
-    this.lastProbeTimedOut = false;
+    this.lastProbeOutcome = 'ok';
     try {
       // This runs for the entire desktop session. Use the canonical, tiny
       // liveness response instead of repeatedly serializing full hardware,
@@ -1269,18 +1261,25 @@ export class BackendSupervisor extends EventEmitter<{
       // health JSON must never redirect renderer content to another service.
       const marked = Boolean(res.headers.get('x-omnivoice-backend'));
       if (identityOnly) return marked;
-      if (!this.remoteUrl && this.port !== this.configuredPort && !marked) return false;
-      if (!res.ok) return false;
+      if (!this.remoteUrl && this.port !== this.configuredPort && !marked) {
+        this.lastProbeOutcome = 'refused';
+        return false;
+      }
+      if (!res.ok) {
+        this.lastProbeOutcome = 'rejected';
+        return false;
+      }
       const body: unknown = await res.json();
-      return (
+      const healthy =
         typeof body === 'object' &&
         body !== null &&
         (body as { status?: unknown }).status === 'ok' &&
-        typeof (body as { version?: unknown }).version === 'string'
-      );
+        typeof (body as { version?: unknown }).version === 'string';
+      if (!healthy) this.lastProbeOutcome = 'rejected';
+      return healthy;
     } catch (error) {
       const name = (error as { name?: unknown } | null)?.name;
-      this.lastProbeTimedOut = name === 'TimeoutError' || name === 'AbortError';
+      this.lastProbeOutcome = name === 'TimeoutError' || name === 'AbortError' ? 'timeout' : 'refused';
       return false;
     }
   }
@@ -1338,14 +1337,12 @@ export class BackendSupervisor extends EventEmitter<{
     if (this.supervisingGeneration === gen) return;
     this.supervisingGeneration = gen;
     let misses = 0;
-    // Attached backends: when this run of misses began, and whether any of
-    // them was a refusal/reset (the process is gone) rather than a timeout.
-    let missesSince = 0;
-    let sawRefusal = false;
+    // Consecutive refused connections, classified from the LATEST probes: a
+    // refusal followed by a timeout or an answer means the listener is back.
+    let refusals = 0;
     const noteMiss = (): number => {
-      if (misses++ === 0) missesSince = Date.now();
-      if (!this.lastProbeTimedOut) sawRefusal = true;
-      return misses;
+      refusals = this.lastProbeOutcome === 'refused' ? refusals + 1 : 0;
+      return ++misses;
     };
     const release = (): void => {
       if (this.supervisingGeneration === gen) this.supervisingGeneration = null;
@@ -1358,7 +1355,7 @@ export class BackendSupervisor extends EventEmitter<{
       }
       if (await this.probe()) {
         misses = 0;
-        sawRefusal = false;
+        refusals = 0;
         if (gen === this.generation && RECOVERABLE_STAGES.has(this.stage)) {
           this.setStage('ready', { message: undefined });
         }
@@ -1388,18 +1385,19 @@ export class BackendSupervisor extends EventEmitter<{
           if (gen === this.generation) void tick();
           return;
         }
-        // An attached backend has no child handle to inspect, but a refused
+        // An attached or remote backend has no child handle, but a refused
         // connection and a silent one differ: the kernel still accepts TCP for
-        // a live process whose event loop is blocked, so an unbroken run of
-        // timeouts is the same busy stall (#2601). Wait it out, bounded.
-        if (
-          !this.managed &&
-          !sawRefusal &&
-          Date.now() - missesSince < ATTACHED_BUSY_PATIENCE_MS
-        ) {
-          if (misses === SUPERVISE_MISSES) {
+        // a live process whose event loop is blocked, so timeouts alone are
+        // never proof of death (#2601) — a long job can hold the loop for
+        // hours. Stay `unresponsive`, keep probing, and let the user reconnect
+        // from the status bar. Only consecutive refusals (the listener is
+        // gone) declare it crashed.
+        if (!this.managed && refusals < SUPERVISE_MISSES) {
+          if (this.stage !== 'unresponsive') {
             this.setStage('unresponsive', {
-              message: `The external backend at ${this.baseUrl} is running but busy; it is not answering health checks right now. This resolves on its own once the current job finishes.`,
+              message: this.remoteUrl
+                ? `Cannot confirm connectivity to the remote backend at ${this.baseUrl}: its health checks are timing out (a network problem, or the server is busy). Retrying automatically.`
+                : `The external backend at ${this.baseUrl} is running but busy; it is not answering health checks right now. This resolves on its own once the current job finishes.`,
             });
           }
           if (gen === this.generation) void tick();
@@ -1412,9 +1410,7 @@ export class BackendSupervisor extends EventEmitter<{
         this.setStage('crashed', {
           message: wasManaged
             ? `Backend stopped answering /health on port ${this.port}.`
-            : sawRefusal
-              ? `The external backend at ${this.baseUrl} stopped answering.`
-              : `The external backend at ${this.baseUrl} accepted connections but did not answer /health for ${Math.round(ATTACHED_BUSY_PATIENCE_MS / 60_000)} minutes.`,
+            : `The external backend at ${this.baseUrl} stopped answering.`,
         });
         return;
       }

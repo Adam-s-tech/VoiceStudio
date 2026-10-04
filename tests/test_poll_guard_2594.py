@@ -25,7 +25,13 @@ sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend")
 )
 
-from core.poll_guard import PollGuard  # noqa: E402
+
+@pytest.fixture()
+def PollGuard():
+    # Imported at run time so collecting this file never imports backend code.
+    from core.poll_guard import PollGuard as guard_cls
+
+    return guard_cls
 
 
 def test_status_poll_routes_and_admin_gate_never_use_the_worker_pool():
@@ -43,7 +49,7 @@ def test_status_poll_routes_and_admin_gate_never_use_the_worker_pool():
         )
 
 
-def test_wedged_snapshot_costs_one_private_thread_and_answers_503():
+def test_wedged_snapshot_costs_one_private_thread_and_answers_503(PollGuard):
     release = threading.Event()
     calls = []
 
@@ -69,7 +75,7 @@ def test_wedged_snapshot_costs_one_private_thread_and_answers_503():
     assert calls[0].startswith("poll-unit")
 
 
-def test_overrun_serves_the_last_good_snapshot():
+def test_overrun_serves_the_last_good_snapshot(PollGuard):
     state = {"block": False}
     release = threading.Event()
 
@@ -98,7 +104,7 @@ def test_overrun_serves_the_last_good_snapshot():
     assert getattr(other, "status_code", None) == 503
 
 
-def test_sequential_polls_are_not_cached():
+def test_sequential_polls_are_not_cached(PollGuard):
     counter = iter(range(100))
     guard = PollGuard("unit", lambda: next(counter))
 
@@ -111,6 +117,7 @@ def test_sequential_polls_are_not_cached():
 def test_polls_answer_while_the_shared_pool_is_saturated(monkeypatch, tmp_path):
     """The real routes, behind the real admin gate, with all 40 pool threads held."""
     httpx = pytest.importorskip("httpx")
+    import anyio.to_thread
     from fastapi import FastAPI
     from api.routers import system, workers
 
@@ -132,7 +139,13 @@ def test_polls_answer_while_the_shared_pool_is_saturated(monkeypatch, tmp_path):
         transport = httpx.ASGITransport(app=app, client=("127.0.0.1", 50000))
         async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
             blockers = [asyncio.ensure_future(client.get("/_block")) for _ in range(60)]
-            await asyncio.sleep(0.5)  # pool is now full, 20 more queued behind it
+            # Barrier: every worker-pool token is held by a blocked sync route,
+            # so the polls below cannot pass by finding a free thread.
+            limiter = anyio.to_thread.current_default_thread_limiter()
+            deadline = time.monotonic() + 10
+            while limiter.borrowed_tokens < limiter.total_tokens:
+                assert time.monotonic() < deadline, "worker pool never saturated"
+                await asyncio.sleep(0.01)
             try:
                 started = time.monotonic()
                 status = await asyncio.wait_for(client.get("/model/status"), 5)
@@ -148,3 +161,68 @@ def test_polls_answer_while_the_shared_pool_is_saturated(monkeypatch, tmp_path):
     assert loaded.status_code == 200, loaded.text
     assert target.status_code == 200, target.text
     assert elapsed < 4.0
+
+
+def test_extra_keys_cannot_queue_unbounded_work_behind_a_wedged_snapshot(PollGuard):
+    release = threading.Event()
+    started = []
+
+    def _wedged(key):
+        started.append(key)
+        release.wait(30)
+        return key
+
+    async def scenario():
+        guard = PollGuard("unit", _wedged, deadline_s=0.05)
+        results = await asyncio.gather(
+            *(guard.get(f"op{i}") for i in range(40)), return_exceptions=True
+        )
+        return results
+
+    try:
+        results = asyncio.run(scenario())
+    finally:
+        release.set()
+    assert all(getattr(r, "status_code", None) == 503 for r in results)
+    # Only a few distinct snapshots were ever submitted to the one thread.
+    from core import poll_guard
+
+    assert len(started) <= poll_guard._MAX_INFLIGHT
+
+
+def test_last_good_snapshot_expires(PollGuard):
+    state = {"block": False}
+    release = threading.Event()
+
+    def _snapshot():
+        if state["block"]:
+            release.wait(30)
+        return {"n": 1}
+
+    async def scenario():
+        guard = PollGuard("unit", _snapshot, deadline_s=0.05, stale_max_age_s=0.2)
+        await guard.get()
+        state["block"] = True
+        within = await guard.get()
+        await asyncio.sleep(0.3)
+        try:
+            await guard.get()
+        except Exception as exc:  # noqa: BLE001
+            return within, exc
+        return within, None
+
+    try:
+        within, expired = asyncio.run(scenario())
+    finally:
+        release.set()
+    assert within == {"n": 1}
+    assert getattr(expired, "status_code", None) == 503, "a stale snapshot was served forever"
+
+
+def test_target_poll_rejects_unknown_operations_before_taking_a_slot():
+    from fastapi import HTTPException
+    from api.routers import workers
+
+    with pytest.raises(HTTPException) as caught:
+        asyncio.run(workers.get_target(op="x" * 40))
+    assert caught.value.status_code == 422

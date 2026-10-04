@@ -119,7 +119,12 @@ async def get_target(op: str = "") -> dict:
     surface being rendered — omitting it answers for the target as a whole,
     which is what the picker's own menu asks.
     """
-    return await _target_poll.get(op.strip()[:64])
+    chosen = op.strip()
+    # The caller picks the guard key, so only the operations routing knows
+    # (plus "whole target") get a snapshot slot.
+    if chosen and chosen not in routing.REMOTE_OPERATIONS:
+        raise HTTPException(status_code=422, detail="unknown operation")
+    return await _target_poll.get(chosen)
 
 
 @router.get("/runtime")

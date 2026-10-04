@@ -176,14 +176,56 @@ it('waits out an attached backend that accepts connections but is busy (#2601)',
   }
 });
 
-it('gives up on an attached backend that stays silent past the patience bound', async () => {
+it('never declares an attached backend crashed from timeouts alone', async () => {
   const health: Health = { mode: 'up' };
   const supervisor = await attachedSupervisor(health);
   try {
     health.mode = 'busy';
-    await vi.advanceTimersByTimeAsync(11 * 60_000);
-    expect(supervisor.status.stage).toBe('crashed');
-    expect(supervisor.status.message).toMatch(/accepted connections but did not answer/);
+    // Long jobs run for hours; six hours of silence is still a live listener.
+    await vi.advanceTimersByTimeAsync(6 * 60 * 60_000);
+    expect(supervisor.status.stage).toBe('unresponsive');
+
+    health.mode = 'up';
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(supervisor.status.stage).toBe('ready');
+  } finally {
+    await supervisor.shutdown();
+  }
+});
+
+it('forgets a past refusal once the listener is back (classified from the latest probes)', async () => {
+  const health: Health = { mode: 'up' };
+  const supervisor = await attachedSupervisor(health);
+  try {
+    // Two refusals (a restart in progress), then the listener returns busy.
+    health.mode = 'down';
+    await vi.advanceTimersByTimeAsync(4_500);
+    health.mode = 'busy';
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(supervisor.status.stage).toBe('unresponsive');
+  } finally {
+    await supervisor.shutdown();
+  }
+});
+
+it('reports remote timeouts as uncertain connectivity, not busy', async () => {
+  const health: Health = { mode: 'up' };
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+  vi.stubEnv('OMNIVOICE_PORT', '');
+  vi.stubEnv('OMNIVOICE_BACKEND_CMD', '');
+  vi.stubEnv('VOICESTUDIO_SKIP_BACKEND', '');
+  stubHealth(health);
+  const supervisor = new BackendSupervisor();
+  (supervisor as unknown as { remoteUrl: string }).remoteUrl = 'http://remote.example:3900';
+  try {
+    await supervisor.start();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(supervisor.status.stage).toBe('ready');
+    health.mode = 'busy';
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(supervisor.status.stage).toBe('unresponsive');
+    expect(supervisor.status.message).toMatch(/Cannot confirm connectivity/);
+    expect(supervisor.status.message).not.toMatch(/busy; it is not answering/);
   } finally {
     await supervisor.shutdown();
   }
