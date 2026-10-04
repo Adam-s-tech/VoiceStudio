@@ -73,11 +73,11 @@ class OmniVoiceSubprocessBackend(SubprocessBackend):
         if isinstance(audio, str):
             from services.tts_backend import omnivoice_inline_reference
 
-            text = kw.get("ref_text")
-            selected_audio, selected_text, passage = omnivoice_inline_reference(audio, text)
+            ref_text = kw.get("ref_text")
+            selected_audio, selected_text, passage = omnivoice_inline_reference(audio, ref_text)
             if passage is not None:
                 kw["ref_audio"], kw["ref_text"] = selected_audio, selected_text
-            elif text:
+            elif ref_text:
                 kw["ref_text"] = selected_text
         try:
             return super().generate(text, **kw)
