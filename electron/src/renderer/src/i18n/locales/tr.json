@@ -649,6 +649,7 @@
     "remove_video_confirm": "Bu video, dökümü ve kaydedilmemiş düzenlemeler silinsin mi? Bu işlem geri alınamaz.",
     "remove_audio": "Sesi kaldır",
     "remove_audio_confirm": "Bu ses, transkripti ve kaydedilmemiş düzenlemeler kaldırılsın mı? Bu işlem geri alınamaz.",
+    "remove_interrupted_confirm": "Bu kaynak kaldırılıp yarıda kesilen çalışma silinsin mi? Transkript, kısmi çıktı ve kaydedilmemiş düzenlemeler kaybolur. Bu işlem geri alınamaz.",
     "cookie_transport_error": "Çerez dışa aktarımları HTTPS veya yerel masaüstü uygulamasını gerektirir.",
     "cookie_size_error": "Çerez dışa aktarımı en fazla 1 MB olmalıdır.",
     "save": "Kaydet",

@@ -649,6 +649,7 @@
     "remove_video_confirm": "Hapus video ini, transkripnya, dan perubahan yang belum disimpan? Tindakan ini tidak dapat dibatalkan.",
     "remove_audio": "Hapus audio",
     "remove_audio_confirm": "Hapus audio ini, transkripnya, dan suntingan yang belum disimpan? Tindakan ini tidak dapat dibatalkan.",
+    "remove_interrupted_confirm": "Hapus sumber ini dan buang proses yang terhenti? Transkrip, keluaran parsial, dan suntingan yang belum disimpan akan hilang. Tindakan ini tidak dapat dibatalkan.",
     "cookie_transport_error": "Ekspor kuki memerlukan HTTPS atau aplikasi desktop lokal.",
     "cookie_size_error": "Ekspor kuki harus berukuran 1 MB atau kurang.",
     "save": "Simpan",

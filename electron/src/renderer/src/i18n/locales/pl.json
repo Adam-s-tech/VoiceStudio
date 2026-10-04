@@ -653,6 +653,7 @@
     "remove_video_confirm": "Usunąć ten film, jego transkrypcję i niezapisane zmiany? Tej operacji nie można cofnąć.",
     "remove_audio": "Usuń audio",
     "remove_audio_confirm": "Usunąć to audio, jego transkrypcję i niezapisane zmiany? Tej operacji nie można cofnąć.",
+    "remove_interrupted_confirm": "Usunąć to źródło i odrzucić przerwane uruchomienie? Transkrypcja, częściowy wynik i niezapisane zmiany zostaną utracone. Tej operacji nie można cofnąć.",
     "cookie_transport_error": "Eksport plików cookie wymaga HTTPS lub lokalnej aplikacji komputerowej.",
     "cookie_size_error": "Eksport plików cookie może mieć najwyżej 1 MB.",
     "save": "Zapisz",

@@ -651,6 +651,7 @@
     "remove_video_confirm": "Supprimer cette vidéo, sa transcription et les modifications non enregistrées ? Cette action est irréversible.",
     "remove_audio": "Retirer l'audio",
     "remove_audio_confirm": "Retirer cet audio, sa transcription et les modifications non enregistrées ? Cette action est irréversible.",
+    "remove_interrupted_confirm": "Retirer cette source et abandonner l'exécution interrompue ? Sa transcription, le résultat partiel et les modifications non enregistrées seront perdus. Cette action est irréversible.",
     "cookie_transport_error": "L’export de cookies nécessite HTTPS ou l’application de bureau locale.",
     "cookie_size_error": "L’export de cookies doit faire 1 Mo maximum.",
     "save": "Enregistrer",

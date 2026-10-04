@@ -651,6 +651,7 @@
     "remove_video_confirm": "Remover este vídeo, sua transcrição e edições não salvas? Esta ação não pode ser desfeita.",
     "remove_audio": "Remover áudio",
     "remove_audio_confirm": "Remover este áudio, a transcrição e as edições não salvas? Isso não pode ser desfeito.",
+    "remove_interrupted_confirm": "Remover esta fonte e descartar a execução interrompida? A transcrição, a saída parcial e as edições não salvas serão perdidas. Isso não pode ser desfeito.",
     "cookie_transport_error": "A exportação de cookies requer HTTPS ou o aplicativo local.",
     "cookie_size_error": "A exportação de cookies deve ter no máximo 1 MB.",
     "save": "Salvar",

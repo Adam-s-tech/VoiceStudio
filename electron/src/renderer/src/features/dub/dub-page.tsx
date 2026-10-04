@@ -116,7 +116,7 @@ import {
   redoDubEdit,
   resumeDub,
   discardDubRecovery,
-  resetDubSession,
+  removeDubSource,
   dubSourceRemovable,
   dismissDubError,
   applyDubQc,
@@ -653,8 +653,8 @@ export function DubPage() {
   const sourceRemovable = dubSourceRemovable(session, cancelling);
   const isAudioSource = session.inputType === 'audio';
   const removeSourceLabel = t(isAudioSource ? 'dub.remove_audio' : 'dub.remove_video');
-  const removeVideo = () => {
-    if (!sourceRemovable || !resetDubSession()) return;
+  const removeVideo = async () => {
+    if (!sourceRemovable || !(await removeDubSource())) return;
     livePreview.stop();
     segmentPreviewAbort.current?.abort();
     segmentPreviewAbort.current = null;
@@ -1076,10 +1076,14 @@ export function DubPage() {
                   onOpenChange={setRemoveVideoOpen}
                   title={removeSourceLabel}
                   description={t(
-                    isAudioSource ? 'dub.remove_audio_confirm' : 'dub.remove_video_confirm',
+                    session.recovery
+                      ? 'dub.remove_interrupted_confirm'
+                      : isAudioSource
+                        ? 'dub.remove_audio_confirm'
+                        : 'dub.remove_video_confirm',
                   )}
                   confirmLabel={removeSourceLabel}
-                  onConfirm={removeVideo}
+                  onConfirm={() => void removeVideo()}
                 />
                 <Button
                   size="xs"
@@ -1087,9 +1091,9 @@ export function DubPage() {
                   aria-label={removeSourceLabel}
                   disabled={!sourceRemovable}
                   onClick={() => {
-                    if (session.segments.length > 0 || editHistory.undoDepth > 0)
+                    if (session.recovery || session.segments.length > 0 || editHistory.undoDepth > 0)
                       setRemoveVideoOpen(true);
-                    else removeVideo();
+                    else void removeVideo();
                   }}
                 >
                   {removeSourceLabel}
