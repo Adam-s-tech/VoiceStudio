@@ -116,8 +116,16 @@ def is_valid_signature(comment: dict) -> bool:
     return is_sign_comment(comment.get("body")) and not _edited(comment)
 
 
+# People who explain how to sign, quoting the line; they never get a near-miss reply.
+STAFF_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
+
+
 def near_miss(comment: dict) -> str | None:
     """Why a comment that looks like a signature cannot be recorded, or None."""
+    if comment.get("author_association") in STAFF_ASSOCIATIONS:
+        return None
+    if int((comment.get("user") or {}).get("id") or 0) in MAINTAINER_IDS:
+        return None
     body = comment.get("body") or ""
     text = " ".join(body.lower().split())
     if "hereby sign" not in text or "voicestudio cla" not in text:

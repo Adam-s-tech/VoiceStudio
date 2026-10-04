@@ -557,6 +557,17 @@ def test_no_reply_to_ordinary_comments_bots_or_valid_signatures(comment):
     assert gh.posted == []
 
 
+@pytest.mark.parametrize("comment", [
+    {**_comment(body="To sign, post: `" + cla.SIGN_PHRASE + "`"), "author_association": "COLLABORATOR"},
+    {**_comment(body="Post this line: " + cla.SIGN_PHRASE), "author_association": "MEMBER"},
+    _comment(user_id=4178343, login="debpalash", body="Please post exactly: " + cla.SIGN_PHRASE),
+])
+def test_maintainers_explaining_how_to_sign_get_no_reply(comment):
+    gh = _with_reactions(FakeGitHub([comment], [], store=cla.empty_store()))
+    cla.sign_on_issue(gh, _issue_event(["cla"]))
+    assert gh.posted == []
+
+
 def test_signed_people_get_no_reply_for_a_later_near_miss():
     gh = _with_reactions(FakeGitHub([_comment(edited=True)], [],
                                     store={**cla.empty_store(), "signatures": [{"id": 1001}]}))
