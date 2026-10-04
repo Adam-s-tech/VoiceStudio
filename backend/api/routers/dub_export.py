@@ -1761,7 +1761,7 @@ def _release_mix(path: str) -> None:
         try:
             os.remove(path)
         except OSError:
-            pass
+            pass  # still open (Windows); the next mix of this track prunes it
 
 
 class _LeasedMixResponse(FileResponse):
