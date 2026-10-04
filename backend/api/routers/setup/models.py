@@ -421,6 +421,37 @@ def cache_is_complete(model: dict) -> bool:
     return any(snapshot_is_complete(model, snapshot) for snapshot in dirs)
 
 
+def installed_snapshot_path(repo_id: str) -> "str | None":
+    """Complete local snapshot directory of an installed catalogue repo, else None.
+
+    Loading an installed model by *repo id* makes huggingface_hub ask the Hub
+    which commit ``main`` is before touching the cache — with no timeout on that
+    call, so a network that drops packets stalls the load, and a pinned-revision
+    install (no ``refs/main``) cannot load offline at all (#2583). A concrete
+    snapshot directory loads with no network. Prefers the recorded installed
+    revision, then the newest complete snapshot. Never raises.
+    """
+    try:
+        meta = get_model_catalog().get(repo_id)
+        if meta is None:
+            return None
+        snapshots = [path for path in _snapshot_dirs(repo_id) if snapshot_is_complete(meta, path)]
+        if not snapshots:
+            return None
+        try:
+            from services.hf_cache_repair import hf_cache_home
+            from services.hf_revisions import installed_revision
+            pinned = installed_revision(repo_id, hf_cache_home())
+        except Exception:  # noqa: BLE001 — uncurated repo: newest snapshot wins
+            pinned = None
+        for path in snapshots:
+            if os.path.basename(path) == pinned:
+                return path
+        return max(snapshots, key=os.path.getmtime)
+    except Exception:  # noqa: BLE001 — callers keep loading by name
+        return None
+
+
 def _is_cached_on_disk(repo_id: str) -> bool:
     """Direct-filesystem fallback for is_cached when scan_cache_dir is unavailable.
 

@@ -47,6 +47,23 @@ def _profile_record(row):
     return result
 
 
+# Wall-clock bound on the best-effort transcript taken while a reference is
+# saved. A cold model load or a stalled network read must not hold the save
+# open (#2583); a late result still lands in transcribe_reference's content
+# cache, so the first generation with this voice reuses it.
+_REFERENCE_TRANSCRIBE_TIMEOUT_S = 60.0
+
+
+def _reference_transcribe_timeout() -> float:
+    try:
+        value = float(os.environ.get(
+            "OMNIVOICE_PROFILE_TRANSCRIBE_TIMEOUT_S", _REFERENCE_TRANSCRIBE_TIMEOUT_S,
+        ))
+    except (TypeError, ValueError):
+        return _REFERENCE_TRANSCRIBE_TIMEOUT_S
+    return value if value > 0 and value != float("inf") else _REFERENCE_TRANSCRIBE_TIMEOUT_S
+
+
 async def _auto_transcribe_reference(audio_path: str) -> str:
     """Best-effort local transcript for a new reference clip, or "".
 
@@ -58,10 +75,19 @@ async def _auto_transcribe_reference(audio_path: str) -> str:
     including the first, uses stable conditioning. Local-only:
     transcribe_reference considers only already-installed ASR/dictation models.
     """
+    timeout = _reference_transcribe_timeout()
     try:
         from services.asr_backend import transcribe_reference
 
-        return (await asyncio.to_thread(transcribe_reference, audio_path) or "").strip()
+        return (await asyncio.wait_for(
+            asyncio.to_thread(transcribe_reference, audio_path), timeout,
+        ) or "").strip()
+    except asyncio.TimeoutError:
+        logger.warning(
+            "reference transcription during profile save exceeded %.0fs; "
+            "saving without a transcript", timeout,
+        )
+        return ""
     except Exception as exc:  # noqa: BLE001 — profile save remains usable
         logger.warning("reference transcription during profile save failed: %s", exc)
         return ""

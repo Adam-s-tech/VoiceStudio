@@ -800,6 +800,12 @@ and `OMNIVOICE_GENERATE_TIMEOUT_S` (generation) — both in seconds, default 300
 default 120). **Raise** them for very long single files/generations, **lower**
 them to fail faster on a small machine.
 
+Saving a cloned voice without a transcript transcribes the reference with an
+installed speech-to-text model for at most 60 seconds
+(`OMNIVOICE_PROFILE_TRANSCRIBE_TIMEOUT_S`). After that the voice is saved
+without a transcript, and the first generation with it reuses the finished
+transcription. Installed models load from disk, so saving works offline.
+
 CPU-only hosts use a bounded 600-second generation floor because correct CPU
 synthesis can take longer than the accelerated five-minute budget. Override it
 with `OMNIVOICE_CPU_GENERATE_TIMEOUT_S` — an explicit value here always
