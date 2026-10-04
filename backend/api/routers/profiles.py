@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from core.db import db_conn
 from core.config import VOICES_DIR, OUTPUTS_DIR
-from core import event_bus
+from core import event_bus, voice_leases
 from core.scrub import scrub_text
 from core.personalities import get_personalities
 from omnivoice.utils.voice_design import heal_design_instruct, sanitize_instruct
@@ -470,7 +470,8 @@ def _voice_file_referenced(conn, filename: str) -> bool:
 # it: a render already running (audiobook, Stories, dub, batch) resolved the
 # voice's path once and re-reads that file for every segment. The file is
 # marked under voices/.retired/ instead and swept once the marker is older
-# than the grace period and no profile references it again.
+# than the grace period, no profile references it again and no running render
+# holds it (core.voice_leases).
 _RETIRED_DIRNAME = ".retired"
 _RETIRED_GRACE_S = 24 * 3600
 
@@ -512,7 +513,10 @@ def sweep_retired_voice_files(grace_s: float = _RETIRED_GRACE_S) -> int:
             path = None if _voice_file_referenced(conn, marker.name) else _voices_path(marker.name)
             if path:
                 try:
-                    os.remove(path)
+                    # A render still holding the take outlives any grace
+                    # period: keep the marker and retry on a later sweep.
+                    if not voice_leases.remove_if_unused(path):
+                        continue
                     removed += 1
                 except FileNotFoundError:
                     pass
@@ -522,6 +526,16 @@ def sweep_retired_voice_files(grace_s: float = _RETIRED_GRACE_S) -> int:
             with contextlib.suppress(OSError):
                 os.remove(marker.path)
     return removed
+
+
+async def _sweep_retired_off_loop() -> None:
+    """Run the retired-file sweep after a retirement, outside any lock or DB
+    transaction and off the event loop. Each retirement triggers one, so the
+    retired set stays bounded on a long-running server, not only at startup."""
+    try:
+        await asyncio.to_thread(sweep_retired_voice_files)
+    except Exception:
+        logger.warning("retired voice sweep failed", exc_info=True)
 
 
 def _remove_voice_file(filename: Optional[str], *, keep: str) -> None:
@@ -689,6 +703,7 @@ async def replace_profile_audio(
         for column in ("ref_audio_path", "locked_audio_path"):
             _retire_voice_file(row[column], keep=new_filename)
         _remove_voice_file(row["consent_audio_path"], keep=new_filename)
+    await _sweep_retired_off_loop()
     event_bus.emit("profiles", {"action": "updated", "id": profile_id})
     return _profile_record(updated)
 
@@ -904,7 +919,6 @@ async def lock_profile(
         # re-locked profile with the same text/seed replay the previous take's
         # cached audio (#2535). The superseded take is retired after commit,
         # not deleted, so a render still reading it keeps working.
-        sweep_retired_voice_files()
         previous_locked = profile["locked_audio_path"]
         locked_filename = f"{profile_id}_locked-{uuid.uuid4().hex[:8]}.wav"
         locked_path = _voices_path(locked_filename)
@@ -936,6 +950,7 @@ async def lock_profile(
         finalize()
     # Only after the row points at the new take; shared/referenced files stay.
     _retire_voice_file(previous_locked, keep=locked_filename)
+    await _sweep_retired_off_loop()
     event_bus.emit("profiles", {"action": "locked", "id": profile_id})
     return {"locked": True, "profile_id": profile_id, "locked_audio_path": locked_filename}
 
@@ -957,6 +972,7 @@ async def unlock_profile(profile_id: str):
         # Retire only after the row change committed (a rolled-back unlock must
         # keep its locked take); a render still reading it keeps working.
         _retire_voice_file(profile["locked_audio_path"])
+    await _sweep_retired_off_loop()
     event_bus.emit("profiles", {"action": "unlocked", "id": profile_id})
     return {"unlocked": True, "profile_id": profile_id}
 

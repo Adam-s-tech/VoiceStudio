@@ -31,6 +31,7 @@ import uuid
 
 from collections.abc import Awaitable, Callable
 
+from core import voice_leases
 from core.render_trace import call as trace_call, stage as trace_stage
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
@@ -569,6 +570,7 @@ def _build_synth(
     language: str | None = None,
     opts: ExpressiveOptions | None = None,
     voice_map: dict | None = None,
+    lease: "voice_leases.VoiceFileLease | None" = None,
 ) -> dict:
     """Describe how to synthesize for the active TTS engine.
 
@@ -585,6 +587,9 @@ def _build_synth(
 
     ``opts`` (#1208) carries the expressive/quality knobs + cache opt-out. A
     default instance reproduces today's exact synth call and caching.
+
+    ``lease`` (#2535) holds every resolved reference file for the render, so
+    the retired-voice sweep never removes a take this job still reads.
     """
     from services.tts_backend import OmniVoiceBackend, active_backend_id, get_backend_class
 
@@ -602,6 +607,7 @@ def _build_synth(
         key = token_cache[voice_id]
         if key not in cache:
             cache[key] = _resolve_voice(key)
+            voice_leases.hold(lease, cache[key].get("ref_audio"))
         return cache[key]
 
     engine_id = active_backend_id()
@@ -637,6 +643,7 @@ async def _prepare_synth(
     language: str | None = None,
     opts: ExpressiveOptions | None = None,
     voice_map: dict | None = None,
+    lease: "voice_leases.VoiceFileLease | None" = None,
 ):
     """Resolve :func:`_build_synth` into ``(synth, sample_rate, resolve,
     engine_id)`` — awaiting the VoiceStudio model load when needed. Shared by the
@@ -644,7 +651,8 @@ async def _prepare_synth(
     chunk so a non-English clone holds its language (#505 B2). ``opts`` (#1208)
     carries the expressive knobs; a default instance reproduces today exactly."""
     opts = opts or ExpressiveOptions()
-    info = _build_synth(default_voice, language=language, opts=opts, voice_map=voice_map)
+    info = _build_synth(default_voice, language=language, opts=opts, voice_map=voice_map,
+                        lease=lease)
     resolve, engine_id = info["resolve"], info["engine_id"]
     if info["mode"] == "omnivoice":
         lang = info["language"]
@@ -879,7 +887,7 @@ def _render_chapter_cached(chapter, synth, sr, engine_id, resolve, cache_dir, le
 
 
 def _remote_chapter_call(chapter, *, engine_id, default_voice, voice_map,
-                         language, lexicon, opts, cache_dir):
+                         language, lexicon, opts, cache_dir, lease=None):
     """Build one opaque remote chapter task without loading a local TTS model."""
     import hashlib
 
@@ -891,6 +899,7 @@ def _remote_chapter_call(chapter, *, engine_id, default_voice, voice_map,
     for span in chapter.spans:
         profile_id = _map_span_voice(span.voice_id, default_voice, voice_map)
         voice = _resolve_voice(profile_id)
+        voice_leases.hold(lease, voice.get("ref_audio"))
         rows.append({
             "text": normalize_for_tts(span.text, language),
             "pause_ms_after": span.pause_ms_after,
@@ -955,8 +964,10 @@ def _remote_chapter_call(chapter, *, engine_id, default_voice, voice_map,
 
 
 async def _run_chapter(chapter, *, operation="audiobook", decision, job, default_voice, language, opts,
-                       voice_map, lexicon, cache_dir):
-    """Run one chapter through the gateway; local preparation stays lazy."""
+                       voice_map, lexicon, cache_dir, lease=None):
+    """Run one chapter through the gateway; local preparation stays lazy.
+
+    ``lease`` holds the reference files the chapter resolves (#2535)."""
     from services import gpu_gateway
     from services.tts_backend import active_backend_id, get_backend_class
 
@@ -964,7 +975,7 @@ async def _run_chapter(chapter, *, operation="audiobook", decision, job, default
     remote, remote_cache = _remote_chapter_call(
         chapter, engine_id=engine_id, default_voice=default_voice,
         voice_map=voice_map, language=language, lexicon=lexicon,
-        opts=opts, cache_dir=cache_dir,
+        opts=opts, cache_dir=cache_dir, lease=lease,
     )
     from services.longform_render import wav_is_complete
 
@@ -977,7 +988,8 @@ async def _run_chapter(chapter, *, operation="audiobook", decision, job, default
         from services.model_manager import generate_timeout_s
 
         synth, sr, resolve, local_engine = await _prepare_synth(
-            default_voice, language=language, opts=opts, voice_map=voice_map
+            default_voice, language=language, opts=opts, voice_map=voice_map,
+            lease=lease,
         )
         try:
             timeout_engine = get_backend_class(local_engine)
@@ -1037,11 +1049,12 @@ async def audiobook_preview(req: AudiobookPreviewRequest) -> dict:
     resolved_lang = _resolve_default_language(req.language, req.default_voice)
     opts = _expressive_opts(req)
     decision = gpu_gateway.decide("audiobook")
-    wav_path, dur, was_cached, _seg_stats = await _run_chapter(
-        chapter, decision=decision, job=None, default_voice=req.default_voice,
-        language=resolved_lang, opts=opts, voice_map=req.voice_map,
-        lexicon=req.lexicon, cache_dir=cache_dir,
-    )
+    with voice_leases.VoiceFileLease() as lease:
+        wav_path, dur, was_cached, _seg_stats = await _run_chapter(
+            chapter, decision=decision, job=None, default_voice=req.default_voice,
+            language=resolved_lang, opts=opts, voice_map=req.voice_map,
+            lexicon=req.lexicon, cache_dir=cache_dir, lease=lease,
+        )
     return {
         "output": os.path.relpath(wav_path, OUTPUTS_DIR),  # served via /audio
         "duration_s": round(dur, 2),
@@ -1166,6 +1179,9 @@ async def _render_longform_sse(
     cache_dir = os.path.join(OUTPUTS_DIR, LONGFORM_CACHE_SUBDIR)
     os.makedirs(cache_dir, exist_ok=True)
     prune_cache_dir(cache_dir)  # bound disk before this job adds its chapters
+    # Every reference take this render resolves stays held until it ends, so a
+    # re-lock mid-book never lets the retired-voice sweep delete it (#2535).
+    voice_lease = voice_leases.VoiceFileLease()
     try:
         resolved_lang = _resolve_default_language(language, default_voice)
         operation = "audiobook" if job_type == "audiobook" else "longform"
@@ -1208,7 +1224,7 @@ async def _render_longform_sse(
                     chapter, operation=operation, decision=decision, job=chapter_run,
                     default_voice=default_voice, language=resolved_lang,
                     opts=opts, voice_map=voice_map, lexicon=lexicon,
-                    cache_dir=cache_dir,
+                    cache_dir=cache_dir, lease=voice_lease,
                 )
             except Exception as e:  # isolate a bad chapter — keep going
                 logger.warning("[%s] chapter %d (%s) failed to render",
@@ -1397,6 +1413,8 @@ async def _render_longform_sse(
                 pass  # best-effort job history
         # Generic message only — don't leak the stack/exception text to the client.
         yield _emit({"type": "error", "error": "render failed (see backend log)"})
+    finally:
+        voice_lease.release()
 
 
 async def _public_longform_stream(plan, **render_kwargs):
