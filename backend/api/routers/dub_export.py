@@ -7,6 +7,7 @@ import os
 import re
 import time
 import uuid
+import weakref
 from pathlib import Path, PureWindowsPath
 from typing import Optional
 
@@ -1740,8 +1741,41 @@ async def dub_qc_pass(job_id: str, lang: str = Query(None), drift_threshold: flo
     }
 
 
-_mixed_audio_locks: dict[str, asyncio.Lock] = {}
+# Weak values: a lock lives only while a request holds or awaits it.
+_mixed_audio_locks: "weakref.WeakValueDictionary[str, asyncio.Lock]" = weakref.WeakValueDictionary()
 _LEGACY_MIX = re.compile(r"mixed_dub_[0-9A-Za-z-]+\.wav")
+# Mix paths a request has chosen but not finished serving, and superseded
+# mixes whose deletion waits for their last reader.
+_mix_readers: dict[str, int] = {}
+_mix_superseded: set[str] = set()
+
+
+def _release_mix(path: str) -> None:
+    left = _mix_readers.get(path, 0) - 1
+    if left > 0:
+        _mix_readers[path] = left
+        return
+    _mix_readers.pop(path, None)
+    if path in _mix_superseded:
+        _mix_superseded.discard(path)
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+class _LeasedMixResponse(FileResponse):
+    """Serve a leased mix and release the lease once the body is sent."""
+
+    def __init__(self, path: str, **kwargs):
+        super().__init__(path, **kwargs)
+        self._lease = path
+
+    async def __call__(self, scope, receive, send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            _release_mix(self._lease)
 
 
 async def _mixed_dub_audio(exports_dir: str, lang: str, bg_audio: str, track_path: str) -> str:
@@ -1753,6 +1787,9 @@ async def _mixed_dub_audio(exports_dir: str, lang: str, bg_audio: str, track_pat
     wrote another ~0.8 GB file until the disk filled and the preview reported
     the audio as missing (#2581). Identical inputs now reuse one file; an
     older mix of the same track and the legacy per-request files are pruned.
+
+    The returned path is leased: the caller must ``_release_mix`` it once
+    served, and pruning defers a leased mix until its last reader is done.
     """
     import hashlib
 
@@ -1768,7 +1805,10 @@ async def _mixed_dub_audio(exports_dir: str, lang: str, bg_audio: str, track_pat
     target = os.path.realpath(os.path.join(exports, f"mixed_{lang}_{key}.wav"))
     if not target.startswith(exports + os.sep):
         raise HTTPException(status_code=400, detail="Invalid export path")
-    async with _mixed_audio_locks.setdefault(target, asyncio.Lock()):
+    lock = _mixed_audio_locks.get(target)
+    if lock is None:
+        lock = _mixed_audio_locks[target] = asyncio.Lock()
+    async with lock:
         if not (os.path.isfile(target) and os.path.getsize(target) > 0):
             partial = target + ".tmp.wav"
             cmd = [
@@ -1790,17 +1830,22 @@ async def _mixed_dub_audio(exports_dir: str, lang: str, bg_audio: str, track_pat
                     except OSError:
                         pass  # best-effort temp cleanup; the next mix overwrites it
             logger.info("Dub audio mix completed")
-            # An open reader keeps its file on POSIX; Windows refuses the
-            # unlink, and the next mix of this track retries it.
+            # A mix another request has chosen is deleted by its last reader.
+            # Windows refuses to unlink a file open elsewhere; the next mix of
+            # this track retries it.
             stale = re.compile(rf"mixed_{re.escape(lang)}_[0-9a-f]{{16}}\.wav")
             for entry in os.scandir(exports):
                 if entry.path != target and entry.is_file(follow_symlinks=False) and (
                     stale.fullmatch(entry.name) or _LEGACY_MIX.fullmatch(entry.name)
                 ):
+                    if entry.path in _mix_readers:
+                        _mix_superseded.add(entry.path)
+                        continue
                     try:
                         os.remove(entry.path)
                     except OSError:
                         pass  # still open (Windows); the next mix of this track retries
+        _mix_readers[target] = _mix_readers.get(target, 0) + 1
     return target
 
 
@@ -1833,9 +1878,10 @@ async def dub_download_audio(
     os.makedirs(exports_dir, exist_ok=True)
 
     bg_audio = await _preserved_background(job, job_id, lang_label) if preserve_bg else None
+    leased = None
     if bg_audio:
         try:
-            wav_path = await _mixed_dub_audio(exports_dir, lang_label, bg_audio, wav_path)
+            wav_path = leased = await _mixed_dub_audio(exports_dir, lang_label, bg_audio, wav_path)
         except Exception as exc:
             logger.exception("Failed to mix audio")
             raise HTTPException(status_code=500, detail={"code": "dub_background_unavailable", "message": "Could not preserve background audio"}) from exc
@@ -1843,16 +1889,22 @@ async def dub_download_audio(
     base_name = os.path.splitext(job.get('filename', 'audio'))[0]
     safe_name = ''.join(c for c in base_name if c.isalnum() or c in '-_ ').strip() or 'audio'
     dl_name = f"dubbed_audio_{lang_label}_{safe_name}_{stamp}.wav"
-    save_path = _consume_native_save(save_authorization)
-    if save_path:
-        return _native_save(wav_path, save_path, dl_name, media_type="audio/wav")
-    return FileResponse(
-        wav_path, media_type="audio/wav",
-        headers={
-            "Cache-Control": "no-store",
-            "Content-Disposition": content_disposition(dl_name),
-        },
-    )
+    headers = {
+        "Cache-Control": "no-store",
+        "Content-Disposition": content_disposition(dl_name),
+    }
+    try:
+        save_path = _consume_native_save(save_authorization)
+        if save_path:
+            return _native_save(wav_path, save_path, dl_name, media_type="audio/wav")
+        if leased is None:
+            return FileResponse(wav_path, media_type="audio/wav", headers=headers)
+        response = _LeasedMixResponse(leased, media_type="audio/wav", headers=headers)
+        leased = None  # the response releases it once the body is sent
+        return response
+    finally:
+        if leased is not None:
+            _release_mix(leased)
 
 
 def _format_srt_time(seconds):
