@@ -212,6 +212,24 @@ export function isUnsupportedPlatform(platform = process.platform, arch = proces
   return platform === 'darwin' && arch === 'x64';
 }
 
+/**
+ * Why this host cannot install the local runtime, if it cannot (#2598).
+ *
+ * An x64 process on macOS is either a real Intel Mac or the Intel build
+ * running through Rosetta on Apple Silicon. Both resolve x86_64 wheels and
+ * fail, but only the second has a fix on the same machine: install the
+ * Apple Silicon build. Telling that user "this Intel Mac is unsupported"
+ * sends them to a remote backend they do not need.
+ */
+export function platformSetupIssue(
+  platform = process.platform,
+  arch = process.arch,
+  translated = app.runningUnderARM64Translation === true,
+): 'unsupported_platform' | 'wrong_architecture' | undefined {
+  if (!isUnsupportedPlatform(platform, arch)) return undefined;
+  return translated ? 'wrong_architecture' : 'unsupported_platform';
+}
+
 function usableFile(path: string): boolean {
   try {
     if (!existsSync(path)) return false;
@@ -666,9 +684,10 @@ export class BackendSupervisor extends EventEmitter<{
         if (!ready) {
           if (gen === this.generation) {
             this.runtimeInterrupted = await runtimeInstallInterrupted(project);
-            // Intel Macs can never resolve the runtime (#889): say so now,
-            // before the setup screen offers an install that must fail.
-            this.setupIssue = isUnsupportedPlatform() ? 'unsupported_platform' : undefined;
+            // Intel Macs can never resolve the runtime (#889), and the Intel
+            // build under Rosetta resolves the same wheels (#2598): say so
+            // now, before the setup screen offers an install that must fail.
+            this.setupIssue = platformSetupIssue();
             this.setStage('setup_required');
           }
           return;
@@ -851,7 +870,7 @@ export class BackendSupervisor extends EventEmitter<{
         const code = (error as NodeJS.ErrnoException)?.code;
         this.setupIssue =
           code === 'INTEL_MAC_UNSUPPORTED'
-            ? 'unsupported_platform'
+            ? (platformSetupIssue() ?? 'unsupported_platform')
             : code === 'ENOSPC'
               ? 'space'
               : ['EACCES', 'EPERM', 'EROFS'].includes(code || '')
