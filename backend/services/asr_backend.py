@@ -577,8 +577,9 @@ def load_align_model(language_code: str, device: str):
     """Lazy-load (and cache) the wav2vec2 aligner for a language.
 
     Returns ``(model, metadata)``, or ``None`` when no aligner exists for the
-    language — WhisperX bundles them for ~20 major languages only, and the
-    caller then keeps Whisper's own (looser) word timestamps."""
+    language — WhisperX bundles them for ~20 major languages only — or it
+    cannot be loaded on ``device``. The caller then keeps Whisper's own
+    (looser) word timestamps, after trying any fallback device."""
     key = (language_code, device)
     if key in _ALIGN_CACHE:
         return _ALIGN_CACHE[key]
@@ -591,9 +592,9 @@ def load_align_model(language_code: str, device: str):
         _ALIGN_CACHE[key] = (model, metadata)
     except Exception as e:  # noqa: BLE001 — missing aligner is normal, not fatal
         logger.info(
-            "no wav2vec2 aligner for language=%r (%s); "
+            "no wav2vec2 aligner for language=%r on %s (%s); "
             "falling back to Whisper's native word timestamps",
-            language_code, e,
+            language_code, device, e,
         )
         _ALIGN_CACHE[key] = None
     return _ALIGN_CACHE[key]
@@ -624,9 +625,18 @@ def forced_align(segments: list, audio, language_code: str, device: str | None =
         devices = ["cpu"]
 
     for i, dev in enumerate(devices):
+        last = i == len(devices) - 1
         align = load_align_model(language_code, dev)
         if align is None:
-            return segments  # no aligner for this language — not a device problem
+            # ``None`` means the aligner could not be loaded on THIS device: an
+            # unsupported language, but just as well an MPS load failure. Only
+            # the always-works device can tell the two apart, so a failed load
+            # on the fast device falls through to it like a failed align does
+            # (#2570). An unsupported language fails fast on every device.
+            if last:
+                return segments
+            logger.info("aligner load failed on %s — retrying on %s", dev, devices[i + 1])
+            continue
         model_a, metadata = align
         try:
             import whisperx
@@ -636,7 +646,6 @@ def forced_align(segments: list, audio, language_code: str, device: str | None =
             )
             return result.get("segments", segments)
         except Exception as e:  # noqa: BLE001
-            last = i == len(devices) - 1
             if last:
                 logger.warning(
                     "forced alignment failed on %s: %s — using native word timestamps", dev, e,

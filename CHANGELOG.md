@@ -127,6 +127,15 @@ metadata and the backend fallback mirror it.
 - Longform chapters and segments are cached per synthesis language, so changing language no longer replays the previous audio (#2524) — thanks @rudycelekli!
 - Moving app data into an existing empty folder no longer fails with an EISDIR rollback (#2521) — thanks @rudycelekli!
 - Models folders with a hash, quote or backslash in the name now survive the saved-settings round trip (#2519) — thanks @rudycelekli!
+- Japanese translations written mostly in kanji are no longer rejected as the wrong script (#2576) — thanks @rudycelekli!
+- Dub quality check compares each track with its own language text, so correct multilingual dubs are no longer flagged (#2574) — thanks @rudycelekli!
+- Dub transcripts keep speech from segments the aligner could not time instead of dropping it (#2572) — thanks @rudycelekli!
+- Word alignment retries on the CPU when its model fails to load on Apple GPU, keeping precise dub timing (#2570) — thanks @rudycelekli!
+- Concurrent MCP voice-binding edits keep each other's changes, and simultaneous first saves no longer fail (#2568) — thanks @rudycelekli!
+- Dub visual-context analysis removes its temporary frames after success, errors and cancelled requests (#2566) — thanks @rudycelekli!
+- Gallery and Voice Clone trimming no longer stay stuck decoding when a file never reports its duration (#2558) — thanks @rudycelekli!
+- Pronunciation dictionary backups keep which duplicate entry wins, and the list, test and synthesis use one order (#2552) — thanks @rudycelekli!
+- Pronunciation entries scoped by language name or 3-letter code now match the right language, and Spanish entries no longer apply to Estonian (#2542) — thanks @rudycelekli!
 - Elevated Windows app removal stops before deleting data and points to a normal PowerShell window or Settings (#2578)
 - Contributor audits inspect committed files and exclude submodules, while still stopping on failed file attribution (#2556)
 
