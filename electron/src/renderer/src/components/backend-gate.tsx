@@ -368,14 +368,14 @@ export function BackendGate({ children, repairDock }: BackendGateProps) {
                 </p>
               )}
               {unsupportedPlatform && (
-                <>
-                  <p className="max-w-sm text-sm text-muted-foreground">
-                    {t('backend.setup_unsupported_platform')}
-                  </p>
-                  <div className="w-full text-left">
-                    <RemoteBackendSettings />
-                  </div>
-                </>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  {t('backend.setup_unsupported_platform')}
+                </p>
+              )}
+              {(unsupportedPlatform || wrongArchitecture) && (
+                <div className="w-full text-left">
+                  <RemoteBackendSettings />
+                </div>
               )}
               <div className="grid w-full grid-cols-2 gap-2">
                 <label className="space-y-1 text-left text-xs text-muted-foreground">
