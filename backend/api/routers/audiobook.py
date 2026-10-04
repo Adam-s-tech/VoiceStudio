@@ -50,6 +50,7 @@ from services.longform_render import (
     build_ffmetadata,
     build_render_cmd,
     prune_cache_dir,
+    write_lf_text,
 )
 from services import longform_resume  # pure (no torch) — durable resume manifest
 
@@ -1294,11 +1295,9 @@ async def _render_longform_sse(
 
         yield _emit({"type": "assembling"})
         meta_path = os.path.join(work, "chapters.ffmeta")
-        with open(meta_path, "w", encoding="utf-8") as f:
-            f.write(build_ffmetadata(chapters_meta, global_meta=metadata))
+        write_lf_text(meta_path, build_ffmetadata(chapters_meta, global_meta=metadata))
         concat_path = os.path.join(work, "concat.txt")
-        with open(concat_path, "w", encoding="utf-8") as f:
-            f.write(build_concat_list(chapter_files))
+        write_lf_text(concat_path, build_concat_list(chapter_files))
         ext = "mp3" if (fmt or "").lower() == "mp3" else "m4b"
         out_name = f"{job_type}_{job_id}.{ext}"
         out_path = os.path.join(OUTPUTS_DIR, out_name)
