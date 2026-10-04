@@ -647,6 +647,8 @@
     "remove_cookie_file": "Cookie ファイルを削除",
     "remove_video": "ビデオを削除",
     "remove_video_confirm": "このビデオ、文字起こし、未保存の編集内容を削除しますか？元に戻せません。",
+    "remove_audio": "音声を削除",
+    "remove_audio_confirm": "この音声、文字起こし、未保存の編集を削除しますか?元に戻すことはできません。",
     "cookie_transport_error": "Cookie のエクスポートには HTTPS またはローカルのデスクトップアプリが必要です。",
     "cookie_size_error": "Cookie のエクスポートは 1 MB 以下にしてください。",
     "save": "保存",
@@ -2113,7 +2115,8 @@
     "all_size": "すべて ~{{size}} GB",
     "download_all_remaining_title": "残りの推奨モデルをすべてダウンロード",
     "reco_disk_free": "モデル用ディスクの空き容量：{{free}} GB",
-    "reco_low_disk": "全モデルのインストールには約 {{need}} GB 必要ですが、空き容量は {{free}} GB です。必要なモデルだけをインストールするか、先に空き容量を確保してください。",
+    "reco_low_disk": "全モデルのインストールには約 {{need}} GB のダウンロードと、その後の空き容量 {{headroom}} GB(合計 {{total}} GB)が必要ですが、空き容量は {{free}} GB です。必要なモデルだけをインストールするか、先に空き容量を確保してください。",
+    "pack_low_disk": "このパックには約 {{need}} GB のダウンロードと、その後の空き容量 {{headroom}} GB(合計 {{total}} GB)が必要ですが、空き容量は {{free}} GB です。先に空き容量を確保するか、モデルフォルダーをより大きなドライブに移動してください。",
     "req_tag": "要求",
     "reco_install_one": "{{label}} をインストール"
   },

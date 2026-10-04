@@ -649,6 +649,8 @@
     "remove_cookie_file": "Quitar archivo de cookies",
     "remove_video": "Quitar video",
     "remove_video_confirm": "¿Quitar este video, su transcripción y los cambios sin guardar? No se puede deshacer.",
+    "remove_audio": "Quitar audio",
+    "remove_audio_confirm": "¿Quitar este audio, su transcripción y los cambios sin guardar? No se puede deshacer.",
     "cookie_transport_error": "Las cookies exportadas requieren HTTPS o la aplicación de escritorio local.",
     "cookie_size_error": "El archivo de cookies debe tener 1 MB o menos.",
     "save": "Guardar",
@@ -2115,7 +2117,8 @@
     "all_size": "Todo ~{{size}} GB",
     "download_all_remaining_title": "Descargar todos los modelos recomendados restantes",
     "reco_disk_free": "{{free}} GB libres en el disco de modelos",
-    "reco_low_disk": "No hay espacio suficiente para el paquete completo: necesita unos {{need}} GB, pero solo hay {{free}} GB libres. Instala solo los modelos necesarios o libera espacio primero.",
+    "reco_low_disk": "No hay espacio suficiente para el paquete completo: descarga ~{{need}} GB y deja {{headroom}} GB libres después ({{total}} GB en total), pero solo hay {{free}} GB libres. Instala solo los modelos necesarios o libera espacio primero.",
+    "pack_low_disk": "No hay espacio suficiente para este paquete: descarga ~{{need}} GB y deja {{headroom}} GB libres después ({{total}} GB en total), pero solo hay {{free}} GB libres. Libera espacio o mueve la carpeta de modelos a una unidad más grande primero.",
     "req_tag": "req",
     "reco_install_one": "Instalar {{label}}"
   },

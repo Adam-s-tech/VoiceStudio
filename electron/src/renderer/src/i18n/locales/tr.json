@@ -647,6 +647,8 @@
     "remove_cookie_file": "Çerez dosyasını kaldır",
     "remove_video": "Videoyu kaldır",
     "remove_video_confirm": "Bu video, dökümü ve kaydedilmemiş düzenlemeler silinsin mi? Bu işlem geri alınamaz.",
+    "remove_audio": "Sesi kaldır",
+    "remove_audio_confirm": "Bu ses, transkripti ve kaydedilmemiş düzenlemeler kaldırılsın mı? Bu işlem geri alınamaz.",
     "cookie_transport_error": "Çerez dışa aktarımları HTTPS veya yerel masaüstü uygulamasını gerektirir.",
     "cookie_size_error": "Çerez dışa aktarımı en fazla 1 MB olmalıdır.",
     "save": "Kaydet",
@@ -2113,7 +2115,8 @@
     "all_size": "Hepsi ~{{size}} GB",
     "download_all_remaining_title": "Kalan tüm önerilen modelleri indir",
     "reco_disk_free": "Model diskinde {{free}} GB boş",
-    "reco_low_disk": "Paketin tamamı için yeterli alan yok: ~{{need}} GB gerekir ancak yalnızca {{free}} GB ücretsizdir. Yalnızca gerekli modelleri yükleyin veya önce alanı boşaltın.",
+    "reco_low_disk": "Tam paket için yeterli alan yok: ~{{need}} GB indirir ve sonrasında {{headroom}} GB boş bırakır (toplam {{total}} GB), ancak yalnızca {{free}} GB boş. Yalnızca gerekli modelleri yükleyin veya önce yer açın.",
+    "pack_low_disk": "Bu paket için yeterli alan yok: ~{{need}} GB indirir ve sonrasında {{headroom}} GB boş bırakır (toplam {{total}} GB), ancak yalnızca {{free}} GB boş. Önce yer açın veya model klasörünü daha büyük bir sürücüye taşıyın.",
     "req_tag": "talep",
     "reco_install_one": "{{label}} yükle"
   },

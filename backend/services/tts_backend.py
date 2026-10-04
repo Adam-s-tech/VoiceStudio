@@ -1219,6 +1219,27 @@ def _reuse_or_rank_passage(ref_audio: str) -> Optional[tuple[str, str]]:
     return _omnivoice_installed_passage(ref_audio)
 
 
+def omnivoice_inline_reference(ref_audio, ref_text):
+    """``(ref_audio, ref_text, owned_path)`` for a direct ``model.generate()``.
+
+    Paths that bypass the prompt cache — the sidecar request and the inline
+    retry after a failed precompute — must condition on the same installed-
+    recognizer passage as the cache. Passing the whole long clip with no
+    transcript instead reached OmniVoice's bundled Whisper and failed with
+    "needs an installed speech-to-text model" although one was installed
+    (#2579). ``owned_path`` is a temporary window the caller deletes.
+    """
+    if isinstance(ref_audio, str):
+        from omnivoice.utils.audio import CLONE_REF_TEXT_MAX_SECONDS
+
+        duration = reference_duration_s(ref_audio)
+        if duration is not None and duration > CLONE_REF_TEXT_MAX_SECONDS:
+            selected = _reuse_or_rank_passage(ref_audio)
+            if selected is not None:
+                return selected[0], selected[1], selected[0]
+    return ref_audio, omnivoice_ref_text(ref_audio, ref_text), None
+
+
 def _speech_score(text: str) -> int:
     """Spoken-character count, matching OmniVoice's window ranking."""
     return len(re.sub(r"[^\w]+", "", text or "", flags=re.UNICODE))
@@ -1420,9 +1441,15 @@ def generate_with_cached_ref(model, *, ref_audio, ref_text, **gen_kw):
                 return model.generate(voice_clone_prompt=prompt, **gen_kw)
             except Exception as e:  # noqa: BLE001 — fall back to the inline ref
                 logger.warning("voice_clone_prompt generate failed; retrying inline ref: %s", e)
-        return model.generate(
-            ref_audio=ref_audio, ref_text=omnivoice_ref_text(ref_audio, ref_text), **gen_kw
-        )
+        inline_audio, inline_text, passage = omnivoice_inline_reference(ref_audio, ref_text)
+        try:
+            return model.generate(ref_audio=inline_audio, ref_text=inline_text, **gen_kw)
+        finally:
+            if passage is not None:
+                try:
+                    os.remove(passage)
+                except OSError:
+                    logger.debug("failed to remove reference window")
 
 
 def clear_clone_prompt_cache() -> None:

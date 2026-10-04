@@ -647,6 +647,8 @@
     "remove_cookie_file": "Cookie-Datei entfernen",
     "remove_video": "Video entfernen",
     "remove_video_confirm": "Dieses Video, sein Transkript und ungespeicherte Änderungen entfernen? Das kann nicht rückgängig gemacht werden.",
+    "remove_audio": "Audio entfernen",
+    "remove_audio_confirm": "Diese Audiodatei, ihr Transkript und ungespeicherte Änderungen entfernen? Dies kann nicht rückgängig gemacht werden.",
     "cookie_transport_error": "Cookie-Exporte erfordern HTTPS oder die lokale Desktop-App.",
     "cookie_size_error": "Der Cookie-Export darf höchstens 1 MB groß sein.",
     "save": "Speichern",
@@ -2113,7 +2115,8 @@
     "all_size": "Alle ~{{size}} GB",
     "download_all_remaining_title": "Alle verbleibenden empfohlenen Modelle herunterladen",
     "reco_disk_free": "{{free}} GB frei auf dem Modelllaufwerk",
-    "reco_low_disk": "Nicht genügend Speicherplatz für das vollständige Paket: Es benötigt ~{{need}} GB, aber nur {{free}} GB ist frei. Installieren Sie nur die benötigten Modelle oder machen Sie zuerst Speicherplatz frei.",
+    "reco_low_disk": "Nicht genügend Speicherplatz für das vollständige Paket: Es lädt ~{{need}} GB herunter und lässt danach {{headroom}} GB frei (insgesamt {{total}} GB), aber nur {{free}} GB sind frei. Installieren Sie nur die benötigten Modelle oder machen Sie zuerst Speicherplatz frei.",
+    "pack_low_disk": "Nicht genügend Speicherplatz für dieses Paket: Es lädt ~{{need}} GB herunter und lässt danach {{headroom}} GB frei (insgesamt {{total}} GB), aber nur {{free}} GB sind frei. Machen Sie zuerst Speicherplatz frei oder verschieben Sie den Modellordner auf ein größeres Laufwerk.",
     "req_tag": "erf",
     "reco_install_one": "{{label}} installieren"
   },

@@ -102,6 +102,11 @@ metadata and the backend fallback mirror it.
 
 ### Fixed
 - Saving a voice design skips cold engine loading and downloads, including when a warm engine unloads during the save (#2583) — thanks @simoncheese!
+- Dubbing keeps Remove video available after an interrupted or failed run, so a YouTube link can replace the source, and labels it Remove audio for audio files (#2584) — thanks @harrsoft-dev!
+- Audio-only dub previews reuse one background mix instead of writing a new full-length WAV on every seek, which filled the disk on long dubs (#2581) — thanks @PsychoRhythmist!
+- References longer than 20 s keep using the installed speech-to-text model when OmniVoice retries generation without its cached voice prompt (#2579) — thanks @mahdinazmi!
+- Model Catalogue disk warnings name the 10 GB kept free after each download and use the same rule as the installer (#2597) — thanks @HuntingSuccubus!
+- Saving a cloned voice works offline: installed speech-to-text models load from disk and save-time transcription is time-limited (#2583) — thanks @simoncheese!
 - Elevated Windows app removal stops before deleting data and points to a normal PowerShell window or Settings (#2578)
 - Contributor audits inspect committed files and exclude submodules, while still stopping on failed file attribution (#2556)
 

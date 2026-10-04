@@ -23,6 +23,7 @@ import {
   dubCancelling,
   redoDubEdit,
   resetDubSession,
+  dubSourceRemovable,
   translateDub,
   translateDubBatchWithAgent,
   translateDubWithAgent,
@@ -44,17 +45,23 @@ it('translates the current dubbing segments with an installed local CLI agent', 
     logListener?.({ requestId: 'another-request', text: 'must not appear' });
     logListener?.({ requestId: request.requestId, text: 'Translating two segments' });
     return {
-    agent: 'codex',
-    translations: [
-      { id: 'a', text: 'Hola' },
-      { id: 'b', text: 'Adiós' },
-    ],
-  }; });
+      agent: 'codex',
+      translations: [
+        { id: 'a', text: 'Hola' },
+        { id: 'b', text: 'Adiós' },
+      ],
+    };
+  });
   Object.defineProperty(window, 'voicestudio', {
     configurable: true,
     value: {
-      repair: { translate, stopTranslation: vi.fn().mockResolvedValue(undefined),
-        onTranslationEvent: (callback: typeof logListener) => { logListener = callback; return unsubscribe; },
+      repair: {
+        translate,
+        stopTranslation: vi.fn().mockResolvedValue(undefined),
+        onTranslationEvent: (callback: typeof logListener) => {
+          logListener = callback;
+          return unsubscribe;
+        },
       },
     } as unknown as Window['voicestudio'],
   });
@@ -79,7 +86,8 @@ it('translates the current dubbing segments with an installed local CLI agent', 
   await expect(translateDubWithAgent('es', 'codex')).resolves.toBe(true);
   expect(unsubscribe).toHaveBeenCalledOnce();
   expect(translationActivity.state.runs.at(-1)).toMatchObject({
-    status: 'complete', logs: 'Translating two segments',
+    status: 'complete',
+    logs: 'Translating two segments',
   });
 
   expect(translate).toHaveBeenCalledWith(
@@ -736,7 +744,10 @@ it('cancelDub exposes cancel-in-flight state so removal stays disabled', async (
   let resolveAbort!: (value: unknown) => void;
   vi.mocked(apiJson).mockReset();
   vi.mocked(apiJson).mockImplementationOnce(
-    () => new Promise((resolve) => { resolveAbort = resolve; }),
+    () =>
+      new Promise((resolve) => {
+        resolveAbort = resolve;
+      }),
   );
   const pending = cancelDub();
   expect(dubCancelling.state).toBe(true);
@@ -751,42 +762,85 @@ it('cancelDub exposes cancel-in-flight state so removal stays disabled', async (
   }));
 });
 
-
 it.each([
   { regenOnly: ['english'], allowed: true },
   { regenOnly: ['japanese'], allowed: false },
   { regenOnly: undefined, allowed: false },
   { regenOnly: ['japanese'], allowed: true, silent: true },
-])('validates only requested dub regeneration languages: $regenOnly', async ({ regenOnly, allowed, silent }) => {
-  const { queryClient } = await import('@/lib/query');
-  queryClient.setQueryData(['workers', 'target', 'dub'], { active: { remote: false } });
-  queryClient.setQueryData(['engines'], {
-    tts: { active: 'test', backends: [{ id: 'test', supported_language_names: ['English'] }] },
-  });
-  vi.mocked(apiJson).mockReset().mockResolvedValue({ task_id: 'regenerate' });
-  vi.mocked(consumeTaskStream).mockReset().mockImplementation(async (_path, emit) => {
-    emit({ type: 'done' });
-  });
-  dubSession.setState((current) => ({
-    ...current, jobId: 'language-regen', phase: 'editing', recovery: null, quality: 'fast',
-    segments: [
-      { id: 'english', start: 0, end: 1, text: 'Hello', text_original: 'Hello', target_lang: 'English' },
-      { id: 'japanese', start: 1, end: silent ? 1.01 : 2, text: 'Untouched cached speech', text_original: 'Untouched cached speech', target_lang: 'Japanese' },
-    ],
-  }));
-  try {
-    // The default target is irrelevant when each rendered segment overrides it.
-    await expect(generateDub('Japanese', 'ja', { regenOnly })).resolves.toBe(allowed);
-    if (allowed) {
-      const request = JSON.parse(vi.mocked(apiJson).mock.calls[0][1]!.body as string);
-      expect(request.regen_only).toEqual(regenOnly);
-      expect(request.segments).toHaveLength(2);
-    } else {
-      expect(apiJson).not.toHaveBeenCalled();
+])(
+  'validates only requested dub regeneration languages: $regenOnly',
+  async ({ regenOnly, allowed, silent }) => {
+    const { queryClient } = await import('@/lib/query');
+    queryClient.setQueryData(['workers', 'target', 'dub'], { active: { remote: false } });
+    queryClient.setQueryData(['engines'], {
+      tts: { active: 'test', backends: [{ id: 'test', supported_language_names: ['English'] }] },
+    });
+    vi.mocked(apiJson).mockReset().mockResolvedValue({ task_id: 'regenerate' });
+    vi.mocked(consumeTaskStream)
+      .mockReset()
+      .mockImplementation(async (_path, emit) => {
+        emit({ type: 'done' });
+      });
+    dubSession.setState((current) => ({
+      ...current,
+      jobId: 'language-regen',
+      phase: 'editing',
+      recovery: null,
+      quality: 'fast',
+      segments: [
+        {
+          id: 'english',
+          start: 0,
+          end: 1,
+          text: 'Hello',
+          text_original: 'Hello',
+          target_lang: 'English',
+        },
+        {
+          id: 'japanese',
+          start: 1,
+          end: silent ? 1.01 : 2,
+          text: 'Untouched cached speech',
+          text_original: 'Untouched cached speech',
+          target_lang: 'Japanese',
+        },
+      ],
+    }));
+    try {
+      // The default target is irrelevant when each rendered segment overrides it.
+      await expect(generateDub('Japanese', 'ja', { regenOnly })).resolves.toBe(allowed);
+      if (allowed) {
+        const request = JSON.parse(vi.mocked(apiJson).mock.calls[0][1]!.body as string);
+        expect(request.regen_only).toEqual(regenOnly);
+        expect(request.segments).toHaveLength(2);
+      } else {
+        expect(apiJson).not.toHaveBeenCalled();
+      }
+    } finally {
+      queryClient.removeQueries({ queryKey: ['workers', 'target', 'dub'], exact: true });
+      queryClient.removeQueries({ queryKey: ['engines'], exact: true });
+      resetDubSession();
     }
-  } finally {
-    queryClient.removeQueries({ queryKey: ['workers', 'target', 'dub'], exact: true });
-    queryClient.removeQueries({ queryKey: ['engines'], exact: true });
-    resetDubSession();
-  }
+  },
+);
+
+it('lets an interrupted job drop its source so a link can be imported (#2584)', () => {
+  // A failed or interrupted transcription leaves `recovery` set; the only
+  // other exit was a file picker, so the link field could not come back.
+  expect(dubSourceRemovable({ phase: 'idle' }, false)).toBe(true);
+  expect(dubSourceRemovable({ phase: 'editing' }, false)).toBe(true);
+  expect(dubSourceRemovable({ phase: 'transcribing' }, false)).toBe(false);
+  expect(dubSourceRemovable({ phase: 'done' }, true)).toBe(false);
+
+  dubSession.setState((current) => ({
+    ...current,
+    jobId: 'interrupted',
+    filename: 'talk.wav',
+    phase: 'idle',
+    recovery: 'transcribing',
+  }));
+  expect(dubSourceRemovable(dubSession.state, false)).toBe(true);
+  expect(resetDubSession()).toBe(true);
+  expect(dubSession.state.jobId).toBeNull();
+  expect(dubSession.state.recovery).toBeNull();
 });

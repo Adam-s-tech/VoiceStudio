@@ -812,7 +812,7 @@ class WhisperXBackend(ASRBackend):
         self._allow_vad_pickle_globals()
         try:
             self._asr = whisperx.load_model(
-                self._model_name,
+                _local_model_source(self._model_name),
                 device=self._device,
                 compute_type=self._compute_type,
                 # vad_method="silero" is the default; keep it so short gaps
@@ -840,7 +840,7 @@ class WhisperXBackend(ASRBackend):
                     self._compute_type = ct
                     try:
                         self._asr = whisperx.load_model(
-                            self._model_name,
+                            _local_model_source(self._model_name),
                             device=self._device,
                             compute_type=self._compute_type,
                         )
@@ -871,7 +871,7 @@ class WhisperXBackend(ASRBackend):
                     pass
                 self._device, self._compute_type = "cpu", "int8"
                 self._asr = whisperx.load_model(
-                    self._model_name,
+                    _local_model_source(self._model_name),
                     device=self._device,
                     compute_type=self._compute_type,
                 )
@@ -1173,7 +1173,7 @@ class FasterWhisperBackend(ASRBackend):
             for ct in candidates:
                 try:
                     self._model = WhisperModel(
-                        self._model_name, device=device, compute_type=ct
+                        _local_model_source(self._model_name), device=device, compute_type=ct
                     )
                     self._device, self._compute_type = device, ct
                     return
@@ -1356,7 +1356,7 @@ class MLXWhisperBackend(ASRBackend):
         audio = _decode_audio_16k_mono(audio_path)
         result = mlx_whisper.transcribe(
             audio,
-            path_or_hf_repo=self._model_name,
+            path_or_hf_repo=_local_model_source(self._model_name),
             word_timestamps=word_timestamps,
             **whisper_request_options(language, initial_prompt, temperature, task),
         )
@@ -1553,7 +1553,7 @@ class PyTorchWhisperBackend(ASRBackend):
         try:
             self._pipe = hf_pipeline(
                 "automatic-speech-recognition",
-                model=model_name,
+                model=_local_model_source(model_name),
                 dtype=asr_dtype,
                 # `device_map="cpu"` only controls weight placement; the
                 # pipeline can still choose CUDA as its execution device.
@@ -1856,7 +1856,7 @@ class ParakeetMLXBackend(ASRBackend):
             return
         import parakeet_mlx
         logger.info("parakeet-mlx loading %s", self._model_name)
-        self._model = parakeet_mlx.from_pretrained(self._model_name)
+        self._model = parakeet_mlx.from_pretrained(_local_model_source(self._model_name))
 
     def ensure_loaded(self) -> None:
         self._ensure_model()
@@ -3791,6 +3791,29 @@ def _fw_repo(name: str) -> str | None:
     """HF repo for a faster-whisper/WhisperX model name (alias or repo id)."""
     name = (name or "").strip()
     return name if "/" in name else _FW_ALIAS_REPOS.get(name.lower())
+
+
+def _local_model_source(name: str) -> str:
+    """What an ASR backend should hand its loader: the installed snapshot
+    directory when ``name`` (repo id or faster-whisper alias) is installed,
+    otherwise ``name`` unchanged.
+
+    Loading by repo id asks the Hub for ``main`` first — an untimed request
+    that stalls on a packet-dropping network and cannot resolve a pinned
+    install offline — so profile saves and every other transcription hung or
+    failed without internet even though the weights were on disk (#2583).
+    A not-installed or custom name keeps its previous by-name behaviour.
+    """
+    if not name or os.path.isdir(name):
+        return name
+    repo = _fw_repo(name)
+    if repo is None:
+        return name
+    try:
+        from api.routers.setup.models import installed_snapshot_path
+        return installed_snapshot_path(repo) or name
+    except Exception:  # noqa: BLE001 — never block a load on the lookup
+        return name
 
 
 def _offline_asr_repo(backend_id: str | None = None) -> str | None:

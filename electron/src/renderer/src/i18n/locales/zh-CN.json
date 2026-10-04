@@ -660,6 +660,8 @@
     "remove_cookie_file": "移除 Cookie 文件",
     "remove_video": "移除视频",
     "remove_video_confirm": "要移除此视频、转录文本和未保存的编辑吗？此操作无法撤销。",
+    "remove_audio": "移除音频",
+    "remove_audio_confirm": "要移除此音频、其转录文本和未保存的编辑吗?此操作无法撤销。",
     "cookie_transport_error": "Cookie 导出文件只能通过 HTTPS 或本地桌面应用发送。",
     "cookie_size_error": "Cookie 导出文件必须小于或等于 1 MB。",
     "save": "保存",
@@ -2113,7 +2115,8 @@
     "all_size": "全部 ~{{size}} GB",
     "download_all_remaining_title": "下载所有剩余推荐模型",
     "reco_disk_free": "模型磁盘剩余 {{free}} GB",
-    "reco_low_disk": "空间不足以安装完整组合：约需 {{need}} GB，但只剩 {{free}} GB。请只安装必需模型，或先腾出空间。",
+    "reco_low_disk": "空间不足,无法安装完整套件:需要下载约 {{need}} GB,并在安装后保留 {{headroom}} GB 可用空间(共 {{total}} GB),但当前仅有 {{free}} GB 可用。请只安装必需的模型,或先释放空间。",
+    "pack_low_disk": "空间不足,无法安装此模型包:需要下载约 {{need}} GB,并在安装后保留 {{headroom}} GB 可用空间(共 {{total}} GB),但当前仅有 {{free}} GB 可用。请先释放空间,或将模型文件夹移到更大的磁盘。",
     "req_tag": "必需",
     "reco_install_one": "安装 {{label}}"
   },
