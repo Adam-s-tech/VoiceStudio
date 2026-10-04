@@ -311,6 +311,44 @@ def test_import_export_roundtrip(client):
     assert client.get("/pronunciation/export").json()["entries"] == []
 
 
+def test_duplicate_precedence_survives_backup_restore(client, monkeypatch):
+    """#2552: one import stamps every row with the same created_at, so the
+    random id must not decide which duplicate wins. Ids are forced to sort in
+    reverse of insertion, which is one ordering a random draw can produce."""
+    import itertools
+    import types
+
+    import api.routers.pronunciation as router
+
+    countdown = itertools.count(999_999, -1)
+    monkeypatch.setattr(router, "uuid", types.SimpleNamespace(
+        uuid4=lambda: f"{next(countdown):012d}"))
+    entries = [
+        {"term": "GIF", "replacement": "first"},
+        {"term": "gif", "replacement": "last"},
+        {"term": "SQL", "replacement": "sequel", "language": "en"},
+        {"term": "SQL", "replacement": "ess-cue-ell", "language": "en"},
+    ]
+    client.post("/pronunciation/import", json={"entries": entries, "replace": True})
+
+    def spoken():
+        return client.post(
+            "/pronunciation/test", json={"text": "GIF SQL", "language": "en"}
+        ).json()["substituted"]
+
+    assert spoken() == "last ess-cue-ell"
+    listed = [e["replacement"] for e in client.get("/pronunciation").json()]
+    assert listed == ["first", "last", "sequel", "ess-cue-ell"]
+    from services.pronunciation import apply_pronunciation, load_entries_from_db
+    assert apply_pronunciation("GIF SQL", load_entries_from_db(), "en") == spoken()
+
+    for _ in range(2):
+        backup = client.get("/pronunciation/export").json()["entries"]
+        assert [e["replacement"] for e in backup] == listed
+        client.post("/pronunciation/import", json={"entries": backup, "replace": True})
+        assert spoken() == "last ess-cue-ell"
+
+
 def test_saved_entry_transforms_generate_text(client):
     """The load-bearing assertion: a saved dictionary entry changes the exact
     text the generate path feeds the model. We call the same transform the route

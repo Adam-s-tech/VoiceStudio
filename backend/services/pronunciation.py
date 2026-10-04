@@ -415,8 +415,16 @@ def apply_pronunciation(
 
 # ── DB load/save ──────────────────────────────────────────────────────────────
 
+# The one entry order every reader shares: later entries win a duplicate or
+# equal-length case-variant term, so the list, dry run, synthesis and backup must
+# agree on it. A bulk import stamps every row with one ``created_at`` and a
+# random ``id``, so ``id`` is no tiebreaker; ``rowid`` grows with each insert
+# and keeps the order entries were added (#2552).
+ENTRY_ORDER_SQL = "ORDER BY created_at ASC, rowid ASC"
+
+
 def load_entries_from_db() -> list[dict]:
-    """Return every pronunciation_entries row as a list of plain dicts.
+    """Return every pronunciation_entries row as plain dicts, in entry order.
 
     Import-light: the DB module is imported lazily so the pure-parser path (and
     the audiobook JSON path) never pull in sqlite/config.
@@ -426,7 +434,7 @@ def load_entries_from_db() -> list[dict]:
     with db_conn() as conn:
         rows = conn.execute(
             "SELECT id, term, replacement, type, language, enabled, created_at "
-            "FROM pronunciation_entries ORDER BY created_at ASC, id ASC"
+            f"FROM pronunciation_entries {ENTRY_ORDER_SQL}"  # nosec B608 - constant
         ).fetchall()
     return [dict(r) for r in rows]
 

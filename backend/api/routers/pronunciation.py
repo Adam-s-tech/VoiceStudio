@@ -38,6 +38,7 @@ from services.pronunciation import (
     entries_for_language,
     inert_entries_for_language,
     language_scope_key,
+    load_entries_from_db,
 )
 
 logger = logging.getLogger("omnivoice.pronunciation")
@@ -137,12 +138,7 @@ class PronImportRequest(BaseModel):
 
 @router.get("/pronunciation")
 def list_entries():
-    with db_conn() as conn:
-        rows = conn.execute(
-            "SELECT id, term, replacement, type, language, enabled, created_at "
-            "FROM pronunciation_entries ORDER BY created_at ASC, id ASC"
-        ).fetchall()
-    return [_row_to_dict(r) for r in rows]
+    return [_row_to_dict(r) for r in load_entries_from_db()]
 
 
 @router.post("/pronunciation")
@@ -245,11 +241,8 @@ def test_substitution(req: PronTestRequest):
     Applies the same dictionary + inline ``[[…]]`` resolution the synth path
     runs, so the user sees exactly what the engine will be handed.
     """
-    with db_conn() as conn:
-        rows = conn.execute(
-            "SELECT id, term, replacement, type, language, enabled, created_at "
-            "FROM pronunciation_entries"
-        ).fetchall()
+    # Same rows in the same order as synthesis, so duplicate terms resolve alike.
+    rows = load_entries_from_db()
     substituted = apply_pronunciation(req.text, rows, req.language)
     applied = entries_for_language(rows, req.language)
     # IPA/CMU rows are validated and stored but not applied yet, so a term that
@@ -270,11 +263,9 @@ def test_substitution(req: PronTestRequest):
 @router.get("/pronunciation/export")
 def export_entries():
     """Every entry as a JSON-serializable list (round-trips ``/import``)."""
-    with db_conn() as conn:
-        rows = conn.execute(
-            "SELECT term, replacement, type, language, enabled "
-            "FROM pronunciation_entries ORDER BY created_at ASC, id ASC"
-        ).fetchall()
+    # Entry order is precedence order; importing rows back in this order
+    # reproduces it.
+    rows = load_entries_from_db()
     return {"entries": [
         {"term": r["term"], "replacement": r["replacement"], "type": r["type"],
          "language": r["language"], "enabled": bool(r["enabled"])}
