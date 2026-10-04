@@ -2113,7 +2113,8 @@
     "all_size": "Tất cả ~{{size}} GB",
     "download_all_remaining_title": "Tải xuống tất cả mô hình đề xuất còn lại",
     "reco_disk_free": "{{free}} GB trống trên ổ đĩa mô hình",
-    "reco_low_disk": "Không đủ dung lượng cho gói đầy đủ: nó cần ~{{need}} GB nhưng chỉ {{free}} GB là miễn phí. Chỉ cài đặt các mô hình cần thiết hoặc giải phóng dung lượng trước.",
+    "reco_low_disk": "Không đủ dung lượng cho toàn bộ gói: gói tải xuống ~{{need}} GB và giữ trống {{headroom}} GB sau đó (tổng cộng {{total}} GB), nhưng chỉ còn trống {{free}} GB. Chỉ cài các mô hình bắt buộc hoặc giải phóng dung lượng trước.",
+    "pack_low_disk": "Không đủ dung lượng cho gói này: gói tải xuống ~{{need}} GB và giữ trống {{headroom}} GB sau đó (tổng cộng {{total}} GB), nhưng chỉ còn trống {{free}} GB. Hãy giải phóng dung lượng hoặc chuyển thư mục mô hình sang ổ lớn hơn trước.",
     "req_tag": "yêu cầu",
     "reco_install_one": "Cài đặt {{label}}"
   },

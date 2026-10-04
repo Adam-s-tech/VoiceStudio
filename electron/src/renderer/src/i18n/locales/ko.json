@@ -2113,7 +2113,8 @@
     "all_size": "전체 ~{{size}}GB",
     "download_all_remaining_title": "남은 추천 모델 모두 다운로드",
     "reco_disk_free": "모델 디스크에 {{free}}GB 여유 공간",
-    "reco_low_disk": "전체 번들을 설치할 공간이 부족합니다: 약 {{need}}GB가 필요하지만 {{free}}GB만 남아 있습니다. 필요한 모델만 설치하거나, 먼저 공간을 확보하세요.",
+    "reco_low_disk": "전체 번들을 설치할 공간이 부족합니다: 약 {{need}} GB를 다운로드하고 이후 {{headroom}} GB를 비워 두어야 하지만(총 {{total}} GB), 여유 공간은 {{free}} GB뿐입니다. 필수 모델만 설치하거나 먼저 공간을 확보하세요.",
+    "pack_low_disk": "이 팩을 설치할 공간이 부족합니다: 약 {{need}} GB를 다운로드하고 이후 {{headroom}} GB를 비워 두어야 하지만(총 {{total}} GB), 여유 공간은 {{free}} GB뿐입니다. 먼저 공간을 확보하거나 모델 폴더를 더 큰 드라이브로 옮기세요.",
     "req_tag": "필수",
     "reco_install_one": "{{label}} 설치"
   },

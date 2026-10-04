@@ -2113,7 +2113,8 @@
     "all_size": "Semua ~{{size}} GB",
     "download_all_remaining_title": "Unduh semua model rekomendasi yang tersisa",
     "reco_disk_free": "{{free}} GB kosong di disk model",
-    "reco_low_disk": "Ruang tidak cukup untuk bundel lengkap: diperlukan sekitar {{need}} GB, tetapi hanya {{free}} GB yang tersedia. Instal model wajib saja atau kosongkan ruang terlebih dahulu.",
+    "reco_low_disk": "Ruang tidak cukup untuk paket lengkap: paket ini mengunduh ~{{need}} GB dan menyisakan {{headroom}} GB kosong setelahnya (total {{total}} GB), tetapi hanya {{free}} GB yang kosong. Instal model yang diperlukan saja, atau kosongkan ruang terlebih dahulu.",
+    "pack_low_disk": "Ruang tidak cukup untuk paket ini: paket ini mengunduh ~{{need}} GB dan menyisakan {{headroom}} GB kosong setelahnya (total {{total}} GB), tetapi hanya {{free}} GB yang kosong. Kosongkan ruang atau pindahkan folder model ke drive yang lebih besar terlebih dahulu.",
     "req_tag": "permintaan",
     "reco_install_one": "Instal {{label}}"
   },

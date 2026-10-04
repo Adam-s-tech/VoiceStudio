@@ -2115,7 +2115,8 @@
     "all_size": "Todos ~{{size}} GB",
     "download_all_remaining_title": "Baixar todos os modelos recomendados restantes",
     "reco_disk_free": "{{free}} GB livres no disco de modelos",
-    "reco_low_disk": "Não há espaço suficiente para o pacote completo: ele precisa de ~{{need}} GB, mas apenas {{free}} GB é gratuito. Instale apenas os modelos necessários ou libere espaço primeiro.",
+    "reco_low_disk": "Espaço insuficiente para o pacote completo: ele baixa ~{{need}} GB e mantém {{headroom}} GB livres depois ({{total}} GB no total), mas só há {{free}} GB livres. Instale apenas os modelos necessários ou libere espaço primeiro.",
+    "pack_low_disk": "Espaço insuficiente para este pacote: ele baixa ~{{need}} GB e mantém {{headroom}} GB livres depois ({{total}} GB no total), mas só há {{free}} GB livres. Libere espaço ou mova a pasta de modelos para uma unidade maior primeiro.",
     "req_tag": "solicitação",
     "reco_install_one": "Instalar {{label}}"
   },

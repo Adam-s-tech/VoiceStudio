@@ -2113,7 +2113,8 @@
     "all_size": "Alla ~{{size}} GB",
     "download_all_remaining_title": "Ladda ner alla återstående rekommenderade modeller",
     "reco_disk_free": "{{free}} GB ledigt på modelldisken",
-    "reco_low_disk": "Inte tillräckligt med utrymme för hela paketet: det behöver ~{{need}} GB men endast {{free}} GB är gratis. Installera bara de modeller som krävs, eller frigör utrymme först.",
+    "reco_low_disk": "Inte tillräckligt med utrymme för hela paketet: det laddar ner ~{{need}} GB och lämnar {{headroom}} GB ledigt efteråt ({{total}} GB totalt), men bara {{free}} GB är ledigt. Installera bara de nödvändiga modellerna eller frigör utrymme först.",
+    "pack_low_disk": "Inte tillräckligt med utrymme för det här paketet: det laddar ner ~{{need}} GB och lämnar {{headroom}} GB ledigt efteråt ({{total}} GB totalt), men bara {{free}} GB är ledigt. Frigör utrymme eller flytta modellmappen till en större enhet först.",
     "req_tag": "req",
     "reco_install_one": "Installera {{label}}"
   },

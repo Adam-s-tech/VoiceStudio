@@ -2216,7 +2216,8 @@
     "all_size": "All ~{{size}} GB",
     "download_all_remaining_title": "Download all remaining recommended models",
     "reco_disk_free": "{{free}} GB free on the model disk",
-    "reco_low_disk": "Not enough space for the full bundle: it needs ~{{need}} GB but only {{free}} GB is free. Install just the required models, or free up space first.",
+    "reco_low_disk": "Not enough space for the full bundle: it downloads ~{{need}} GB and keeps {{headroom}} GB free afterwards ({{total}} GB in total), but only {{free}} GB is free. Install just the required models, or free up space first.",
+    "pack_low_disk": "Not enough space for this pack: it downloads ~{{need}} GB and keeps {{headroom}} GB free afterwards ({{total}} GB in total), but only {{free}} GB is free. Free up space or move the models folder to a larger drive first.",
     "req_tag": "req",
     "reco_install_one": "Install {{label}}"
   },

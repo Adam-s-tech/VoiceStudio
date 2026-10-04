@@ -2113,7 +2113,8 @@
     "all_size": "全部 ~{{size}} GB",
     "download_all_remaining_title": "下載所有剩餘推薦模型",
     "reco_disk_free": "模型磁碟可用空間：{{free}} GB",
-    "reco_low_disk": "完整套件需要約 {{need}} GB，但目前僅剩 {{free}} GB。請只安裝必要的模型，或先釋放磁碟空間。",
+    "reco_low_disk": "空間不足,無法安裝完整套件:需要下載約 {{need}} GB,並在安裝後保留 {{headroom}} GB 可用空間(共 {{total}} GB),但目前僅有 {{free}} GB 可用。請只安裝必要的模型,或先釋放空間。",
+    "pack_low_disk": "空間不足,無法安裝此模型包:需要下載約 {{need}} GB,並在安裝後保留 {{headroom}} GB 可用空間(共 {{total}} GB),但目前僅有 {{free}} GB 可用。請先釋放空間,或將模型資料夾移到更大的磁碟。",
     "req_tag": "要求",
     "reco_install_one": "安裝 {{label}}"
   },

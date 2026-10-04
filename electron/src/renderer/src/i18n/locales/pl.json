@@ -2117,7 +2117,8 @@
     "all_size": "Wszystko ~{{size}} GB",
     "download_all_remaining_title": "Pobierz wszystkie pozostałe zalecane modele",
     "reco_disk_free": "{{free}} GB wolnego miejsca na dysku modeli",
-    "reco_low_disk": "Za mało miejsca na cały pakiet: potrzebuje ~{{need}} GB, ale tylko {{free}} GB jest wolny. Zainstaluj tylko wymagane modele lub najpierw zwolnij miejsce.",
+    "reco_low_disk": "Za mało miejsca na pełny pakiet: pobiera ~{{need}} GB i zostawia potem {{headroom}} GB wolnego miejsca (łącznie {{total}} GB), a wolne jest tylko {{free}} GB. Zainstaluj tylko wymagane modele lub najpierw zwolnij miejsce.",
+    "pack_low_disk": "Za mało miejsca na ten pakiet: pobiera ~{{need}} GB i zostawia potem {{headroom}} GB wolnego miejsca (łącznie {{total}} GB), a wolne jest tylko {{free}} GB. Najpierw zwolnij miejsce lub przenieś folder modeli na większy dysk.",
     "req_tag": "wymaganie",
     "reco_install_one": "Zainstaluj {{label}}"
   },

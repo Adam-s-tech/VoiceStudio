@@ -2113,7 +2113,8 @@
     "all_size": "Alles ~{{size}} GB",
     "download_all_remaining_title": "Alle resterende aanbevolen modellen downloaden",
     "reco_disk_free": "{{free}} GB vrij op de modelschijf",
-    "reco_low_disk": "Niet genoeg ruimte voor de volledige bundel: er is ongeveer {{need}} GB nodig, maar slechts {{free}} GB is vrij. Installeer alleen de vereiste modellen of maak eerst ruimte vrij.",
+    "reco_low_disk": "Niet genoeg ruimte voor de volledige bundel: deze downloadt ~{{need}} GB en houdt daarna {{headroom}} GB vrij ({{total}} GB in totaal), maar er is maar {{free}} GB vrij. Installeer alleen de vereiste modellen of maak eerst ruimte vrij.",
+    "pack_low_disk": "Niet genoeg ruimte voor dit pakket: het downloadt ~{{need}} GB en houdt daarna {{headroom}} GB vrij ({{total}} GB in totaal), maar er is maar {{free}} GB vrij. Maak eerst ruimte vrij of verplaats de modellenmap naar een grotere schijf.",
     "req_tag": "aanvr",
     "reco_install_one": "{{label}} installeren"
   },

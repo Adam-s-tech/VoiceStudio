@@ -2115,7 +2115,8 @@
     "all_size": "Tous ~{{size}} Go",
     "download_all_remaining_title": "Télécharger tous les modèles recommandés restants",
     "reco_disk_free": "{{free}} Go libres sur le disque modèle",
-    "reco_low_disk": "Pas assez d'espace pour le bundle complet : il nécessite ~{{need}} Go mais seul {{free}} Go est gratuit. Installez uniquement les modèles requis ou libérez d'abord de l'espace.",
+    "reco_low_disk": "Espace insuffisant pour le pack complet : il télécharge ~{{need}} Go et laisse ensuite {{headroom}} Go libres ({{total}} Go au total), mais seulement {{free}} Go sont libres. Installez uniquement les modèles requis ou libérez d'abord de l'espace.",
+    "pack_low_disk": "Espace insuffisant pour ce pack : il télécharge ~{{need}} Go et laisse ensuite {{headroom}} Go libres ({{total}} Go au total), mais seulement {{free}} Go sont libres. Libérez de l'espace ou déplacez d'abord le dossier des modèles vers un disque plus grand.",
     "req_tag": "demande",
     "reco_install_one": "Installer {{label}}"
   },

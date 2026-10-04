@@ -707,6 +707,10 @@ def list_models():
         # BEFORE an "Install all" overruns the disk (pairs with the per-install
         # disk_space_error guard in setup/download.py).
         "disk_free_gb": None if remote_inventory is not None else round(disk_free_bytes() / _GIB, 1),
+        # The headroom disk_space_error keeps free on top of every download, so
+        # the UI warns with the same rule (and names it) instead of a raw
+        # "needs 4.8 GB, 10.2 GB free" that contradicts its own refusal (#2597).
+        "disk_headroom_gb": MIN_FREE_GB,
         "platform_tags": platform_tags,
     }
     _set_cache(cache_key, response)
