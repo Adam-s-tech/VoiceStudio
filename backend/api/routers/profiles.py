@@ -458,16 +458,78 @@ async def _is_decodable_audio(path: str) -> bool:
     return _sndfile_decodes(path) or await _ffmpeg_decodes(path)
 
 
+def _voice_file_referenced(conn, filename: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM voice_profiles WHERE ref_audio_path=? OR locked_audio_path=? "
+        "OR consent_audio_path=? LIMIT 1",
+        (filename, filename, filename),
+    ).fetchone() is not None
+
+
+# A superseded reference/locked take is not deleted when the profile moves off
+# it: a render already running (audiobook, Stories, dub, batch) resolved the
+# voice's path once and re-reads that file for every segment. The file is
+# marked under voices/.retired/ instead and swept once the marker is older
+# than the grace period and no profile references it again.
+_RETIRED_DIRNAME = ".retired"
+_RETIRED_GRACE_S = 24 * 3600
+
+
+def _retire_voice_file(filename: Optional[str], *, keep: Optional[str] = None) -> None:
+    """Schedule a superseded voices/ file for a later sweep instead of deleting it."""
+    if not filename or filename == keep:
+        return
+    path = _voices_path(filename)
+    if not path or not os.path.isfile(path):
+        return
+    marker = os.path.join(VOICES_DIR, _RETIRED_DIRNAME, filename)
+    try:
+        os.makedirs(os.path.dirname(marker), exist_ok=True)
+        with open(marker, "a"):
+            pass
+        os.utime(marker, None)  # the grace period counts from this retirement
+    except OSError as exc:
+        logger.warning("could not mark superseded voice file for cleanup: %s", exc)
+
+
+def sweep_retired_voice_files(grace_s: float = _RETIRED_GRACE_S) -> int:
+    """Delete retired voices/ files whose grace period passed and that no
+    profile references any more. Returns how many files were removed."""
+    marker_dir = os.path.join(VOICES_DIR, _RETIRED_DIRNAME)
+    try:
+        markers = [e for e in os.scandir(marker_dir) if e.is_file()]
+    except OSError:
+        return 0
+    cutoff = time.time() - grace_s
+    removed = 0
+    with db_conn() as conn:
+        for marker in markers:
+            try:
+                if marker.stat().st_mtime > cutoff:
+                    continue
+            except OSError:
+                continue
+            path = None if _voice_file_referenced(conn, marker.name) else _voices_path(marker.name)
+            if path:
+                try:
+                    os.remove(path)
+                    removed += 1
+                except FileNotFoundError:
+                    pass
+                except OSError as exc:  # e.g. still open on Windows: retry next sweep
+                    logger.warning("could not remove retired voice file: %s", exc)
+                    continue
+            with contextlib.suppress(OSError):
+                os.remove(marker.path)
+    return removed
+
+
 def _remove_voice_file(filename: Optional[str], *, keep: str) -> None:
     """Delete a superseded voices/ file unless it is still referenced."""
     if not filename or filename == keep:
         return
     with db_conn() as conn:
-        shared = conn.execute(
-            "SELECT 1 FROM voice_profiles WHERE ref_audio_path=? OR locked_audio_path=? "
-            "OR consent_audio_path=? LIMIT 1",
-            (filename, filename, filename),
-        ).fetchone()
+        shared = _voice_file_referenced(conn, filename)
     path = None if shared else _voices_path(filename)
     if path and os.path.isfile(path):
         try:
@@ -622,8 +684,11 @@ async def replace_profile_audio(
                 with contextlib.suppress(OSError):
                     os.remove(leftover)
             raise
-        for column in ("ref_audio_path", "locked_audio_path", "consent_audio_path"):
-            _remove_voice_file(row[column], keep=new_filename)
+        # Render inputs are retired (a running render may still read them);
+        # the consent recording is never one, so it goes now.
+        for column in ("ref_audio_path", "locked_audio_path"):
+            _retire_voice_file(row[column], keep=new_filename)
+        _remove_voice_file(row["consent_audio_path"], keep=new_filename)
     event_bus.emit("profiles", {"action": "updated", "id": profile_id})
     return _profile_record(updated)
 
@@ -837,7 +902,9 @@ async def lock_profile(
         # Every lock gets a fresh filename: longform caches key a voice by its
         # reference path, so overwriting one fixed `<id>_locked.wav` let a
         # re-locked profile with the same text/seed replay the previous take's
-        # cached audio (#2535). The superseded take is removed after commit.
+        # cached audio (#2535). The superseded take is retired after commit,
+        # not deleted, so a render still reading it keeps working.
+        sweep_retired_voice_files()
         previous_locked = profile["locked_audio_path"]
         locked_filename = f"{profile_id}_locked-{uuid.uuid4().hex[:8]}.wav"
         locked_path = _voices_path(locked_filename)
@@ -868,7 +935,7 @@ async def lock_profile(
                 os.remove(staged_path)
         finalize()
     # Only after the row points at the new take; shared/referenced files stay.
-    _remove_voice_file(previous_locked, keep=locked_filename)
+    _retire_voice_file(previous_locked, keep=locked_filename)
     event_bus.emit("profiles", {"action": "locked", "id": profile_id})
     return {"locked": True, "profile_id": profile_id, "locked_audio_path": locked_filename}
 
@@ -883,19 +950,13 @@ async def unlock_profile(profile_id: str):
                     detail="Voice profile not found. It may have been deleted from another window — refresh the sidebar to see the current list.",
                 )
 
-            locked_path = (
-                _voices_path(profile["locked_audio_path"]) if profile["locked_audio_path"] else None
-            )
             conn.execute(
                 "UPDATE voice_profiles SET locked_audio_path='', seed=NULL, is_locked=0 WHERE id=?",
                 (profile_id,)
             )
-        # Unlink only after the row change committed (a rolled-back unlock must
-        # keep its locked take). Holding the lock stops a concurrent re-lock
-        # from installing a take that this unlink would then remove.
-        if locked_path:
-            with contextlib.suppress(OSError):
-                os.remove(locked_path)
+        # Retire only after the row change committed (a rolled-back unlock must
+        # keep its locked take); a render still reading it keeps working.
+        _retire_voice_file(profile["locked_audio_path"])
     event_bus.emit("profiles", {"action": "unlocked", "id": profile_id})
     return {"unlocked": True, "profile_id": profile_id}
 
