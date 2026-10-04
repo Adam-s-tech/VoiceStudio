@@ -617,7 +617,8 @@
   },
   "designWorkspace": {
     "title": "Concevoir",
-    "save_failed": "Échec de l'enregistrement du profil vocal"
+    "save_failed": "Échec de l'enregistrement du profil vocal",
+    "engine_cannot_design": "{{engine}} ne peut pas concevoir de voix, car il a besoin d'un extrait de référence. Choisissez un moteur compatible avec la conception de voix, comme OmniVoice, ou clonez plutôt une voix."
   },
   "dub": {
     "timing_label": "Synchronisation",

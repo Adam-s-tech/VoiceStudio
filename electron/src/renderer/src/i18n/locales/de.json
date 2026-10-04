@@ -615,7 +615,8 @@
   },
   "designWorkspace": {
     "title": "Designen",
-    "save_failed": "Das Sprachprofil konnte nicht gespeichert werden"
+    "save_failed": "Das Sprachprofil konnte nicht gespeichert werden",
+    "engine_cannot_design": "{{engine}} kann keine Stimmen entwerfen, weil es einen Referenzclip benötigt. Wechsle zu einer Engine mit Voice Design, etwa OmniVoice, oder klone stattdessen eine Stimme."
   },
   "dub": {
     "timing_label": "Timing",

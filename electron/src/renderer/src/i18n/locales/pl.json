@@ -619,7 +619,8 @@
   },
   "designWorkspace": {
     "title": "Projektuj",
-    "save_failed": "Nie udało się zapisać profilu głosowego"
+    "save_failed": "Nie udało się zapisać profilu głosowego",
+    "engine_cannot_design": "{{engine}} nie może projektować głosów, ponieważ wymaga klipu referencyjnego. Wybierz silnik obsługujący projektowanie głosu, np. OmniVoice, albo sklonuj głos."
   },
   "dub": {
     "timing_label": "Synchronizacja",

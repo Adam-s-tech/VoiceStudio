@@ -1,4 +1,5 @@
-"""Voice Design: edits must reach the engine (Discord report).
+"""Voice Design: edits must reach the engine, and only engines that can design
+are asked to (Discord reports).
 
 1. Once a designed voice was saved or selected, every take sent its
    ``profile_id``. The backend then cloned the profile's saved sample, so new
@@ -6,6 +7,10 @@
    request whose instruct or seed differs from the design profile's now
    designs from the request; an unchanged one still re-renders the saved
    voice from its sample.
+2. Design could start on engines that need a reference clip (IndexTTS2, MOSS
+   v1.5, dots, Confucius4, Supertonic, GGUF) and failed inside the engine.
+   The catalogue now exposes ``supports_voice_design`` and ``/generate``
+   refuses a design request on those engines with a 422.
 """
 import importlib
 import os
@@ -80,6 +85,21 @@ def test_a_clone_profile_keeps_its_reference_with_a_style_instruct():
     row = _design_row(kind="clone", instruct="", ref_audio_path="clip.wav")
     cond = _gen()._resolve_profile_conditioning(row, instruct="whisper", seed=9)
     assert cond["ref_audio_path"].endswith("clip.wav")
+
+
+# ── 2. design-capability gate ───────────────────────────────────────────────
+
+
+def test_catalogue_reports_voice_design_support():
+    entries = {e["id"]: e for e in _tts().list_backends(include_hidden=True)}
+    assert entries["omnivoice"]["supports_voice_design"] is True
+    assert entries["voxcpm2"]["supports_voice_design"] is True
+    for bid in ("indextts2", "moss-tts-v15", "dots-tts", "confucius4-tts",
+                "supertonic3", "omnivoice-gguf", "gpt-sovits", "moss-tts-nano"):
+        if bid in entries:
+            assert entries[bid]["supports_voice_design"] is False, bid
+    for bid, entry in entries.items():
+        assert entry["supports_voice_design"] in (True, False, None), bid
 
 
 def _engine(design, engine_id):
@@ -157,6 +177,41 @@ def profiles():
                     os.remove(os.path.join(VOICES_DIR, rel))
                 except OSError:
                     pass
+
+
+@pytest.mark.parametrize("field", [{"instruct": "male"}, {"design_recipe": '{"description":"deep","picks":{}}'}])
+def test_design_request_on_an_engine_that_cannot_design_is_a_clear_422(client, monkeypatch, field):
+    fake = _engine(False, "fake-ref-only-design")
+    monkeypatch.setitem(_tts()._REGISTRY, fake.id, fake)
+    res = client.post("/generate", data={"text": "Hello", "engine": fake.id, **field})
+    assert res.status_code == 422, res.text
+    assert "can't design" in res.json()["detail"]
+    assert fake.calls == []
+
+
+def test_design_profile_without_a_sample_is_refused_too(client, monkeypatch, profiles):
+    fake = _engine(False, "fake-ref-only-profile")
+    monkeypatch.setitem(_tts()._REGISTRY, fake.id, fake)
+    pid = profiles("design")
+    res = client.post("/generate", data={"text": "Hello", "engine": fake.id, "profile_id": pid})
+    assert res.status_code == 422, res.text
+
+
+def test_plain_tts_and_cloning_a_design_sample_stay_allowed(client, monkeypatch, profiles):
+    fake = _engine(False, "fake-ref-only-allowed")
+    monkeypatch.setitem(_tts()._REGISTRY, fake.id, fake)
+    assert client.post("/generate", data={"text": "Hello", "engine": fake.id}).status_code == 200
+    pid = profiles("design", sample=True)
+    res = client.post("/generate", data={"text": "Hello", "engine": fake.id, "profile_id": pid})
+    assert res.status_code == 200, res.text
+    assert fake.calls[-1].get("ref_audio")
+
+
+def test_undeclared_engines_may_still_design(client, monkeypatch):
+    fake = _engine(None, "fake-undeclared")
+    monkeypatch.setitem(_tts()._REGISTRY, fake.id, fake)
+    res = client.post("/generate", data={"text": "Hello", "engine": fake.id, "instruct": "male"})
+    assert res.status_code == 200, res.text
 
 
 def test_an_edited_design_reaches_the_engine_and_is_not_filed_under_the_profile(

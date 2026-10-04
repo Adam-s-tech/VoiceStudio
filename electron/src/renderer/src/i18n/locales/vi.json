@@ -615,7 +615,8 @@
   },
   "designWorkspace": {
     "title": "Thiết kế",
-    "save_failed": "Không lưu được hồ sơ giọng nói"
+    "save_failed": "Không lưu được hồ sơ giọng nói",
+    "engine_cannot_design": "{{engine}} không thể thiết kế giọng nói vì cần một đoạn âm thanh tham chiếu. Hãy chuyển sang công cụ hỗ trợ thiết kế giọng nói, chẳng hạn OmniVoice, hoặc nhân bản một giọng nói."
   },
   "dub": {
     "timing_label": "Căn thời gian",

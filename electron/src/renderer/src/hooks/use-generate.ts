@@ -71,7 +71,8 @@ export interface UseGenerateClone {
   clearError(): void;
   canGenerate: boolean;
   canGenerateDesign: boolean;
-  designBlocker: 'engine' | 'loading' | null;
+  /** `design`: the active engine needs a reference clip, so it can't design. */
+  designBlocker: 'engine' | 'loading' | 'design' | null;
   cloneBlocker: CloneBlocker;
   /** How the active engine reads `instruct`: OmniVoice tags or as written (#2389). */
   instructVocabulary: InstructVocabulary;
@@ -119,10 +120,15 @@ function announceResultNotices(result: GenerateResult): void {
 function useGenerateController(): UseGenerateClone {
   const queryClient = useQueryClient();
   const inputBlocker = useCloneInputsReadiness();
-  const designBlocker = useTtsReadiness();
+  const ttsBlocker = useTtsReadiness();
   const cloneEngineBlocker = useTtsReadiness('clone');
   const blocker = cloneEngineBlocker ?? inputBlocker;
-  const instructVocabulary = useEngines().activeTts?.instruct_vocabulary ?? 'tags';
+  const activeTts = useEngines().activeTts;
+  const instructVocabulary = activeTts?.instruct_vocabulary ?? 'tags';
+  // An engine that declares it can't design would only fail inside the
+  // engine (and /generate refuses it); say so before anything starts.
+  const designBlocker: UseGenerateClone['designBlocker'] =
+    activeTts?.supports_voice_design === false ? 'design' : ttsBlocker;
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);

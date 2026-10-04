@@ -147,6 +147,16 @@ mapped from your description are not re-sent. The engine catalogue reports
 this as `instruct_vocabulary`: `"tags"` for the OmniVoice family,
 `"freeform"` for everything else.
 
+IndexTTS2, MOSS-TTS v1.5, MOSS-TTS-Nano, dots.tts, Confucius4, GPT-SoVITS,
+Supertonic-3 and OmniVoice GGUF take their timbre from a reference clip or a
+preset voice, so they can't design one. With one of them selected, the Design
+workspace says so and links to the engine settings, and `/generate` answers a
+design request (an `instruct`, a Voice Design recipe or a design voice with no
+saved sample) with a 422. Cloning a saved design voice's sample still works on
+them. The engine catalogue reports this as `supports_voice_design`: `false`
+for these engines, `true` for engines that design, and `null` when an engine
+doesn't declare it.
+
 On every engine, a detail you pick holds until your description says something
 different about it, and **Reset to description** drops all picks. Choosing a
 saved voice or a starting point replaces the description.

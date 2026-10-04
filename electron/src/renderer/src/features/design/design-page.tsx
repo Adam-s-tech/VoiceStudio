@@ -25,6 +25,7 @@ import {
 } from './design-draft';
 import { useDescription } from './use-description';
 import { useProfiles } from '@/hooks/use-profiles';
+import { useEngines } from '@/hooks/use-engines';
 import { AudioPreviewButton } from '@/components/audio-preview-button';
 import { apiJson, describeError, profileAudioUrl } from '@/lib/api/client';
 import { useEffect, useRef, useState } from 'react';
@@ -46,7 +47,8 @@ import {
   XIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
+import { Link } from '@tanstack/react-router';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useGenerateClone } from '@/hooks/use-generate';
 import { OutputPanel } from '@/features/clone/output-panel';
@@ -79,6 +81,7 @@ export function DesignPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const generation = useGenerateClone();
+  const activeEngine = useEngines().activeTts;
   const freeform = generation.instructVocabulary === 'freeform';
   const description = draft.description;
   const client = useQueryClient();
@@ -283,7 +286,13 @@ export function DesignPage() {
                     source={'design-profile-' + profile.id}
                     activity={!profile.ref_audio_path ? 'synthesis' : undefined}
                     disabled={!profile.ref_audio_path && Boolean(generation.designBlocker)}
-                    disabledLabel={t('engines.none_ready_title')}
+                    disabledLabel={
+                      generation.designBlocker === 'design'
+                        ? t('designWorkspace.engine_cannot_design', {
+                            engine: activeEngine?.display_name ?? '',
+                          })
+                        : t('engines.none_ready_title')
+                    }
                     onReady={
                       !profile.ref_audio_path
                         ? () =>
@@ -502,6 +511,22 @@ export function DesignPage() {
             {generation.designBlocker === 'engine' && !generation.isGenerating && (
               <div className="mb-3">
                 <EngineNotice operation="design" compact />
+              </div>
+            )}
+            {generation.designBlocker === 'design' && !generation.isGenerating && (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1 text-sm text-muted-foreground">
+                <p role="status">
+                  {t('designWorkspace.engine_cannot_design', {
+                    engine: activeEngine?.display_name ?? '',
+                  })}
+                </p>
+                <Link
+                  to="/settings/models/$family"
+                  params={{ family: 'tts' }}
+                  className={buttonVariants({ variant: 'ghost', size: 'xs' })}
+                >
+                  {t('engineSidebar.tts')}
+                </Link>
               </div>
             )}
             {generation.designBlocker === 'loading' && !generation.isGenerating && (
