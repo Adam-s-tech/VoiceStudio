@@ -1,7 +1,7 @@
 # Installer review: remaining findings and overlap
 
 **Baseline:** [`fb9a960c88744edc36daf2cf38d48df0971ee713`][baseline],
-2026-10-04, app 0.5.6. [Proposal](README.md); no finding is fixed by this docs-only
+2026-10-04, app 0.5.6. [Proposal](readme.md); no finding is fixed by this docs-only
 patch. The active renderer is `electron/src/renderer/src`, not the legacy shared
 wizard. Tests below used a clean archive of that commit, not a modified checkout.
 
