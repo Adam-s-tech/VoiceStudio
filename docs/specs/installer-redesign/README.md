@@ -25,6 +25,12 @@ Package-managed installs can disable the updater with `VOICESTUDIO_DISABLE_UPDAT
 ([#2557](https://github.com/debpalash/VoiceStudio/pull/2557)). Preserve these changes.
 Do not restore the removed Preview update channel or duplicate the open fixes
 listed in the [review](review.md#open-pr-overlap).
+In particular, [#2605](https://github.com/debpalash/VoiceStudio/pull/2605) adds
+source CPU selection/no-sync restarts and startup fixes, while draft
+[#2607](https://github.com/debpalash/VoiceStudio/pull/2607) builds Windows AMD/ROCm
+desktop integration on [#2600](https://github.com/debpalash/VoiceStudio/pull/2600)'s
+source recipe. Reconcile their selector, interpreter and test overlap before
+implementing runtime slices; neither draft establishes new shipped platform support.
 
 ## Proposed user flow
 
@@ -88,7 +94,8 @@ until a replacement policy is measured. Unknown capacity is distinct from zero.
 
 Runtime recipes should validate OS/architecture/accelerator combinations before
 network work and avoid downloading CUDA before replacing it with CPU/ROCm. The
-remaining recipe edges are identified in the review; reuse the existing CPU path.
+remaining recipe edges and #2605/#2607 integration requirements are identified in
+the [review](review.md#open-pr-overlap); reuse the existing CPU path.
 Keep host, process and Python architecture separate for Rosetta/Windows emulation.
 
 ## Platform boundaries

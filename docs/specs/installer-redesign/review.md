@@ -26,10 +26,29 @@ Read-only PR metadata/diffs were checked on 2026-10-04:
 |---|---|---|
 | [#2602][pr2602] · `4cf3db00993b910a50c00b19ca6cb3cb823b440b` · open | Named disk-headroom/total warnings, Mac architecture/Rosetta guidance and runtime package-progress identity | Do not implement these again; recheck after landing. Headroom wording is distinct from R5/R7; runtime package bytes are distinct from R3's model-pack aggregation |
 | [#2585][pr2585] · `e87cba0449485b226674961be796b9d3e20ed0a1` · open | Runtime package-progress identity, storage scan/cleanup and broader desktop/audio fixes | Avoid duplicate progress/storage work. Its general storage cleanup changes are distinct from R8's sidecar uninstall function |
+| [#2605][pr2605] · `441673e1ff5423e6713aef834ec0b1b62dc6c703` · draft | Source CPU/CUDA dependency groups, CPU selection before sync, no-sync restarts, extracted native-compatibility helpers and Electron lazy-executable startup | Reuse this source-install work; packaged CPU bootstrap already landed in #2500. R6's remaining recipe edges are not resolved by this CPU change |
+| [#2607][pr2607] · `265295e7e1b1687308314aefe27e219c5994e95f` · draft | Broader Windows AMD/ROCm desktop and engine integration, depending on [#2600][pr2600]'s source recipe; Windows x64 Python 3.12, HIP Torch/CT2 checks and recipe-aware runtime identity | Reconcile with #2605 and #2602 instead of creating another selector or recipe. Keep the documented separate source flow until launcher/interpreter selection agrees; this draft does not establish shipped or qualified AMD support |
 
 No open-PR tests or merge readiness are asserted here. Their scopes overlap each
-other too; this proposal does not pick a winner or absorb either branch. Refresh
-this snapshot before implementation, especially if either head changes.
+other too; this proposal does not pick a winner or absorb these branches. Refresh
+this snapshot before implementation, especially if any reviewed head changes.
+
+**#2605 / #2607 reconciliation:** seven paths overlap: `CHANGELOG.md`,
+`docs/install/windows.md`, `electron/src/main/runtime-project.ts`,
+`electron/src/main/runtime-project.test.ts`,
+`electron/src/main/runtime-torch-variant.test.ts`, `scripts/setup.py` and
+`tests/test_setup_rocm_variant.py`. Preserve #2605's helper extraction and optional
+cuDNN HIP exclusion alongside #2607's recipe-aware runtime work. Their runtime
+tests independently add global `fetch` mocks (success versus offline rejection);
+choose one intentional baseline with per-test overrides, not duplicate stubs.
+The [source selector][cpu-selector] in #2605 falls back to CPU/CUDA for a Windows
+ROCm request, and its [launcher][cpu-launcher] does not select Python 3.12 on x64.
+#2607's [setup gate][rocm-setup] requires Windows x64 Python 3.12: combining the
+branches unchanged can sync a CPU/CUDA stack first, then reject an existing 3.11
+environment. Preserve its [separate source recipe][rocm-source] or reconcile and
+test the launcher before presenting a unified path. #2607 also retains clean
+Windows/packaged-artifact, engine-coverage and non-ASCII-path validation gates;
+its reported hardware experiments are not acceptance for this proposal.
 
 ## Remaining findings
 
@@ -43,7 +62,7 @@ Priorities do not imply observed data loss or a measured user failure rate.
 | R3 | Isolated source probe · P2 | Pack percentage sums only active jobs, so completed work disappears | Retain completed work in the accepted-plan denominator |
 | R4 | Source review · P2 | Model/sidecar state is process-local; detailed model failures disappear from status after 60 seconds | Separate retry cooldown from terminal history; durable interrupted state |
 | R5 | Source review · P2 | Pack confirmation uses catalogue estimates; exact file/dependency metadata resolves inside the started job | Read-only plan before confirmation; explicit size uncertainty |
-| R6 | Source review · P2 | Explicit ROCm syncs default wheels before replacement; explicit CUDA/default precedes the Windows ARM automatic CPU branch | Validate recipes and avoid CUDA-first replacement; coordinate with CPU/runtime work |
+| R6 | Source review · P2 | Explicit ROCm syncs default wheels before replacement; explicit CUDA/default precedes the Windows ARM automatic CPU branch | Validate recipes and avoid CUDA-first replacement; reconcile [#2605][pr2605] and [#2607][pr2607] before adding runtime work |
 | R7 | Isolated source probes · P2 | Both backend guards treat measured zero free bytes like a failed/unknown probe | Represent unknown separately; reject positive work at zero |
 | R8 | Isolated source probe · P2 | Managed sidecar removal ignores deletion errors and clears registration despite remaining files | Observe removal outcome and preserve retry/registration on failure |
 | R9 | Source review · P2 | Wizard position and preview selection are component state; persisted setup flags cannot restore them | Persist and reconcile a versioned setup session |
@@ -83,6 +102,11 @@ then performs default frozen sync before the ROCm replacement. Explicit
 gate is OS-only. This is source evidence of unsupported/unverified recipe edges,
 not proof of native ARM/ROCm installation failure. The shipped auto-CPU path is
 already present; avoid a second implementation while CPU/runtime work is active.
+[#2605][pr2605] preserves these baseline edges while adding source CPU selection.
+[#2607][pr2607] proposes a narrower Windows x64 ROCm recipe and changes runtime
+selection; it must be reconciled with #2605, not treated as proof that baseline R6
+is fixed. Recheck default-sync ordering and explicit Windows ARM overrides in the
+combined code, with separate source and packaged acceptance.
 
 **R7:** The [model guard][disk-guard] and [sidecar guard][sidecar-disk] both return
 no error for `free <= 0`. Fresh extracted-function probes with positive requested
@@ -130,6 +154,13 @@ explicitly separate from platform acceptance.
 [pr2557]: https://github.com/debpalash/VoiceStudio/pull/2557
 [pr2602]: https://github.com/debpalash/VoiceStudio/pull/2602
 [pr2585]: https://github.com/debpalash/VoiceStudio/pull/2585
+[pr2600]: https://github.com/debpalash/VoiceStudio/pull/2600
+[pr2605]: https://github.com/debpalash/VoiceStudio/pull/2605
+[pr2607]: https://github.com/debpalash/VoiceStudio/pull/2607
+[cpu-selector]: https://github.com/debpalash/VoiceStudio/blob/441673e1ff5423e6713aef834ec0b1b62dc6c703/electron/scripts/torch-variant.mjs#L65-L88
+[cpu-launcher]: https://github.com/debpalash/VoiceStudio/blob/441673e1ff5423e6713aef834ec0b1b62dc6c703/scripts/setup-api.mjs#L18-L32
+[rocm-setup]: https://github.com/Pates2004/VoiceStudio/blob/265295e7e1b1687308314aefe27e219c5994e95f/scripts/setup.py#L163-L172
+[rocm-source]: https://github.com/Pates2004/VoiceStudio/blob/265295e7e1b1687308314aefe27e219c5994e95f/docs/install/windows-rocm-source.md
 [setup-status]: https://github.com/debpalash/VoiceStudio/blob/fb9a960c88744edc36daf2cf38d48df0971ee713/backend/api/routers/setup/wizard.py#L41-L58
 [is-cached]: https://github.com/debpalash/VoiceStudio/blob/fb9a960c88744edc36daf2cf38d48df0971ee713/backend/api/routers/setup/models.py#L497-L517
 [catalogue]: https://github.com/debpalash/VoiceStudio/blob/fb9a960c88744edc36daf2cf38d48df0971ee713/backend/api/routers/setup/models.py#L650-L670
