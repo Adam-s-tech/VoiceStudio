@@ -932,16 +932,16 @@ def test_ref_upload_suffix_allowlist(filename, suffix):
 def test_subprocess_engine_still_speaks_the_requested_text(tmp_path, monkeypatch, ref_text):
     """Choosing the reference passage must never replace the text to speak."""
     from engines import omnivoice_subprocess
-    from services import subprocess_backend
 
+    engine = omnivoice_subprocess.OmniVoiceSubprocessBackend
+    # Patch the base the engine really inherits from: other tests reload
+    # `services.subprocess_backend`, so a fresh import can be a different class.
+    base = next(c for c in engine.__mro__[1:] if "generate" in vars(c))
     sent = {}
-    monkeypatch.setattr(subprocess_backend.SubprocessBackend, "generate",
-                        lambda self, text, **kw: sent.update(text=text, **kw))
+    monkeypatch.setattr(base, "generate", lambda self, text, **kw: sent.update(text=text, **kw))
     monkeypatch.setattr(_tts(), "omnivoice_inline_reference", lambda audio, text: (audio, text, None))
     path = _wav(tmp_path / "ref.wav", 5)
 
-    omnivoice_subprocess.OmniVoiceSubprocessBackend.generate(
-        object.__new__(omnivoice_subprocess.OmniVoiceSubprocessBackend), "Say this.",
-        ref_audio=path, ref_text=ref_text)
+    engine.generate(object.__new__(engine), "Say this.", ref_audio=path, ref_text=ref_text)
 
     assert sent["text"] == "Say this."
