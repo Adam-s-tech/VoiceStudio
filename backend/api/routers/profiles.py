@@ -535,7 +535,7 @@ def sweep_retired_voice_files(grace_s: float = _RETIRED_GRACE_S) -> int:
                     os.remove(path)
                     removed += 1
                 except FileNotFoundError:
-                    pass
+                    pass  # already gone; nothing left to retire
                 except OSError as exc:  # e.g. still open on Windows: retry next sweep
                     logger.warning("could not remove retired voice file: %s", exc)
                     continue

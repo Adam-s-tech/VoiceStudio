@@ -1788,7 +1788,7 @@ async def _mixed_dub_audio(exports_dir: str, lang: str, bg_audio: str, track_pat
                     try:
                         os.remove(partial)
                     except OSError:
-                        pass
+                        pass  # best-effort temp cleanup; the next mix overwrites it
             logger.info("Dub audio mix completed")
             # An open reader keeps its file on POSIX; Windows refuses the
             # unlink, and the next mix of this track retries it.
@@ -1800,7 +1800,7 @@ async def _mixed_dub_audio(exports_dir: str, lang: str, bg_audio: str, track_pat
                     try:
                         os.remove(entry.path)
                     except OSError:
-                        pass
+                        pass  # still open (Windows); the next mix of this track retries
     return target
 
 
