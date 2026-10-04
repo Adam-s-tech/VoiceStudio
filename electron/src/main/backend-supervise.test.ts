@@ -54,7 +54,7 @@ afterEach(() => {
  * loop (the kernel still accepts, so the probe's deadline fires), `up` an
  * answering backend.
  */
-type Health = { mode: 'down' | 'busy' | 'up' };
+type Health = { mode: 'down' | 'busy' | 'rejected' | 'up' };
 
 /** /health answers only in `up`. */
 function stubHealth(health: Health): void {
@@ -63,6 +63,9 @@ function stubHealth(health: Health): void {
     vi.fn(async () => {
       if (health.mode === 'busy') throw new DOMException('timed out', 'TimeoutError');
       if (health.mode === 'down') throw new TypeError('fetch failed');
+      if (health.mode === 'rejected') {
+        return new Response('{}', { status: 503, headers: { 'x-omnivoice-backend': 'test' } });
+      }
       return new Response(JSON.stringify({ status: 'ok', version: 'test' }), {
         headers: { 'x-omnivoice-backend': 'test' },
       });
@@ -225,7 +228,48 @@ it('reports remote timeouts as uncertain connectivity, not busy', async () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(supervisor.status.stage).toBe('unresponsive');
     expect(supervisor.status.message).toMatch(/Cannot confirm connectivity/);
+    // The renderer localizes this state from the code, not the English prose.
+    expect(supervisor.status.diagnosis).toBe('remote_unreachable');
     expect(supervisor.status.message).not.toMatch(/busy; it is not answering/);
+  } finally {
+    await supervisor.shutdown();
+  }
+});
+
+it('reports a backend that keeps answering unhealthy as failed, never busy', async () => {
+  const health: Health = { mode: 'up' };
+  const supervisor = await attachedSupervisor(health);
+  try {
+    health.mode = 'rejected';
+    // A few unhealthy answers are not enough; the listener is alive.
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(supervisor.status.stage).toBe('ready');
+
+    await vi.advanceTimersByTimeAsync(40_000);
+    expect(supervisor.status.stage).toBe('failed');
+    expect(supervisor.status.diagnosis).toBe('unhealthy');
+    expect(supervisor.status.message).not.toMatch(/busy/i);
+
+    // Nothing was killed or respawned, and a healthy probe clears it.
+    expect(mocks.spawn).not.toHaveBeenCalled();
+    health.mode = 'up';
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(supervisor.status.stage).toBe('ready');
+    expect(supervisor.status.diagnosis).toBeUndefined();
+  } finally {
+    await supervisor.shutdown();
+  }
+});
+
+it('does not let unhealthy answers hide a listener that then goes away', async () => {
+  const health: Health = { mode: 'up' };
+  const supervisor = await attachedSupervisor(health);
+  try {
+    health.mode = 'rejected';
+    await vi.advanceTimersByTimeAsync(10_000);
+    health.mode = 'down';
+    await vi.advanceTimersByTimeAsync(8_000);
+    expect(supervisor.status.stage).toBe('crashed');
   } finally {
     await supervisor.shutdown();
   }

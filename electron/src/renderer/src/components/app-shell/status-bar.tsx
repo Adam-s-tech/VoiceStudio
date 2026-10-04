@@ -27,7 +27,6 @@ import { useIsFetching, useQuery } from '@tanstack/react-query';
 import { apiJson } from '@/lib/api/client';
 import { useTranslation } from 'react-i18next';
 import { useBackendStatus } from '@/hooks/use-backend-status';
-import { BackendReconnect } from './backend-reconnect';
 import { isBackendReachable } from '@shared/utils/backendStage';
 import { engineFamilyState, useEngines } from '@/hooks/use-engines';
 import { useDeviceUsage } from '@/hooks/use-device-usage';
@@ -361,7 +360,11 @@ export function StatusBar({
     status.stage !== 'ready'
       ? status.stage === 'port_in_use'
         ? t('backend.port_in_use_short', { port: status.port })
-        : t(`backend.${status.stage}`)
+        : status.diagnosis === 'remote_unreachable'
+          ? t('backend.unresponsive_remote')
+          : status.diagnosis === 'unhealthy'
+            ? t('backend.unhealthy')
+            : t(`backend.${status.stage}`)
       : runtimeHealth === 'checking'
         ? t('preferences.loading')
         : runtimeHealth === 'unavailable'
@@ -414,7 +417,6 @@ export function StatusBar({
         </div>
         <CpuIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       </div>
-      <BackendReconnect status={status} />
       <ComputeTargetChoices data={computeTarget.data} />
       {activeRemoteTarget ? (
         <div className="space-y-3 rounded-lg border border-border/55 bg-muted/20 p-2.5 text-xs">

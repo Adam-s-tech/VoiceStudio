@@ -219,10 +219,49 @@ def test_last_good_snapshot_expires(PollGuard):
     assert getattr(expired, "status_code", None) == 503, "a stale snapshot was served forever"
 
 
-def test_target_poll_rejects_unknown_operations_before_taking_a_slot():
+def _renderer_workers_target_ops() -> set[str]:
+    """Every `op` the renderer can send to /workers/target, read from its source."""
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "electron" / "src" / "renderer" / "src"
+    patterns = [
+        r"operation=\"([^\"]+)\"",  # <EngineNotice operation="design" />
+        r"useTtsReadiness\('([^']+)'",
+        r"useComputeTarget\([^)]*?,\s*'([^']+)'",
+        r"workers/target\?op=([A-Za-z0-9_-]+)",
+        r"ttsOperation = [^?]*\? '([^']+)' : '([^']+)'",
+    ]
+    found: set[str] = set()
+    for path in list(root.rglob("*.ts")) + list(root.rglob("*.tsx")):
+        if ".test." in path.name:
+            continue
+        text = path.read_text(encoding="utf-8")
+        for pattern in patterns:
+            for match in re.finditer(pattern, text):
+                found.update(g for g in match.groups() if g)
+    return found
+
+
+def test_every_operation_the_renderer_sends_is_accepted_by_workers_target():
+    from api.routers import workers
+    from worker import routing
+
+    ops = _renderer_workers_target_ops()
+    # Sanity: the scan sees the surfaces that regressed (#2608 review).
+    assert {"tts", "clone", "dub", "batch", "design", "compare", "profile-preview"} <= ops
+    # Backend-known operations, including the non-remote ones the picker asks about.
+    ops |= set(routing.REMOTE_OPERATIONS) | set(routing._OP_LABELS) | {"asr", "dictation", ""}
+    for op in sorted(ops):
+        payload = asyncio.run(workers.get_target(op=op))
+        assert payload["op"] == op, op
+
+
+def test_target_poll_still_rejects_arbitrary_strings():
     from fastapi import HTTPException
     from api.routers import workers
 
-    with pytest.raises(HTTPException) as caught:
-        asyncio.run(workers.get_target(op="x" * 40))
-    assert caught.value.status_code == 422
+    for bad in ("x" * 40, "Has Space", "../etc", "a;b", "UPPER"):
+        with pytest.raises(HTTPException) as caught:
+            asyncio.run(workers.get_target(op=bad))
+        assert caught.value.status_code == 422, bad

@@ -158,7 +158,9 @@ export function BackendGate({ children, repairDock }: BackendGateProps) {
         ? t('modelMaintenance.repairDescription')
         : status.stage === 'port_in_use'
           ? t('backend.port_in_use', { port: status.port })
-          : t(`backend.${status.stage === 'idle' ? 'starting' : status.stage}`);
+          : status.diagnosis === 'unhealthy'
+            ? t('backend.unhealthy')
+            : t(`backend.${status.stage === 'idle' ? 'starting' : status.stage}`);
 
   const retry = async () => {
     setRestarting(true);
@@ -218,7 +220,7 @@ export function BackendGate({ children, repairDock }: BackendGateProps) {
           )}
           <div className="space-y-1">
             <p className={cn('text-base font-medium', failed && 'text-destructive')}>{stageText}</p>
-            {(failed || setup) && status.message ? (
+            {(failed || setup) && status.message && !status.diagnosis ? (
               <p className="text-sm text-muted-foreground">
                 {status.message === 'VOICESTUDIO_PROXY_BYPASS_UNSUPPORTED'
                   ? t('backend.proxy_bypass_help')

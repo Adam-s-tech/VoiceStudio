@@ -35,6 +35,7 @@ beforeEach(() => {
   backendStatus.elapsedMs = 0;
   backendStatus.logTail = [];
   delete backendStatus.message;
+  delete backendStatus.diagnosis;
   delete backendStatus.setupIssue;
   delete backendStatus.setupPhase;
   delete backendStatus.setupProgress;
@@ -155,6 +156,17 @@ it('still takes over the workspace for a real failure', () => {
 
   expect(screen.getByTestId('backend-gate-scroll')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: i18n.t('backend.retry') })).toBeInTheDocument();
+});
+
+it('describes a backend that answers unhealthy from the catalog, not the English detail', () => {
+  backendStatus.message = 'The backend at http://x answers /health but reports that it is not healthy.';
+  backendStatus.diagnosis = 'unhealthy';
+
+  renderGate('failed');
+
+  expect(screen.getByText(i18n.t('backend.unhealthy'))).toBeInTheDocument();
+  expect(screen.queryByText(/answers \/health but reports/)).not.toBeInTheDocument();
+  expect(screen.queryByText(i18n.t('backend.failed'))).not.toBeInTheDocument();
 });
 
 it('keeps agent repair available when the backend is down', () => {

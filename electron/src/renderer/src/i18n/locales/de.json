@@ -2132,6 +2132,8 @@
     "attaching": "Verbindung zur laufenden Engine wird hergestellt…",
     "crashed": "Die lokale Engine wurde unerwartet beendet.",
     "unresponsive": "Die lokale Engine ist gerade ausgelastet und antwortet nicht — sie erholt sich von selbst.",
+    "unresponsive_remote": "Die Verbindung zur entfernten Engine lässt sich nicht bestätigen — es wird automatisch erneut versucht.",
+    "unhealthy": "Die Engine antwortet, meldet aber, dass sie nicht gesund ist. Prüfe Einstellungen → Protokolle → Backend und versuche es erneut.",
     "failed": "Die lokale Engine konnte nicht gestartet werden.",
     "idle": "Warten auf die lokale Engine…",
     "log_label": "Engine-Protokoll",

@@ -57,6 +57,14 @@ const SHUTDOWN_INTENT_TIMEOUT_MS = 1000;
 /** Consecutive supervisor probe misses (2 s apart) before a ready backend is declared gone. */
 const SUPERVISE_MISSES = 3;
 /**
+ * Consecutive probes that got an HTTP answer which was not a healthy /health
+ * (about a minute at the supervisor's cadence) before the backend is reported
+ * as unhealthy. A listener that answers is alive, so this is never `crashed`
+ * and never "busy" — it is a different, accurate state, and it still clears
+ * itself as soon as a probe comes back healthy.
+ */
+const SUPERVISE_REJECTIONS = 15;
+/**
  * Stages a later successful /health probe must retire back to `ready` (#2430).
  * `unresponsive` is a live-but-busy backend, not a failure: the supervisor
  * already proved the process is alive, so the health loop owns clearing it.
@@ -531,6 +539,7 @@ export class BackendSupervisor extends EventEmitter<{
    */
   private lastProbeOutcome: 'ok' | 'timeout' | 'refused' | 'rejected' = 'ok';
   private shuttingDown = false;
+  private diagnosis: BackendStatus['diagnosis'];
   private setupIssue: BackendStatus['setupIssue'];
   private setupRequiredGib: number | undefined;
   private runtimeInterrupted = false;
@@ -597,6 +606,7 @@ export class BackendSupervisor extends EventEmitter<{
       status.setupProgress = this.setupProgress.snapshot();
     }
     if (this.message !== undefined) status.message = this.message;
+    if (this.diagnosis) status.diagnosis = this.diagnosis;
     if (this.exitCode !== undefined) status.exitCode = this.exitCode;
     if (this.exitSignal !== undefined) status.exitSignal = this.exitSignal;
     return status;
@@ -1052,9 +1062,14 @@ export class BackendSupervisor extends EventEmitter<{
 
   private setStage(
     stage: BackendStage,
-    patch: { managed?: boolean; message?: string | undefined } = {},
+    patch: {
+      managed?: boolean;
+      message?: string | undefined;
+      diagnosis?: BackendStatus['diagnosis'];
+    } = {},
   ): void {
     this.stage = stage;
+    this.diagnosis = patch.diagnosis;
     if ('managed' in patch) this.managed = patch.managed ?? false;
     if ('message' in patch) this.message = patch.message;
     this.emitStatus();
@@ -1340,8 +1355,11 @@ export class BackendSupervisor extends EventEmitter<{
     // Consecutive refused connections, classified from the LATEST probes: a
     // refusal followed by a timeout or an answer means the listener is back.
     let refusals = 0;
+    // Consecutive answered-but-unhealthy probes, counted apart from refusals.
+    let rejections = 0;
     const noteMiss = (): number => {
       refusals = this.lastProbeOutcome === 'refused' ? refusals + 1 : 0;
+      rejections = this.lastProbeOutcome === 'rejected' ? rejections + 1 : 0;
       return ++misses;
     };
     const release = (): void => {
@@ -1356,6 +1374,7 @@ export class BackendSupervisor extends EventEmitter<{
       if (await this.probe()) {
         misses = 0;
         refusals = 0;
+        rejections = 0;
         if (gen === this.generation && RECOVERABLE_STAGES.has(this.stage)) {
           this.setStage('ready', { message: undefined });
         }
@@ -1364,6 +1383,27 @@ export class BackendSupervisor extends EventEmitter<{
         // will either attach or invalidate the generation before reporting a
         // crash, so this concurrent health loop must not race it.
         if (this.stage === 'attaching') {
+          if (gen === this.generation) void tick();
+          return;
+        }
+        // The listener keeps answering /health with something unhealthy. It is
+        // neither busy nor dead, so say what is true instead of waiting
+        // forever. `failed` is recoverable: the next healthy probe clears it,
+        // and nothing is killed or respawned here.
+        if (rejections >= SUPERVISE_REJECTIONS) {
+          if (this.stage !== 'failed') {
+            this.setStage('failed', {
+              message: `The backend at ${this.baseUrl} answers /health but reports that it is not healthy.`,
+              diagnosis: 'unhealthy',
+            });
+          }
+          if (gen === this.generation) void tick();
+          return;
+        }
+        // An answered-but-unhealthy probe is neither a stall nor a death, so it
+        // must not announce "busy" or fall through to the crash path below
+        // while the count above is still building.
+        if (this.lastProbeOutcome === 'rejected') {
           if (gen === this.generation) void tick();
           return;
         }
@@ -1377,7 +1417,7 @@ export class BackendSupervisor extends EventEmitter<{
         // and dead-ends in-flight requests, all for a stall that the very next
         // probe clears. Announced once, then left to recover on its own.
         if (this.child && this.child.exitCode === null && this.child.signalCode === null) {
-          if (misses === SUPERVISE_MISSES) {
+          if (this.stage !== 'unresponsive') {
             this.setStage('unresponsive', {
               message: `Backend is running but busy on port ${this.port}; it is not answering health checks right now. This resolves on its own once the current job finishes.`,
             });
@@ -1398,6 +1438,9 @@ export class BackendSupervisor extends EventEmitter<{
               message: this.remoteUrl
                 ? `Cannot confirm connectivity to the remote backend at ${this.baseUrl}: its health checks are timing out (a network problem, or the server is busy). Retrying automatically.`
                 : `The external backend at ${this.baseUrl} is running but busy; it is not answering health checks right now. This resolves on its own once the current job finishes.`,
+              // English above is for logs and bug reports; the renderer shows
+              // the localized catalog string for this code.
+              diagnosis: this.remoteUrl ? 'remote_unreachable' : undefined,
             });
           }
           if (gen === this.generation) void tick();

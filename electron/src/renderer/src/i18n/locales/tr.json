@@ -2132,6 +2132,8 @@
     "attaching": "Çalışan motora bağlanılıyor…",
     "crashed": "Yerel motor beklenmedik şekilde durdu.",
     "unresponsive": "Yerel motor şu anda meşgul ve yanıt vermiyor — kendiliğinden toparlanacak.",
+    "unresponsive_remote": "Uzak motorla bağlantı doğrulanamıyor — otomatik olarak yeniden deneniyor.",
+    "unhealthy": "Motor yanıt veriyor ancak sağlıklı olmadığını bildiriyor. Ayarlar → Günlükler → Arka uç bölümüne bakın, ardından yeniden deneyin.",
     "failed": "Yerel motor başlatılamadı.",
     "idle": "Yerel motor bekleniyor…",
     "log_label": "Motor günlüğü",

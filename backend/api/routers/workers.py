@@ -120,10 +120,11 @@ async def get_target(op: str = "") -> dict:
     which is what the picker's own menu asks.
     """
     chosen = op.strip()
-    # The caller picks the guard key, so only the operations routing knows
-    # (plus "whole target") get a snapshot slot.
-    if chosen and chosen not in routing.REMOTE_OPERATIONS:
-        raise HTTPException(status_code=422, detail="unknown operation")
+    # The caller picks the guard key. Surface names are open-ended, so validate
+    # their shape (routing.OPERATION_NAME) rather than enumerate them; the
+    # guard's own in-flight bound stops a wedged snapshot queueing more work.
+    if chosen and not routing.valid_operation_name(chosen):
+        raise HTTPException(status_code=422, detail="invalid operation name")
     return await _target_poll.get(chosen)
 
 

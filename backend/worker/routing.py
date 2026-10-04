@@ -50,6 +50,7 @@ the feature.
 """
 from __future__ import annotations
 
+import re
 import logging
 from dataclasses import dataclass
 from typing import Optional
@@ -83,6 +84,18 @@ REMOTE_OPERATIONS = frozenset(
         "tts",
     }
 )
+
+# What a caller-supplied ``op`` must look like. The renderer names the SURFACE
+# it is rendering (``design``, ``profile-preview``, ``compare``, ``asr``,
+# ``dictation`` ...), and that set grows with the UI, so it cannot be an
+# enumerated allow-list without 422-ing the next screen. The shape is the
+# contract: a short lowercase identifier. Anything else is not a surface name.
+OPERATION_NAME = re.compile(r"[a-z][a-z0-9_-]{0,31}")
+
+
+def valid_operation_name(op: str) -> bool:
+    return OPERATION_NAME.fullmatch(op) is not None
+
 
 # Only for the sentence the user reads; an unknown op falls back to its id
 # rather than inventing a name for it.
@@ -370,6 +383,7 @@ def status(control_plane=None, *, op: Optional[str] = None) -> dict:
 
 __all__ = [
     "LOCAL",
+    "OPERATION_NAME",
     "REMOTE_OPERATIONS",
     "Decision",
     "Target",
@@ -380,4 +394,5 @@ __all__ = [
     "set_target_id",
     "status",
     "supports_operation",
+    "valid_operation_name",
 ]
