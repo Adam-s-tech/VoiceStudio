@@ -653,6 +653,10 @@ export class BackendSupervisor extends EventEmitter<{
           managed: false,
           message: `Could not reach the configured remote backend at ${this.remoteUrl}.`,
         });
+        // Nothing else probes a `failed` remote. Without this, a Retry made
+        // while the server is down leaves the status failed forever, even after
+        // the server comes back.
+        void this.recoverWhenRemoteReturns(gen);
         return;
       }
 
@@ -1296,6 +1300,20 @@ export class BackendSupervisor extends EventEmitter<{
       const name = (error as { name?: unknown } | null)?.name;
       this.lastProbeOutcome = name === 'TimeoutError' || name === 'AbortError' ? 'timeout' : 'refused';
       return false;
+    }
+  }
+
+  /** Keep probing a configured remote that was unreachable; resume supervision when it answers. */
+  private async recoverWhenRemoteReturns(gen: number): Promise<void> {
+    while (gen === this.generation && this.stage === 'failed' && this.remoteUrl) {
+      await delay(SUPERVISE_POLL_MS);
+      if (gen !== this.generation || this.stage !== 'failed') return;
+      if (await this.probe()) {
+        if (gen !== this.generation || this.stage !== 'failed') return;
+        this.setStage('ready', { message: undefined });
+        this.supervise(gen);
+        return;
+      }
     }
   }
 

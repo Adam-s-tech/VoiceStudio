@@ -316,6 +316,30 @@ def _op_label(op: str) -> str:
     return _OP_LABELS.get(op, op)
 
 
+def _unsupported_decision(op: str) -> Decision:
+    return Decision(
+        remote=False,
+        reason=f"{_op_label(op)} does not run remotely yet — running locally",
+    )
+
+
+def status_for_operation(snapshot: dict, op: Optional[str]) -> dict:
+    """Derive ``status(op=op)`` from the target-wide ``status()`` snapshot.
+
+    ``decide`` depends on the operation only through :func:`supports_operation`:
+    every supported operation resolves exactly like "the target as a whole", and
+    an unsupported one is answered before reachability is consulted. So one
+    snapshot serves every ``op``, which lets a status poll keep a single
+    in-flight computation no matter what operation names callers send.
+    """
+    if not op:
+        return snapshot
+    derived = dict(snapshot, op=op)
+    if snapshot.get("target") != LOCAL and not supports_operation(op):
+        derived["active"] = _unsupported_decision(op).to_dict()
+    return derived
+
+
 def decide(control_plane=None, *, op: Optional[str] = None) -> Decision:
     """Resolve the user's choice against what is actually reachable.
 
@@ -332,10 +356,7 @@ def decide(control_plane=None, *, op: Optional[str] = None) -> Decision:
         return Decision(remote=False, reason="chosen")
 
     if not supports_operation(op):
-        return Decision(
-            remote=False,
-            reason=f"{_op_label(op)} does not run remotely yet — running locally",
-        )
+        return _unsupported_decision(op)
 
     if control_plane is None:
         from worker.service import control_plane as default_plane  # noqa: PLC0415
@@ -393,6 +414,7 @@ __all__ = [
     "local_target",
     "set_target_id",
     "status",
+    "status_for_operation",
     "supports_operation",
     "valid_operation_name",
 ]

@@ -105,9 +105,11 @@ def list_workers() -> dict:
     return service.control_plane.snapshot()
 
 
-# Polled every second while work runs, once per surface (tts, clone, ...): it
-# reads SQLite, so it must not be able to occupy the shared worker pool.
-_target_poll = PollGuard("workers-target", lambda op: routing.status(op=op or None))
+# Polled every second while work runs: it reads SQLite, so it must not be able
+# to occupy the shared worker pool. ONE target-wide snapshot serves every `op`
+# (routing.status_for_operation), so the guard has a single in-flight key that
+# no caller-chosen value can multiply or exhaust.
+_target_poll = PollGuard("workers-target", lambda: routing.status())
 
 
 @router.get("/target")
@@ -120,12 +122,12 @@ async def get_target(op: str = "") -> dict:
     which is what the picker's own menu asks.
     """
     chosen = op.strip()
-    # The caller picks the guard key. Surface names are open-ended, so validate
-    # their shape (routing.OPERATION_NAME) rather than enumerate them; the
-    # guard's own in-flight bound stops a wedged snapshot queueing more work.
+    # Surface names are open-ended, so validate their shape
+    # (routing.OPERATION_NAME) rather than enumerate them. The name only labels
+    # the answer; it never selects or multiplies the work done.
     if chosen and not routing.valid_operation_name(chosen):
         raise HTTPException(status_code=422, detail="invalid operation name")
-    return await _target_poll.get(chosen)
+    return routing.status_for_operation(await _target_poll.get(), chosen)
 
 
 @router.get("/runtime")

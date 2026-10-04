@@ -274,3 +274,39 @@ it('does not let unhealthy answers hide a listener that then goes away', async (
     await supervisor.shutdown();
   }
 });
+
+it('resumes supervising a remote after a Retry made while it was down', async () => {
+  const health: Health = { mode: 'up' };
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+  vi.stubEnv('OMNIVOICE_PORT', '');
+  vi.stubEnv('OMNIVOICE_BACKEND_CMD', '');
+  vi.stubEnv('VOICESTUDIO_SKIP_BACKEND', '');
+  stubHealth(health);
+  const supervisor = new BackendSupervisor();
+  (supervisor as unknown as { remoteUrl: string }).remoteUrl = 'http://remote.example:3900';
+  try {
+    await supervisor.start();
+    await vi.advanceTimersByTimeAsync(1_000);
+    health.mode = 'rejected';
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(supervisor.status.stage).toBe('failed');
+
+    // The gate's Retry while the server is still down: the initial probe fails.
+    health.mode = 'down';
+    await supervisor.restart();
+    expect(supervisor.status.stage).toBe('failed');
+    expect(supervisor.status.message).toMatch(/Could not reach the configured remote/);
+
+    // Nothing but the recovery loop is probing now; it must notice the return.
+    health.mode = 'up';
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(supervisor.status.stage).toBe('ready');
+
+    // And supervision is back: a later stall is reported again.
+    health.mode = 'busy';
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(supervisor.status.stage).toBe('unresponsive');
+  } finally {
+    await supervisor.shutdown();
+  }
+});

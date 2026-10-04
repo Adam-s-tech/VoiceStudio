@@ -265,3 +265,61 @@ def test_target_poll_still_rejects_arbitrary_strings():
         with pytest.raises(HTTPException) as caught:
             asyncio.run(workers.get_target(op=bad))
         assert caught.value.status_code == 422, bad
+
+
+@pytest.mark.parametrize("target", ["local", "gpu2"])
+def test_one_target_snapshot_answers_every_operation_like_a_per_op_query(monkeypatch, target):
+    """The derivation is what lets /workers/target keep a single in-flight key."""
+    from worker import routing
+
+    monkeypatch.setattr(routing, "get_target_id", lambda: target)
+    base = routing.status()
+    ops = set(routing.REMOTE_OPERATIONS) | set(routing._OP_LABELS) | {"design", "compare", "x-y"}
+    for op in sorted(ops):
+        assert routing.status_for_operation(base, op) == routing.status(op=op), (target, op)
+    assert routing.status_for_operation(base, "") == routing.status()
+
+
+def test_remote_caller_cannot_exhaust_target_poll_slots_with_distinct_ops(monkeypatch):
+    """Unauthenticated server-mode callers pick `op`; it must never pick the work."""
+    httpx = pytest.importorskip("httpx")
+    from fastapi import FastAPI
+    from api.routers import workers
+    from worker import routing
+
+    monkeypatch.setenv("OMNIVOICE_SERVER_MODE", "1")
+    monkeypatch.delenv("OMNIVOICE_API_KEY", raising=False)
+    guard = workers._target_poll
+    guard._last.clear()
+    guard._inflight.clear()
+    release = threading.Event()
+    calls = []
+
+    def _stalled(*_args, **_kwargs):
+        calls.append(threading.current_thread().name)
+        release.wait(30)
+        return {"target": "local", "op": "", "active": {}, "targets": []}
+
+    monkeypatch.setattr(routing, "status", _stalled)
+    app = FastAPI()
+    app.include_router(workers.router)
+    ops = [f"op{i}" for i in range(40)] + ["tts", "clone", "dub", "design"]
+
+    async def scenario():
+        transport = httpx.ASGITransport(app=app, client=("203.0.113.9", 50000))
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            flood = await asyncio.gather(
+                *(client.get("/workers/target", params={"op": op}) for op in ops)
+            )
+            # A legitimate poll during the stall gets the bounded answer too,
+            # and consumes no further work.
+            legit = await client.get("/workers/target", params={"op": "tts"})
+            return flood, legit
+
+    try:
+        flood, legit = asyncio.run(scenario())
+    finally:
+        release.set()
+    assert {r.status_code for r in flood} == {503}
+    assert legit.status_code == 503
+    assert len(calls) == 1, f"{len(calls)} snapshots were started for distinct ops"
