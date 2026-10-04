@@ -105,6 +105,7 @@ metadata and the backend fallback mirror it.
 - Remote backend checks and WebSocket sign-in time out when a server stalls mid-response instead of waiting forever (#2527) — thanks @rudycelekli!
 - Remote backends served under a reverse-proxy path prefix keep that prefix for dictation, events and speech WebSockets (#2537) — thanks @rudycelekli!
 - Cancelling dictation while it connects no longer hijacks the next dictation's connection (#2533) — thanks @rudycelekli!
+- Deleting one dictation transcript no longer removes other transcripts saved in the same moment (#2538) — thanks @rudycelekli!
 - Elevated Windows app removal stops before deleting data and points to a normal PowerShell window or Settings (#2578)
 - Contributor audits inspect committed files and exclude submodules, while still stopping on failed file attribution (#2556)
 
