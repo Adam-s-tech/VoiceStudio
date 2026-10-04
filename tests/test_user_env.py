@@ -62,3 +62,40 @@ def test_file_is_0600(tmp_path):
     p = tmp_path / "env"
     user_env.set_user_env("K", "v", path=str(p))
     assert stat.S_IMODE(os.stat(p).st_mode) == 0o600
+
+
+import pytest
+
+
+@pytest.mark.parametrize("value", [
+    "/chosen/Books #1",
+    "/chosen/it's here",
+    "C:\\Users\\me\\Models #2",
+    "/chosen/${HOME}/models",
+    "/chosen/a b/c\\'d",
+    '/chosen/"quoted"',
+])
+def test_special_characters_survive_the_dotenv_round_trip(tmp_path, monkeypatch, value):
+    """A folder like ``Books #1`` was written unquoted and truncated at `` #``
+    by the startup dotenv loader, silently pointing at a sibling directory."""
+    p = tmp_path / "env"
+    p.write_text("HF_TOKEN=hf_keep\n")
+    user_env.set_user_env("OMNIVOICE_TEST_PATH", value, path=str(p))
+    assert user_env.get_user_env("OMNIVOICE_TEST_PATH", path=str(p)) == value
+    monkeypatch.delenv("OMNIVOICE_TEST_PATH", raising=False)
+    monkeypatch.setenv("HF_TOKEN", "")
+    assert user_env.load_into_environ(str(p)) is True
+    assert os.environ["OMNIVOICE_TEST_PATH"] == value
+    assert os.environ["HF_TOKEN"] == "hf_keep"
+
+
+def test_ordinary_values_stay_unquoted(tmp_path):
+    p = tmp_path / "env"
+    user_env.set_user_env("HF_ENDPOINT", "https://hf-mirror.com", path=str(p))
+    user_env.set_user_env("OMNIVOICE_CACHE_DIR", "/data/models", path=str(p))
+    assert p.read_text() == "HF_ENDPOINT=https://hf-mirror.com\nOMNIVOICE_CACHE_DIR=/data/models\n"
+
+
+def test_line_breaks_are_rejected(tmp_path):
+    with pytest.raises(ValueError):
+        user_env.set_user_env("K", "a\nb", path=str(tmp_path / "env"))

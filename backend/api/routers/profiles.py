@@ -854,7 +854,12 @@ async def lock_profile(
         if not src_path.is_file():
             raise HTTPException(status_code=404, detail="Audio file not found on disk")
 
-        locked_filename = f"{profile_id}_locked.wav"
+        # Every lock gets a fresh filename: longform caches key a voice by its
+        # reference path, so overwriting one fixed `<id>_locked.wav` let a
+        # re-locked profile with the same text/seed replay the previous take's
+        # cached audio (#2535). The superseded take is removed after commit.
+        previous_locked = profile["locked_audio_path"]
+        locked_filename = f"{profile_id}_locked-{uuid.uuid4().hex[:8]}.wav"
         locked_path = _voices_path(locked_filename)
         if locked_path is None:
             raise HTTPException(status_code=400, detail="Invalid profile id")
@@ -882,6 +887,8 @@ async def lock_profile(
             with contextlib.suppress(OSError):
                 os.remove(staged_path)
         finalize()
+    # Only after the row points at the new take; shared/referenced files stay.
+    _remove_voice_file(previous_locked, keep=locked_filename)
     event_bus.emit("profiles", {"action": "locked", "id": profile_id})
     return {"locked": True, "profile_id": profile_id, "locked_audio_path": locked_filename}
 
