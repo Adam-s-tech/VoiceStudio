@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, expect, it, onTestFinished, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { chmodSync, existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -59,6 +59,7 @@ vi.mock('./runtime-project', () => ({
 import {
   BackendSupervisor,
   bundledUvPath,
+  bundledWebUiPath,
   isExpectedPipeClose,
   isUnsupportedPlatform,
   managedBackendSpawnOptions,
@@ -632,6 +633,40 @@ it('only ever names a uv that is really there', () => {
     expect(env.OMNIVOICE_BUNDLED_UV).not.toBe('');
     expect(existsSync(env.OMNIVOICE_BUNDLED_UV)).toBe(true);
   }
+});
+
+// ── #2599: LAN devices need the web UI this app version ships ──────────────
+//
+// The runtime project holds only the Python sources, so a backend left to
+// find the web build beside itself had none and redirected LAN devices to
+// their own localhost. The managed launch must point it at the packaged build.
+
+function stubResourcesPath(path: string): void {
+  const previous = Object.getOwnPropertyDescriptor(process, 'resourcesPath');
+  Object.defineProperty(process, 'resourcesPath', { value: path, configurable: true });
+  onTestFinished(() => {
+    if (previous) Object.defineProperty(process, 'resourcesPath', previous);
+    else delete (process as { resourcesPath?: string }).resourcesPath;
+  });
+}
+
+it('serves LAN devices the web UI packaged with this app version', () => {
+  vi.stubEnv('OMNIVOICE_FRONTEND_DIST', '');
+  stubResourcesPath(join('/opt', 'VoiceStudio', 'resources'));
+
+  const { env } = managedBackendSpawnOptions(3900);
+
+  expect(env.OMNIVOICE_FRONTEND_DIST).toBe(
+    join('/opt', 'VoiceStudio', 'resources', 'frontend', 'dist'),
+  );
+  expect(bundledWebUiPath()).toBe(env.OMNIVOICE_FRONTEND_DIST);
+});
+
+it('keeps a web UI directory the user pinned themselves', () => {
+  vi.stubEnv('OMNIVOICE_FRONTEND_DIST', '/custom/web');
+  stubResourcesPath(join('/opt', 'VoiceStudio', 'resources'));
+
+  expect(managedBackendSpawnOptions(3900).env.OMNIVOICE_FRONTEND_DIST).toBe('/custom/web');
 });
 
 it('exposes the current process signal separately from the durable crash journal', async () => {

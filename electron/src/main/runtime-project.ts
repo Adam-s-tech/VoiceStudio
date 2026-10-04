@@ -18,15 +18,9 @@ import {
 } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const SOURCES = [
-  'backend',
-  'frontend',
-  'omnivoice',
-  'pyproject.toml',
-  'uv.lock',
-  'README.md',
-  'LICENSE',
-];
+// The web UI is not staged: the backend serves it straight from the app's
+// resources via OMNIVOICE_FRONTEND_DIST, so it always matches this version.
+const SOURCES = ['backend', 'omnivoice', 'pyproject.toml', 'uv.lock', 'README.md', 'LICENSE'];
 export const UV_VERSION = '0.12.13';
 export const CUDNN8_COMPAT_PIN = 'nvidia-cudnn-cu12==8.9.7.29';
 export const ROCM_TORCH_INDEX = 'https://download.pytorch.org/whl/rocm6.4';

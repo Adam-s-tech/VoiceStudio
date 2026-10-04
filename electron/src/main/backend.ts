@@ -356,6 +356,11 @@ function selectedRuntimeRoot(parent: string): string {
     : join(selected, 'VoiceStudio');
 }
 
+/** The web UI build packaged with this app version (served to LAN devices). */
+export function bundledWebUiPath(): string {
+  return join(backendRoot(), 'frontend', 'dist');
+}
+
 function samePath(left: string, right: string): boolean {
   const normalizedLeft = resolve(left);
   const normalizedRight = resolve(right);
@@ -453,6 +458,12 @@ function childEnv(
   if (!env.OMNIVOICE_BUNDLED_UV) {
     const uv = findUv();
     if (uv) env.OMNIVOICE_BUNDLED_UV = uv;
+  }
+  // #2599: LAN devices load the web UI from this backend. Serve the build
+  // shipped inside this app version's resources, never a copy beside the
+  // runtime project (absent on updated installs, stale after an update).
+  if (app.isPackaged && process.resourcesPath && !env.OMNIVOICE_FRONTEND_DIST?.trim()) {
+    env.OMNIVOICE_FRONTEND_DIST = bundledWebUiPath();
   }
   if (region === 'china') env.HF_ENDPOINT ??= 'https://hf-mirror.com';
   if (platform === 'win32') {
