@@ -252,6 +252,9 @@ it('sends Apple Silicon users on the Intel build to the arm64 download (#2598)',
     screen.queryByRole('button', { name: i18n.t('backend.setup_required') }),
   ).not.toBeInTheDocument();
   expect(screen.queryByText(i18n.t('backend.setup_unsupported_platform'))).not.toBeInTheDocument();
+  expect(
+    screen.getByRole('textbox', { name: i18n.t('settings.remote_backend_url') }),
+  ).toBeVisible();
 });
 
 it('offers a remote backend instead of a doomed local install on Intel Macs', () => {
