@@ -108,7 +108,7 @@ metadata and the backend fallback mirror it.
 - Re-locking a voice to another take re-renders its audiobook and Stories audio instead of replaying the previous take, and renders already running keep reading their take (#2535) — thanks @rudycelekli!
 - Longform chapters and segments are cached per synthesis language, so changing language no longer replays the previous audio (#2524) — thanks @rudycelekli!
 - Moving app data into an existing empty folder no longer fails with an EISDIR rollback (#2521) — thanks @rudycelekli!
-- Models folders with a hash, quote or backslash in the name now survive the saved-settings round trip (#2519) — thanks @rudycelekli!
+- Models folders with a hash, quote or backslash in the name now survive the saved-settings round trip, while hand-written `${HOME}` paths still expand (#2519) — thanks @rudycelekli!
 - Elevated Windows app removal stops before deleting data and points to a normal PowerShell window or Settings (#2578)
 - Contributor audits inspect committed files and exclude submodules, while still stopping on failed file attribution (#2556)
 
