@@ -222,10 +222,7 @@ metadata and the backend fallback mirror it.
 - Release Docker images publish when the GitHub Release is published; `:latest` only ever comes from `main` (#2578)
 - One bun, TypeScript and Playwright version and one lockfile across the workspace; frontend unit tests run in the required check (#2578)
 - Tests keep the review-bot configs, issue-template labels and locale catalogs consistent (#2578)
-
-### CI
 - Trusted base-branch checks reject leaked, placeholder, and AI agent identities while allowing human co-authors with names shared by agents (#2556)
-- GitHub Actions are pinned to exact commits and kept current by Dependabot (#2556)
 
 ## [0.5.6] — 2026-09-23
 
