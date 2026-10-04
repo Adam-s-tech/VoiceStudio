@@ -327,6 +327,40 @@ class TestDubExportUniqueness:
             assert len(mixes()) == 1
             assert not list(exports.glob("*.tmp.wav"))
 
+    def test_regenerated_mix_never_prunes_a_mix_still_being_served(self, app_client):
+        """#2581: a preview that had chosen its mix lost the file when a
+        regenerated track's mix pruned it before FileResponse opened it."""
+        client, dc, dx, tmp = app_client
+        job_id, job_dir = _seed_job_with_tracks(dc, tmp)
+        exports = job_dir / "exports"
+        exports.mkdir()
+        track = job_dir / "dubbed_es.wav"
+        bg = job_dir / "no_vocals.wav"
+
+        async def fake_run(cmd, **_kwargs):
+            Path(cmd[-1]).write_bytes(b"RIFF" + b"\x01" * 60)
+            return 0, b"", b""
+
+        async def scenario():
+            first = await dx._mixed_dub_audio(str(exports), "es", str(bg), str(track))
+            _make_wav(track, seconds=0.75)
+            second = await dx._mixed_dub_audio(str(exports), "es", str(bg), str(track))
+            assert first != second
+            assert os.path.isfile(first), "pruned a mix another request is serving"
+            dx._release_mix(first)
+            assert not os.path.exists(first), "the last reader deletes a superseded mix"
+            dx._release_mix(second)
+            assert os.path.isfile(second)
+
+        with (
+            patch.object(dx, "find_ffmpeg", return_value="ffmpeg"),
+            patch.object(dx, "run_ffmpeg", new=fake_run),
+        ):
+            _asyncio.run(scenario())
+            assert client.get(f"/dub/download-audio/{job_id}", params={"lang": "es"}).status_code == 200
+        assert dx._mix_readers == {} and dx._mix_superseded == set()
+        assert len(list(exports.glob("mixed_*.wav"))) == 1
+
     def test_mp4_export_refuses_when_ffmpeg_writes_nothing(self, app_client):
         client, dc, dx, tmp = app_client
         job_id, _ = _seed_job_with_tracks(dc, tmp)
