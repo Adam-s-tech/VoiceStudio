@@ -48,6 +48,7 @@ import {
   batchStatusPollMs,
   loadedModelsPollMs,
   modelStatusPollMs,
+  relaxWhenBackendBusy,
 } from '@/lib/status-polling';
 
 type BackendStage = ReturnType<typeof useBackendStatus>['stage'];
@@ -254,7 +255,7 @@ export function StatusBar({
   const diarisation = useQuery({
     queryKey: ['diarisation-status'],
     enabled: isBackendReachable(status.stage),
-    refetchInterval: IDLE_STATUS_POLL_MS,
+    refetchInterval: () => relaxWhenBackendBusy(IDLE_STATUS_POLL_MS),
     queryFn: () =>
       apiJson<{
         active: string;

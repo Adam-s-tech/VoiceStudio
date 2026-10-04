@@ -49,7 +49,11 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-/** `down` is a cold port, `busy` a blocked event loop, `up` an answering backend. */
+/**
+ * `down` is a closed port (the connection is refused), `busy` a blocked event
+ * loop (the kernel still accepts, so the probe's deadline fires), `up` an
+ * answering backend.
+ */
 type Health = { mode: 'down' | 'busy' | 'up' };
 
 /** /health answers only in `up`. */
@@ -57,7 +61,8 @@ function stubHealth(health: Health): void {
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => {
-      if (health.mode !== 'up') throw new Error('no answer');
+      if (health.mode === 'busy') throw new DOMException('timed out', 'TimeoutError');
+      if (health.mode === 'down') throw new TypeError('fetch failed');
       return new Response(JSON.stringify({ status: 'ok', version: 'test' }), {
         headers: { 'x-omnivoice-backend': 'test' },
       });
@@ -124,26 +129,61 @@ it('reports a live-but-busy backend as unresponsive, not failed (#2430)', async 
   }
 });
 
-it('still reports a backend that is genuinely gone as crashed', async () => {
+async function attachedSupervisor(health: Health): Promise<BackendSupervisor> {
   vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
   vi.stubEnv('OMNIVOICE_PORT', '');
   vi.stubEnv('OMNIVOICE_BACKEND_CMD', '');
   vi.stubEnv('VOICESTUDIO_SKIP_BACKEND', '');
-  const health: Health = { mode: 'up' };
   stubHealth(health);
-
-  // No child to inspect: an attached/external backend that stops answering is
-  // indistinguishable from one that died, so it must still surface as `crashed`.
+  // No child to inspect: a backend that was already running is attached to.
   const supervisor = new BackendSupervisor();
-  try {
-    await supervisor.start();
-    await vi.advanceTimersByTimeAsync(1_000);
-    expect(supervisor.status.stage).toBe('ready');
-    expect(mocks.spawn).not.toHaveBeenCalled();
+  await supervisor.start();
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(supervisor.status.stage).toBe('ready');
+  expect(mocks.spawn).not.toHaveBeenCalled();
+  return supervisor;
+}
 
-    health.mode = 'busy';
+it('still reports an attached backend that refuses connections as crashed', async () => {
+  const health: Health = { mode: 'up' };
+  const supervisor = await attachedSupervisor(health);
+  try {
+    health.mode = 'down';
     await vi.advanceTimersByTimeAsync(7_000);
     expect(supervisor.status.stage).toBe('crashed');
+    expect(supervisor.status.message).toMatch(/stopped answering/);
+  } finally {
+    await supervisor.shutdown();
+  }
+});
+
+it('waits out an attached backend that accepts connections but is busy (#2601)', async () => {
+  const health: Health = { mode: 'up' };
+  const supervisor = await attachedSupervisor(health);
+  try {
+    // A long generation blocks the external backend's event loop. It used to
+    // be declared crashed ~10 s in, although the process was fine.
+    health.mode = 'busy';
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(supervisor.status.stage).toBe('unresponsive');
+    expect(supervisor.status.message).toMatch(/busy/i);
+
+    health.mode = 'up';
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(supervisor.status.stage).toBe('ready');
+  } finally {
+    await supervisor.shutdown();
+  }
+});
+
+it('gives up on an attached backend that stays silent past the patience bound', async () => {
+  const health: Health = { mode: 'up' };
+  const supervisor = await attachedSupervisor(health);
+  try {
+    health.mode = 'busy';
+    await vi.advanceTimersByTimeAsync(11 * 60_000);
+    expect(supervisor.status.stage).toBe('crashed');
+    expect(supervisor.status.message).toMatch(/accepted connections but did not answer/);
   } finally {
     await supervisor.shutdown();
   }
