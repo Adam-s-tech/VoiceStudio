@@ -62,7 +62,9 @@ import {
   isExpectedPipeClose,
   isUnsupportedPlatform,
   managedBackendSpawnOptions,
+  platformSetupIssue,
 } from './backend';
+import { app } from 'electron';
 
 beforeEach(() => {
   // Generic installation fixtures need a supported host. Intel cases override it.
@@ -701,4 +703,36 @@ it('does not gate Apple Silicon or other platforms', () => {
   expect(isUnsupportedPlatform('darwin', 'arm64')).toBe(false);
   expect(isUnsupportedPlatform('win32', 'x64')).toBe(false);
   expect(isUnsupportedPlatform('linux', 'x64')).toBe(false);
+});
+
+it('tells Apple Silicon users running the Intel build to install the arm64 build (#2598)', async () => {
+  expect(platformSetupIssue('darwin', 'x64', true)).toBe('wrong_architecture');
+  expect(platformSetupIssue('darwin', 'x64', false)).toBe('unsupported_platform');
+  expect(platformSetupIssue('darwin', 'arm64', false)).toBeUndefined();
+  // Windows on ARM emulating the x64 build is a different, supported path.
+  expect(platformSetupIssue('win32', 'x64', true)).toBeUndefined();
+
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => {
+      throw new Error('no backend');
+    }),
+  );
+  vi.stubEnv('OMNIVOICE_BACKEND_CMD', '');
+  vi.stubEnv('VOICESTUDIO_SKIP_BACKEND', '');
+  const restore = stubIntelMac();
+  const electronApp = app as { runningUnderARM64Translation?: boolean };
+  electronApp.runningUnderARM64Translation = true;
+  try {
+    const supervisor = new BackendSupervisor();
+    await supervisor.start();
+    expect(supervisor.status.stage).toBe('setup_required');
+    expect(supervisor.status.setupIssue).toBe('wrong_architecture');
+    await supervisor.setupRuntime();
+    expect(mocks.install).not.toHaveBeenCalled();
+    await supervisor.shutdown();
+  } finally {
+    delete electronApp.runningUnderARM64Translation;
+    restore();
+  }
 });

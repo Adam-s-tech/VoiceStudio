@@ -1,6 +1,7 @@
 import { downloadProxyEnv } from './proxy-env';
 import { downloadRuntimeInstaller } from './runtime-download';
 import { asciiSafePthFiles } from './pth-ascii';
+import { scrubText } from '../shared/utils/scrub';
 import { execFile } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
@@ -456,7 +457,31 @@ function probeTimedOut(error: unknown): boolean {
  * process's own output and the startup budget, which is a far better diagnostic
  * than a silent false negative here.
  */
-export async function runtimeDependenciesReady(project: string): Promise<boolean> {
+/**
+ * The line that says WHY the import probe failed: Python's final exception
+ * line (`ModuleNotFoundError: No module named 'sentencepiece'`, `ImportError:
+ * DLL load failed ...`), or the launch error when the interpreter never ran.
+ * Without it a source checkout only learned "missing or incomplete" and could
+ * not tell an unfinished setup from one import that keeps failing (#2555).
+ */
+export function probeFailureDetail(error: unknown, stderr: unknown): string {
+  const lines = String(stderr ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const failure = error as { code?: unknown; message?: unknown } | null;
+  const detail =
+    lines.at(-1) ??
+    (typeof failure?.code === 'string'
+      ? `the interpreter could not be started (${failure.code})`
+      : String(failure?.message ?? 'unknown error').split('\n')[0]);
+  return scrubText(detail).slice(0, 300);
+}
+
+export async function runtimeDependenciesReady(
+  project: string,
+  onFailure?: (detail: string) => void,
+): Promise<boolean> {
   const env: NodeJS.ProcessEnv = { ...process.env };
   delete env.PYTHONHOME;
   delete env.PYTHONPATH;
@@ -474,7 +499,11 @@ export async function runtimeDependenciesReady(project: string): Promise<boolean
         maxBuffer: 256 * 1024,
         env,
       },
-      (error) => resolve(!error || probeTimedOut(error)),
+      (error, _stdout, stderr) => {
+        const ready = !error || probeTimedOut(error);
+        if (!ready) onFailure?.(probeFailureDetail(error, stderr));
+        resolve(ready);
+      },
     );
   });
 }

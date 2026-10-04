@@ -2127,6 +2127,8 @@
     "setup_space": "Gib mindestens {{gib}} GiB auf dem Laufwerk der App frei und versuche es erneut.",
     "setup_access": "Erlaube Schreibzugriff auf den Datenordner der App und versuche es erneut.",
     "setup_unsupported_platform": "Dieser Intel-Mac kann das lokale KI-Backend nicht ausführen — PyTorch bietet keine macOS-Intel-Wheels. Verbinde stattdessen unten ein Remote-Backend; keine lokale Installation nötig.",
+    "setup_wrong_architecture": "Dies ist die Intel-Version (x64) von VoiceStudio, die über Rosetta auf einem Mac mit Apple Silicon läuft, daher kann das lokale KI-Backend nicht installiert werden. Beende die App, installiere das Apple-Silicon-DMG (arm64) darüber und öffne sie erneut – deine Stimmen und Projekte bleiben erhalten.",
+    "download_apple_silicon": "Apple-Silicon-Version herunterladen",
     "ready": "Engine bereit",
     "show_log": "Protokoll anzeigen",
     "hide_log": "Protokoll ausblenden",

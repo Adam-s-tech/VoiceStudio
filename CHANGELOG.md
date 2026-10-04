@@ -107,6 +107,9 @@ metadata and the backend fallback mirror it.
 - References longer than 20 s keep using the installed speech-to-text model when OmniVoice retries generation without its cached voice prompt (#2579) — thanks @mahdinazmi!
 - Model Catalogue disk warnings name the 10 GB kept free after each download and use the same rule as the installer (#2597) — thanks @HuntingSuccubus!
 - Saving a cloned voice works offline: installed speech-to-text models load from disk and save-time transcription is time-limited (#2583) — thanks @simoncheese!
+- Apple Silicon Macs running the Intel build are pointed to the Apple Silicon download instead of failing setup on PyTorch (#2598) — thanks @igiteam!
+- Source checkouts that cannot start the backend say whether `.venv` is missing or which Python import failed (#2555) — thanks @spvn81!
+- Native backend crashes name the faulting frame and report the VoiceStudio frames and other threads that were running (#2382, #2250, #2187) — thanks @quan0pek and @geogjaime!
 - Elevated Windows app removal stops before deleting data and points to a normal PowerShell window or Settings (#2578)
 - Contributor audits inspect committed files and exclude submodules, while still stopping on failed file attribution (#2556)
 
