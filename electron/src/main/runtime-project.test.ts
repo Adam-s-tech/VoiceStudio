@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { existsSync } from 'node:fs';
 import { mkdtemp, mkdir, readFile, rm, writeFile, statfs } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -463,6 +464,14 @@ describe('packaged runtime setup', () => {
     expect(await runtimeCompatible(bundle, project)).toBe(true);
     await writeFile(join(project, '.runtime-ready'), 'legacy-manifest-only-stamp');
     expect(await runtimeCompatible(bundle, project)).toBe(false);
+  });
+  it('does not copy the web UI into the runtime project', async () => {
+    const { bundle, project } = await fixture();
+    await stageRuntimeSources(bundle, project);
+    // The backend serves the packaged build in place (OMNIVOICE_FRONTEND_DIST);
+    // a staged copy would only ever be a stale second source of truth (#2599).
+    expect(existsSync(join(project, 'frontend'))).toBe(false);
+    expect(existsSync(join(project, 'backend', 'main.py'))).toBe(true);
   });
   it('replaces obsolete bundled modules without removing the interpreter or user files', async () => {
     const { bundle, project } = await fixture();

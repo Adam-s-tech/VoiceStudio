@@ -101,6 +101,7 @@ metadata and the backend fallback mirror it.
 - License notice: commercial use is free under the AGPL; the paid licence is for closed-source use, with Pro plans linked (#2578)
 
 ### Fixed
+- Network Sharing from packaged desktop apps serves the web interface to LAN devices on macOS, Windows and Linux, and never redirects them to their own `localhost` (#2599) — thanks @Xpertfall!
 - Elevated Windows app removal stops before deleting data and points to a normal PowerShell window or Settings (#2578)
 - Contributor audits inspect committed files and exclude submodules, while still stopping on failed file attribution (#2556)
 
