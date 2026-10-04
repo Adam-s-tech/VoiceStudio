@@ -56,6 +56,8 @@ bun run dev
 
 This launches Electron with hot reload. Run source dependency setup explicitly before launching; the supervisor manages backend
 startup; do not launch a second backend. See [Electron setup](../electron/README.md).
+CPU-only Linux/Windows hosts automatically select CPU wheels; see
+[CPU setup and overrides](../electron/README.md#running-without-a-gpu).
 
 ```bash
 bun run build       # build Electron
