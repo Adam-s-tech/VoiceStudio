@@ -1738,6 +1738,70 @@ async def dub_qc_pass(job_id: str, lang: str = Query(None), drift_threshold: flo
     }
 
 
+_mixed_audio_locks: dict[str, asyncio.Lock] = {}
+_LEGACY_MIX = re.compile(r"mixed_dub_[0-9A-Za-z-]+\.wav")
+
+
+async def _mixed_dub_audio(exports_dir: str, lang: str, bg_audio: str, track_path: str) -> str:
+    """One reusable background + dub WAV per (background, track) version.
+
+    The audio preview streams this route with HTTP range requests, and every
+    request used to re-run the full mix into a new ``mixed_dub_<stamp>.wav``
+    that was never deleted. On a 70-minute dub each seek or buffer refill
+    wrote another ~0.8 GB file until the disk filled and the preview reported
+    the audio as missing (#2581). Identical inputs now reuse one file; an
+    older mix of the same track and the legacy per-request files are pruned.
+    """
+    import hashlib
+
+    _base = os.path.realpath(DUB_DIR)
+    exports = os.path.realpath(exports_dir)
+    if not exports.startswith(_base + os.sep):
+        raise HTTPException(status_code=400, detail="Invalid export path")
+    identity = [
+        (os.path.basename(path), info.st_size, info.st_mtime_ns)
+        for path, info in ((bg_audio, os.stat(bg_audio)), (track_path, os.stat(track_path)))
+    ]
+    key = hashlib.sha256(json.dumps(identity).encode()).hexdigest()[:16]
+    target = os.path.realpath(os.path.join(exports, f"mixed_{lang}_{key}.wav"))
+    if not target.startswith(exports + os.sep):
+        raise HTTPException(status_code=400, detail="Invalid export path")
+    async with _mixed_audio_locks.setdefault(target, asyncio.Lock()):
+        if not (os.path.isfile(target) and os.path.getsize(target) > 0):
+            partial = target + ".tmp.wav"
+            cmd = [
+                find_ffmpeg(), "-i", bg_audio, "-i", track_path,
+                "-filter_complex", bed_mix_filter("0:a", "1:a", bed_gain=1.0),
+                "-map", "[aout]", "-c:a", "pcm_s16le", "-f", "wav", "-y", partial,
+            ]
+            try:
+                rc, _, stderr = await run_ffmpeg(cmd, timeout=900.0)
+                if rc != 0:
+                    raise RuntimeError(stderr.decode(errors="replace") if stderr else "ffmpeg mix non-zero")
+                if not os.path.isfile(partial) or os.path.getsize(partial) == 0:
+                    raise RuntimeError("ffmpeg mix produced no output file")
+                os.replace(partial, target)
+            finally:
+                if os.path.exists(partial):
+                    try:
+                        os.remove(partial)
+                    except OSError:
+                        pass
+            logger.info("Dub audio mix completed")
+            # An open reader keeps its file on POSIX; Windows refuses the
+            # unlink, and the next mix of this track retries it.
+            stale = re.compile(rf"mixed_{re.escape(lang)}_[0-9a-f]{{16}}\.wav")
+            for entry in os.scandir(exports):
+                if entry.path != target and entry.is_file(follow_symlinks=False) and (
+                    stale.fullmatch(entry.name) or _LEGACY_MIX.fullmatch(entry.name)
+                ):
+                    try:
+                        os.remove(entry.path)
+                    except OSError:
+                        pass
+    return target
+
+
 @router.get("/dub/download-audio/{job_id}")
 @router.get("/dub/download-audio/{job_id}/{filename}")
 async def dub_download_audio(
@@ -1768,21 +1832,8 @@ async def dub_download_audio(
 
     bg_audio = await _preserved_background(job, job_id, lang_label) if preserve_bg else None
     if bg_audio:
-        ffmpeg = find_ffmpeg()
-        final_audio_path = os.path.join(exports_dir, f"mixed_dub_{stamp}.wav")
-        cmd = [
-            ffmpeg, "-i", bg_audio, "-i", wav_path,
-            "-filter_complex", bed_mix_filter("0:a", "1:a", bed_gain=1.0),
-            "-map", "[aout]", "-c:a", "pcm_s16le", "-y", final_audio_path
-        ]
         try:
-            rc, _, stderr = await run_ffmpeg(cmd, timeout=900.0)
-            if rc != 0:
-                raise Exception(stderr.decode(errors="replace") if stderr else "ffmpeg mix non-zero")
-            if not os.path.exists(final_audio_path) or os.path.getsize(final_audio_path) == 0:
-                raise Exception("ffmpeg mix produced no output file")
-            wav_path = final_audio_path
-            logger.info("Dub audio mix completed")
+            wav_path = await _mixed_dub_audio(exports_dir, lang_label, bg_audio, wav_path)
         except Exception as exc:
             logger.exception("Failed to mix audio")
             raise HTTPException(status_code=500, detail={"code": "dub_background_unavailable", "message": "Could not preserve background audio"}) from exc

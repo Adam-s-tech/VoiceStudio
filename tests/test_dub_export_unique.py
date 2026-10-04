@@ -288,6 +288,45 @@ class TestDubExportUniqueness:
         assert response.status_code == 200, response.text
         assert response.headers["cache-control"] == "no-store"
 
+    def test_wav_preview_reuses_one_mix_across_range_requests(self, app_client):
+        """#2581: every range request of the audio preview re-mixed the whole
+        dub into a new never-deleted WAV; a 70-minute dub filled the disk."""
+        client, dc, dx, tmp = app_client
+        job_id, job_dir = _seed_job_with_tracks(dc, tmp)
+        exports = job_dir / "exports"
+        exports.mkdir()
+        (exports / "mixed_dub_20260101T000000-abcdef12.wav").write_bytes(b"legacy")
+        commands = []
+
+        async def fake_run(cmd, **_kwargs):
+            commands.append(cmd)
+            Path(cmd[-1]).write_bytes(b"RIFF" + b"\x01" * 60)
+            return 0, b"", b""
+
+        def mixes():
+            return sorted(path.name for path in exports.glob("mixed_*.wav"))
+
+        with (
+            patch.object(dx, "find_ffmpeg", return_value="ffmpeg"),
+            patch.object(dx, "run_ffmpeg", new=fake_run),
+        ):
+            url = f"/dub/download-audio/{job_id}"
+            full = client.get(url, params={"lang": "es"})
+            ranged = client.get(url, params={"lang": "es"}, headers={"Range": "bytes=10-19"})
+            assert full.status_code == 200, full.text
+            assert ranged.status_code == 206, ranged.text
+            assert ranged.content == full.content[10:20]
+            assert len(commands) == 1
+            assert len(mixes()) == 1 and not mixes()[0].startswith("mixed_dub_")
+
+            # A regenerated track gets a fresh mix and the old one is removed.
+            track = job_dir / "dubbed_es.wav"
+            _make_wav(track, seconds=0.75)
+            assert client.get(url, params={"lang": "es"}).status_code == 200
+            assert len(commands) == 2
+            assert len(mixes()) == 1
+            assert not list(exports.glob("*.tmp.wav"))
+
     def test_mp4_export_refuses_when_ffmpeg_writes_nothing(self, app_client):
         client, dc, dx, tmp = app_client
         job_id, _ = _seed_job_with_tracks(dc, tmp)

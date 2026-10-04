@@ -101,6 +101,7 @@ metadata and the backend fallback mirror it.
 - License notice: commercial use is free under the AGPL; the paid licence is for closed-source use, with Pro plans linked (#2578)
 
 ### Fixed
+- Audio-only dub previews reuse one background mix instead of writing a new full-length WAV on every seek, which filled the disk on long dubs (#2581) — thanks @PsychoRhythmist!
 - References longer than 20 s keep using the installed speech-to-text model when OmniVoice retries generation without its cached voice prompt (#2579) — thanks @mahdinazmi!
 - Model Catalogue disk warnings name the 10 GB kept free after each download and use the same rule as the installer (#2597) — thanks @HuntingSuccubus!
 - Saving a cloned voice works offline: installed speech-to-text models load from disk and save-time transcription is time-limited (#2583) — thanks @simoncheese!
