@@ -10,7 +10,13 @@ from fastapi.responses import JSONResponse
 from schemas.requests import AgentFitRequest, TranslateRequest
 from services.model_manager import _cpu_pool, _gpu_pool
 from services.hf_revisions import revision_for
-from services.translator import cinematic_available, cinematic_refine_many, _cinematic_budget
+from services.translator import (
+    SCRIPT_RANGES,
+    _cinematic_budget,
+    cinematic_available,
+    cinematic_refine_many,
+    script_ratio,
+)
 from api.routers.dub_core import _get_job, _save_job
 
 router = APIRouter()
@@ -148,38 +154,32 @@ def dialect_clause(dialect: Optional[str]) -> str:
     return ""
 
 
-# Per-language script enforcement. Maps language code → required Unicode
-# block(s) the translation must contain. Used as a sanity gate after the
-# LLM responds: if the output contains <50% characters from the expected
-# block, we treat the translation as corrupted and retry. The block names
-# here are the keys recognised by Python's `unicodedata.name()` lookup or
-# regex Unicode property classes.
+# Per-language script enforcement. Maps language code → (script name named in
+# the LLM prompt, letter ranges the translation must mostly use). Used as a
+# sanity gate after the LLM responds: if the output contains <50% letters from
+# the expected script, we treat the translation as corrupted and retry. The
+# ranges are shared with the Cinematic/Autofit gate (services.translator).
+_SCRIPT_NAMES = {
+    "hi": "DEVANAGARI",
+    "ar": "ARABIC",
+    "zh": "CJK",
+    "zh-CN": "CJK",
+    "ja": "JAPANESE",
+    "ko": "HANGUL",
+    "th": "THAI",
+    "ru": "CYRILLIC",
+    "uk": "CYRILLIC",
+}
 LANG_REQUIRED_SCRIPT = {
-    "hi":  ("DEVANAGARI", (0x0900, 0x097F)),
-    "ar":  ("ARABIC",     (0x0600, 0x06FF)),
-    "zh":  ("CJK",        (0x4E00, 0x9FFF)),
-    "zh-CN": ("CJK",      (0x4E00, 0x9FFF)),
-    "ja":  ("JAPANESE",   (0x3040, 0x30FF)),
-    "ko":  ("HANGUL",     (0xAC00, 0xD7AF)),
-    "th":  ("THAI",       (0x0E00, 0x0E7F)),
-    "ru":  ("CYRILLIC",   (0x0400, 0x04FF)),
-    "uk":  ("CYRILLIC",   (0x0400, 0x04FF)),
+    code: (name, SCRIPT_RANGES[code]) for code, name in _SCRIPT_NAMES.items()
 }
 
 
 def _script_ratio(text: str, code: str) -> float:
-    """Fraction of letters in `text` that fall inside the script block we
-    expect for `code`. Punctuation/digits/whitespace are excluded from the
-    denominator so a Hindi sentence ending in "." still scores 1.0."""
-    info = LANG_REQUIRED_SCRIPT.get(code)
-    if not info:
-        return 1.0
-    _, (lo, hi) = info
-    letters = [c for c in text if c.isalpha()]
-    if not letters:
-        return 1.0
-    inside = sum(1 for c in letters if lo <= ord(c) <= hi)
-    return inside / len(letters)
+    """Fraction of letters in `text` that fall inside the script we expect for
+    `code`. Punctuation/digits/whitespace are excluded from the denominator so
+    a Hindi sentence ending in "." still scores 1.0."""
+    return script_ratio(text, code)
 
 
 def _looks_like_target(text: str, code: str, threshold: float = 0.5) -> bool:

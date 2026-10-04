@@ -400,3 +400,46 @@ def test_chat_keeps_a_closing_tag_quoted_from_the_source(monkeypatch):
     monkeypatch.setattr(tr, "_llm_model", lambda: "test-model")
     out = tr._chat(client, system="s", user="Use </think> to close the block.")
     assert out == "Usa </think> para cerrar el bloque."
+
+
+# ── #2576: Japanese is written in kana AND kanji ─────────────────────────────
+# Escaped so the CJK guard (tests/test_no_hardcoded_cjk.py) stays untouched.
+_JA_KANJI_MAJORITY = "\u6771\u4eac\u90fd\u5e81\u306b\u884c\u304f\u3002"  # Tokyo city hall ni iku.
+_JA_ALL_KANJI = "日本語教室"                                # nihongo kyoushitsu
+_JA_SUPPLEMENTARY = "\U00020b9fる。人々"                        # rare Han + iteration mark
+
+
+@pytest.mark.parametrize("text", [_JA_KANJI_MAJORITY, _JA_ALL_KANJI, _JA_SUPPLEMENTARY])
+def test_japanese_han_letters_count_as_target_script(text):
+    from api.routers.dub_translate import _looks_like_target
+
+    assert tr._looks_like_target_script(text, "ja")
+    assert _looks_like_target(text, "ja")
+
+
+@pytest.mark.parametrize("text", ["This is English.", "Это русский.", "هذا عربي"])
+def test_japanese_gate_still_rejects_other_scripts(text):
+    from api.routers.dub_translate import _looks_like_target
+
+    assert not tr._looks_like_target_script(text, "ja")
+    assert not _looks_like_target(text, "ja")
+
+
+def test_hindi_and_chinese_gates_unchanged_by_shared_ranges():
+    from api.routers.dub_translate import LANG_REQUIRED_SCRIPT, _script_ratio
+
+    assert _script_ratio("नमस्ते दोस्त.", "hi") == 1.0
+    assert _script_ratio("Hello friend", "hi") == 0.0
+    assert _script_ratio(_JA_ALL_KANJI, "zh") == 1.0
+    assert _script_ratio("Hello", "es") == 1.0
+    assert LANG_REQUIRED_SCRIPT["ja"][0] == "JAPANESE"
+
+
+def test_cinematic_accepts_kanji_majority_japanese(monkeypatch):
+    literal = "私は東京へ行く。"
+    _mock_chain(monkeypatch, "fine", _JA_KANJI_MAJORITY)
+    res = tr.cinematic_refine_sync(
+        "I am going to Tokyo.", literal, source_lang="en", target_lang="ja",
+    )
+    assert res["text"] == _JA_KANJI_MAJORITY
+    assert "degraded" not in res
