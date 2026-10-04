@@ -45,7 +45,12 @@ export async function startDevBackendProxy(
   const server = createServer((incoming, response) => {
     let target: URL;
     try {
-      target = new URL(incoming.url || '/', `${getBaseUrl().replace(/\/+$/, '')}/`);
+      // Resolve relative to the base: a leading slash would drop a reverse-proxy
+      // path prefix, and `//host` would leave the configured backend entirely.
+      target = new URL(
+        (incoming.url || '/').replace(/^\/+/, ''),
+        `${getBaseUrl().replace(/\/+$/, '')}/`,
+      );
     } catch {
       response.writeHead(502, { 'content-type': 'application/json' });
       response.end('{"detail":"Invalid backend target"}');
