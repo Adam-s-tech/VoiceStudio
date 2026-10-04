@@ -56,6 +56,25 @@ FLORES_CODES = {
     "ro": "ron_Latn", "hu": "hun_Latn", "bg": "bul_Cyrl", "sk": "slk_Latn",
     "sl": "slv_Latn", "hr": "hrv_Latn", "sr": "srp_Cyrl", "lt": "lit_Latn",
     "et": "est_Latn", "sw": "swh_Latn", "af": "afr_Latn", "ms": "zsm_Latn",
+    # Every remaining two-letter code the dub pickers and Whisper can emit.
+    # Script variants follow the NLLB-200 defaults (Serbian Cyrillic, Gurmukhi
+    # Punjabi, Northern Kurdish in Latin script, Tosk Albanian, ...). Latin (la),
+    # Hawaiian (haw) and Breton (br) have no NLLB-200 code and stay unsupported.
+    "am": "amh_Ethi", "as": "asm_Beng", "az": "azj_Latn", "ba": "bak_Cyrl",
+    "be": "bel_Cyrl", "bo": "bod_Tibt", "bs": "bos_Latn", "ca": "cat_Latn",
+    "cy": "cym_Latn", "eu": "eus_Latn", "fo": "fao_Latn", "gd": "gla_Latn",
+    "gl": "glg_Latn", "ha": "hau_Latn", "ht": "hat_Latn", "hy": "hye_Armn",
+    "is": "isl_Latn", "iw": "heb_Hebr", "jv": "jav_Latn", "jw": "jav_Latn",
+    "ka": "kat_Geor", "kk": "kaz_Cyrl", "km": "khm_Khmr", "ku": "kmr_Latn",
+    "ky": "kir_Cyrl", "lb": "ltz_Latn", "ln": "lin_Latn", "lo": "lao_Laoo",
+    "lv": "lvs_Latn", "mg": "plt_Latn", "mi": "mri_Latn", "mk": "mkd_Cyrl",
+    "mn": "khk_Cyrl", "mt": "mlt_Latn", "my": "mya_Mymr", "ne": "npi_Deva",
+    "no": "nob_Latn", "oc": "oci_Latn", "pa": "pan_Guru", "ps": "pbt_Arab",
+    "sa": "san_Deva", "sd": "snd_Arab", "si": "sin_Sinh", "sm": "smo_Latn",
+    "sn": "sna_Latn", "so": "som_Latn", "sq": "als_Latn", "su": "sun_Latn",
+    "tg": "tgk_Cyrl", "tk": "tuk_Latn", "tl": "tgl_Latn", "fil": "tgl_Latn",
+    "tt": "tat_Cyrl", "uz": "uzn_Latn", "xh": "xho_Latn", "yi": "ydd_Hebr",
+    "yo": "yor_Latn", "zu": "zul_Latn",
 }
 
 
