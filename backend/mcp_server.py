@@ -317,7 +317,6 @@ def _backend_budget_s(kind: str, text: str = "") -> float | None:
         base = max(
             _env_seconds("OMNIVOICE_GENERATE_TIMEOUT_S", 300.0),
             _env_seconds("OMNIVOICE_CPU_GENERATE_TIMEOUT_S", 600.0),
-            _GENERATE_SIDECAR_FLOOR_S,
         )
         # Shared with the backend's rule (core.generate_budget): covers the
         # legacy length bonus AND the automatic CPU ceiling (the backend budgets
@@ -326,7 +325,7 @@ def _backend_budget_s(kind: str, text: str = "") -> float | None:
         from core.generate_budget import client_execution_budget_s
 
         execution = client_execution_budget_s(
-            base, len(text or ""),
+            max(base, _GENERATE_SIDECAR_FLOOR_S), len(text or ""),
             cpu_auto_possible=not os.environ.get("OMNIVOICE_CPU_GENERATE_TIMEOUT_S", "").strip(),
         ) + _GENERATE_SIDECAR_GRACE_S
         # Classic /generate sends no response until the whole render finishes.
@@ -339,9 +338,16 @@ def _backend_budget_s(kind: str, text: str = "") -> float | None:
             _env_seconds("OMNIVOICE_MODEL_LOAD_TIMEOUT_S", 1800.0),
         )
         extension = max(extension_cap, _GENERATE_PROGRESS_BUDGETS * execution)
+        queue = _env_seconds("OMNIVOICE_GPU_QUEUE_TIMEOUT_S", 1800.0)
+        # A clone without a cached reference transcript first runs a separate
+        # guarded ASR job. That job uses generate_timeout_s("") without an
+        # engine: no length bonus or sidecar grace, but its own queue and
+        # progress extension. MCP cannot see whether the profile needs it.
+        reference = queue + base + max(extension_cap, _GENERATE_PROGRESS_BUDGETS * base)
         return (
             model_load
-            + _env_seconds("OMNIVOICE_GPU_QUEUE_TIMEOUT_S", 1800.0)
+            + reference
+            + queue
             + execution
             + extension
         )
@@ -983,4 +989,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -171,6 +171,12 @@ model-load, queue, sidecar and progress-extension allowances. The ceiling avoids
 guessing the compute budget from typed text that number normalization or
 pronunciation rules can expand before synthesis.
 
+MCP generation also allows a separate reference-transcription job before
+synthesis for clone profiles without a cached transcript. That job uses the
+generation base budget, its own queue and progress extension; it does not use
+the standalone transcription timeout. MCP includes this allowance conservatively
+because it cannot inspect the backend's cached reference transcript.
+
 Both rows above can be overridden, and the two vars are independent:
 
 - An explicit `OMNIVOICE_CPU_GENERATE_TIMEOUT_S` always governs CPU-family
@@ -395,4 +401,3 @@ with hardware-independent budgets: one synthesis per chunk, one assembly,
 one final Studio effects pass, and linear copied sample volume. No model download
 or wall-clock speed threshold is involved. These complement the streaming/dub
 budgets in `tests/test_perf_operation_budgets.py`.
-
