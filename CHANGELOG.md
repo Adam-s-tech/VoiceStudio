@@ -103,13 +103,54 @@ metadata and the backend fallback mirror it.
 - License notice: commercial use is free under the AGPL; the paid licence is for closed-source use, with Pro plans linked (#2578)
 
 ### Fixed
-
+- Fix it with an agent finds Claude Code and other agent CLIs installed in user folders (~/.local/bin, Homebrew, npm global) when launched from Finder or a desktop entry, and rechecks each time the panel opens (#2602) — thanks @flatlinebb on Discord!
+- YouTube downloads no longer fail with Errno 22 or Broken pipe when the app's stdout is closed; yt-dlp progress and messages now go to the log (#2602) — thanks @marioteka and @shizzy_prod on Discord!
+- Offline NLLB translation accepts every language in the dubbing pickers (Nepali, Catalan, Latvian, Georgian, Punjabi, Norwegian and about 50 more) for both target and auto-detected source (#2602) — thanks @lamomg on Discord!
+- Voice Design explains when the selected engine can't design voices (IndexTTS2, MOSS, dots, Confucius4, GPT-SoVITS, Supertonic, OmniVoice GGUF) or can't reuse a saved voice's sample (KittenTTS, Supertonic, Sherpa-ONNX) instead of failing or silently switching to a preset voice (#2602) — thanks @natebojangles on Discord!
+- Voice Design follows your edits after you pick or save a designed voice: changing details, gender, the description or the seed no longer re-renders the saved sample (#2602) — thanks @retrologic on Discord!
+- Saving a voice design skips cold engine loading and downloads, including when a warm engine unloads during the save (#2583) — thanks @simoncheese!
+- Dubbing keeps Remove video available after an interrupted or failed run, so a YouTube link can replace the source, and labels it Remove audio for audio files (#2584) — thanks @harrsoft-dev!
+- Audio-only dub previews reuse one background mix instead of writing a new full-length WAV on every seek, which filled the disk on long dubs (#2581) — thanks @PsychoRhythmist!
+- References longer than 20 s keep using the installed speech-to-text model when OmniVoice retries generation without its cached voice prompt (#2579) — thanks @mahdinazmi!
+- Model Catalogue disk warnings name the 10 GB kept free after each download and use the same rule as the installer (#2597) — thanks @HuntingSuccubus!
+- Saving a cloned voice works offline: installed speech-to-text models load from disk and save-time transcription is time-limited (#2583) — thanks @simoncheese!
+- Apple Silicon Macs running the Intel build are pointed to the Apple Silicon download instead of failing setup on PyTorch (#2598) — thanks @igiteam!
+- Source checkouts that cannot start the backend say whether `.venv` is missing or which Python import failed (#2555) — thanks @spvn81!
+- Native backend crashes name the faulting frame and report the VoiceStudio frames and other threads that were running (#2382, #2250, #2187) — thanks @quan0pek and @geogjaime!
+- Streaming previews play the last chunk to its end and resume at full volume after a generation pause (#2518) — thanks @rudycelekli!
+- Remote backend checks and WebSocket sign-in time out when a server stalls mid-response instead of waiting forever (#2527) — thanks @rudycelekli!
+- Remote backends served under a reverse-proxy path prefix keep that prefix for dictation, events and speech WebSockets (#2537) — thanks @rudycelekli!
+- Cancelling dictation while it connects no longer hijacks the next dictation's connection (#2533) — thanks @rudycelekli!
+- Deleting one dictation transcript no longer removes other transcripts saved in the same moment (#2538) — thanks @rudycelekli!
+- Reusing a Clone take restores its WAV precision and Even out volume choice (#2526) — thanks @rudycelekli!
+- Compare voices and voice-profile previews warn when part of the text produced no speech (#2548) — thanks @rudycelekli!
+- Saving an export over an existing file keeps the old file intact if the new write fails (#2560) — thanks @rudycelekli!
+- First-run setup shows the right download size and active package when similarly named packages download together (#2562) — thanks @rudycelekli!
+- Storage scans now enforce their time budget between files, return the measured partial total, and mark Other incomplete when it expires or an entry is unreadable (#2564) — thanks @rudycelekli!
+- Batch retry and delete no longer race, so a job cannot be queued twice and its files are never removed while it is active or stopping (#2547) — thanks @rudycelekli!
+- Stopping an audiobook or Stories render marks its job cancelled instead of leaving it running, and refused renders no longer stay running either (#2536) — thanks @rudycelekli!
+- Audiobook and Stories descriptions with CRLF or CR paragraph breaks keep every paragraph in the exported file (#2528) — thanks @rudycelekli!
+- Re-locking a voice to another take re-renders its audiobook and Stories audio instead of replaying the previous take, and renders already running keep reading their take (#2535) — thanks @rudycelekli!
+- Longform chapters and segments are cached per synthesis language, so changing language no longer replays the previous audio (#2524) — thanks @rudycelekli!
+- Moving app data into an existing empty folder no longer fails with an EISDIR rollback (#2521) — thanks @rudycelekli!
+- Models folders with a hash, quote or backslash in the name now survive the saved-settings round trip, while hand-written `${HOME}` paths still expand (#2519) — thanks @rudycelekli!
+- Japanese translations written mostly in kanji are no longer rejected as the wrong script (#2576) — thanks @rudycelekli!
+- Dub quality check compares each track with its own language text, so correct multilingual dubs are no longer flagged (#2574) — thanks @rudycelekli!
+- Dub transcripts keep speech from segments the aligner could not time instead of dropping it (#2572) — thanks @rudycelekli!
+- Word alignment retries on the CPU when its model fails to load on Apple GPU, keeping precise dub timing (#2570) — thanks @rudycelekli!
+- Concurrent MCP voice-binding edits keep each other's changes, and simultaneous first saves no longer fail (#2568) — thanks @rudycelekli!
+- Dub visual-context analysis removes its temporary frames after success, errors and cancelled requests (#2566) — thanks @rudycelekli!
+- Gallery and Voice Clone trimming no longer stay stuck decoding when a file never reports its duration (#2558) — thanks @rudycelekli!
+- Pronunciation dictionary backups keep which duplicate entry wins, and the list, test and synthesis use one order (#2552) — thanks @rudycelekli!
+- Pronunciation entries scoped by language name or 3-letter code now match the right language, and Spanish entries no longer apply to Estonian (#2542) — thanks @rudycelekli!
+- Network Sharing from packaged desktop apps serves the web interface to LAN devices on macOS, Windows and Linux, and never redirects them to their own `localhost` (#2599) — thanks @Xpertfall!
 - A busy attached backend shows as unresponsive instead of crashed, and background status polls no longer starve the backend worker pool (#2608)
 - Elevated Windows app removal stops before deleting data and points to a normal PowerShell window or Settings (#2578)
 - Contributor audits inspect committed files and exclude submodules, while still stopping on failed file attribution (#2556)
 
 - Contributor audits stop on unreadable Git history instead of dropping affected authors (#2556)
 
+- The CLA check accepts the sign line without a final full stop and replies when a comment cannot be recorded (#2586)
 - CLA rechecks clear older approvals, reject duplicate PR heads, and block failed status updates (#2556)
 - Keep audiobook chapter boundaries when importing CR-only manuscripts (#2508) — thanks @rudycelekli!
 - Preserve busy sidecars during engine-level unload instead of terminating their active operation (#2507) — thanks @Anuj04432 and @rudycelekli!
@@ -190,10 +231,7 @@ metadata and the backend fallback mirror it.
 - Release Docker images publish when the GitHub Release is published; `:latest` only ever comes from `main` (#2578)
 - One bun, TypeScript and Playwright version and one lockfile across the workspace; frontend unit tests run in the required check (#2578)
 - Tests keep the review-bot configs, issue-template labels and locale catalogs consistent (#2578)
-
-### CI
 - Trusted base-branch checks reject leaked, placeholder, and AI agent identities while allowing human co-authors with names shared by agents (#2556)
-- GitHub Actions are pinned to exact commits and kept current by Dependabot (#2556)
 
 ## [0.5.6] — 2026-09-23
 

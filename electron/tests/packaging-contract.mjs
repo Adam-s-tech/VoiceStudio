@@ -75,6 +75,21 @@ for (const resource of [readme, 'LICENSE', 'pyproject.toml', 'uv.lock', 'backend
   if (artifactRequested)
     assert(existsSync(resolve(artifactResources, resource)), 'Packaged resource: ' + resource);
 }
+// #2599: LAN devices load the web UI from the backend, which serves this
+// build from the app's resources. Without it they only get an error page.
+const webUi = config.extraResources.find((item) => item.to === 'frontend/dist');
+assert(webUi, 'Required resource: frontend/dist (web UI for LAN sharing)');
+for (const [label, dir] of [
+  ['Built', resolve(root, webUi.from)],
+  ...(artifactRequested ? [['Packaged', resolve(artifactResources, webUi.to)]] : []),
+]) {
+  const index = resolve(dir, 'index.html');
+  assert(existsSync(index), `${label} web UI entry (run build:web first): ${index}`);
+  const html = readFileSync(index, 'utf8');
+  for (const [, asset] of html.matchAll(/(?:src|href)="\/(assets\/[^"]+)"/g)) {
+    assert(existsSync(resolve(dir, asset)), `${label} web UI asset: ${asset}`);
+  }
+}
 const bundledUvSource = config.extraResources.find((item) => /^tools\/uv(?:\.exe)?$/.test(item.to));
 if (process.env.VOICESTUDIO_RUST_TARGET || process.env.VOICESTUDIO_BUNDLED_UV) {
   assert(bundledUvSource, 'Release builds package the pinned uv executable');
@@ -142,5 +157,5 @@ assert(
 );
 
 console.log(
-  `PASS: built entry syntax, Python resource contract, app version source${artifactRequested ? ` and ${process.platform} artifact` : ''}`,
+  `PASS: built entry syntax, Python and web UI resource contract, app version source${artifactRequested ? ` and ${process.platform} artifact` : ''}`,
 );

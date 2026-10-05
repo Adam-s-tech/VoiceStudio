@@ -33,12 +33,14 @@ import { brandIcon } from '@/lib/brand';
 import { cn } from '@/lib/utils';
 import type { RuntimeRegion } from '../../../preload/index.d';
 import { getBridge, isMac } from './bridge';
+import { ExternalLink } from './external-link';
 
 interface BackendGateProps {
   children: ReactNode;
   repairDock?: ReactNode;
 }
 
+const RELEASES_URL = 'https://github.com/debpalash/VoiceStudio/releases/latest';
 const RETRYABLE = new Set(['crashed', 'failed', 'port_in_use']);
 const SETUP_PHASES = ['checking', 'downloading_uv', 'installing_deps', 'verifying'] as const;
 
@@ -109,6 +111,9 @@ export function BackendGate({ children, repairDock }: BackendGateProps) {
   // Intel Macs can never resolve the runtime (#2365): the setup screen
   // offers a remote backend instead of a local install that must fail.
   const unsupportedPlatform = setup && status.setupIssue === 'unsupported_platform';
+  // The Intel build under Rosetta on Apple Silicon (#2598): the same Mac runs
+  // the local backend once the Apple Silicon build is installed.
+  const wrongArchitecture = setup && status.setupIssue === 'wrong_architecture';
   const running = status.stage === 'starting' || status.stage === 'attaching' || installing;
   const seconds = useElapsedSeconds(status.elapsedMs, running);
   const setupPhaseIndex = status.setupPhase ? SETUP_PHASES.indexOf(status.setupPhase) : 0;
@@ -368,15 +373,20 @@ export function BackendGate({ children, repairDock }: BackendGateProps) {
           {setup ? (
             <>
               <p className="max-w-sm text-sm text-muted-foreground">{t('backend.setup_hint')}</p>
+              {wrongArchitecture && (
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  {t('backend.setup_wrong_architecture')}
+                </p>
+              )}
               {unsupportedPlatform && (
-                <>
-                  <p className="max-w-sm text-sm text-muted-foreground">
-                    {t('backend.setup_unsupported_platform')}
-                  </p>
-                  <div className="w-full text-left">
-                    <RemoteBackendSettings />
-                  </div>
-                </>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  {t('backend.setup_unsupported_platform')}
+                </p>
+              )}
+              {(unsupportedPlatform || wrongArchitecture) && (
+                <div className="w-full text-left">
+                  <RemoteBackendSettings />
+                </div>
               )}
               <div className="grid w-full grid-cols-2 gap-2">
                 <label className="space-y-1 text-left text-xs text-muted-foreground">
@@ -486,7 +496,12 @@ export function BackendGate({ children, repairDock }: BackendGateProps) {
                   </div>
                 </div>
               )}
-              {!unsupportedPlatform && (
+              {wrongArchitecture && (
+                <ExternalLink href={RELEASES_URL}>
+                  {t('backend.download_apple_silicon')}
+                </ExternalLink>
+              )}
+              {!unsupportedPlatform && !wrongArchitecture && (
                 <Button disabled={restarting || choosingLocation} onClick={() => void runSetup()}>
                   {status.runtimeInterrupted
                     ? t('common.resume')
