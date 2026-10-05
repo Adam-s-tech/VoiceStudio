@@ -230,13 +230,59 @@ def test_every_client_waits_at_least_as_long_as_the_backend(mm, monkeypatch, raw
     assert mcp_server._post_timeout_s("generate", raw) > backend
 
 
-def test_backend_reports_the_ceiling_only_where_it_applies(mm, monkeypatch, gb):
-    _host(monkeypatch, "cpu")
+def _route(monkeypatch, family, gpu_compat):
+    """A host of ``family`` whose active engine declares ``gpu_compat``."""
+    import core.device_caps as caps
+    import services.tts_backend as tb
+
+    host = caps.HostCaps(family=family, available_families=tuple({family, "cpu"}))
+    engine = type("RoutedEngine", (), {"gpu_compat": gpu_compat, "min_vram_gb": 0.0})
+    monkeypatch.setattr(caps, "detect_host_caps", lambda: host)
+    monkeypatch.setattr(tb, "active_backend_id", lambda: "routed")
+    monkeypatch.setattr(tb, "get_backend_class", lambda _id: engine)
+
+
+def test_ceiling_is_reported_for_cpu_hosts(mm, monkeypatch, gb):
+    _route(monkeypatch, "cpu", ("cpu",))
     assert mm.generate_budget_s()["cpuAutoCeiling"] == gb.CPU_AUTO_CAP_S
-    _host(monkeypatch, "cuda")
+
+
+@pytest.mark.parametrize("family,compat", [
+    ("cuda", ("cpu",)),            # CPU-only engine on a GPU host
+    ("rocm", ("cuda", "cpu")),     # engine without a ROCm path -> CPU fallback
+])
+def test_ceiling_is_reported_when_a_gpu_host_routes_to_cpu(mm, monkeypatch, gb, family, compat):
+    """Fail-before: the budget was keyed on host family only, so a job the
+    backend budgets on the CPU rule got a zero ceiling and the UI backstop
+    could abort it inside its 7200 s budget."""
+    _route(monkeypatch, family, compat)
+    assert mm.generate_timeout_s("x" * 5_000, execution_device="cpu") == gb.CPU_AUTO_CAP_S
+    assert mm.generate_budget_s()["cpuAutoCeiling"] == gb.CPU_AUTO_CAP_S
+
+
+def test_ceiling_is_zero_for_gpu_routed_jobs(mm, monkeypatch):
+    _route(monkeypatch, "cuda", ("cuda", "cpu"))
     assert mm.generate_budget_s()["cpuAutoCeiling"] == 0.0
+
+
+def test_ceiling_follows_the_requested_engine(mm, monkeypatch, gb):
+    """?engine= reports the route of THAT engine, not only the active one."""
+    import core.device_caps as caps
+    import services.tts_backend as tb
+
+    _route(monkeypatch, "cuda", ("cuda", "cpu"))
+    cpu_engine = type("Cpu", (), {"gpu_compat": ("cpu",), "min_vram_gb": 0.0})
+    gpu_engine = type("Gpu", (), {"gpu_compat": ("cuda", "cpu"), "min_vram_gb": 0.0})
+    monkeypatch.setattr(
+        tb, "get_backend_class", lambda eid: cpu_engine if eid == "cpu-eng" else gpu_engine
+    )
+    assert mm.generate_budget_s("cpu-eng")["cpuAutoCeiling"] == gb.CPU_AUTO_CAP_S
+    assert mm.generate_budget_s("gpu-eng")["cpuAutoCeiling"] == 0.0
+
+
+def test_ceiling_is_zero_with_an_explicit_budget(mm, monkeypatch):
+    _route(monkeypatch, "cpu", ("cpu",))
     monkeypatch.setattr(mm, "CPU_JOB_TIMEOUT_S", 999.0)  # explicit CPU budget
-    _host(monkeypatch, "cpu")
     assert mm.generate_budget_s()["cpuAutoCeiling"] == 0.0
 
 

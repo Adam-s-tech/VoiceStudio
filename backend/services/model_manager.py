@@ -4115,7 +4115,26 @@ def unload_diarization_pipeline() -> bool:
     return True
 
 
-def generate_budget_s() -> dict[str, float]:
+def _local_route_is_cpu(engine_id: "str | None" = None) -> bool:
+    """Does a local /generate for this engine (default: the active one) end up
+    computing on the CPU? True for a CPU host AND for an accelerated host whose
+    engine is CPU-only or falls back to CPU — the same routing decision the
+    generate dispatch budgets from. A failed lookup falls back to the host
+    family, which is what an engine-less budget uses."""
+    from core.device_caps import detect_host_caps
+
+    caps = detect_host_caps()
+    try:
+        from services.engine_routing import runtime_compute_profile
+        from services.tts_backend import active_backend_id, get_backend_class
+
+        cls = get_backend_class(engine_id or active_backend_id())
+        return runtime_compute_profile(cls, caps)["effective_device"] == "cpu"
+    except Exception:  # noqa: BLE001 — routing lookup is advisory
+        return caps.family == "cpu"
+
+
+def generate_budget_s(engine_id: "str | None" = None) -> dict[str, float]:
     """The active /generate budgets, including operator overrides.
 
     The client backstop (electron/src/shared/utils/generateBudget.ts) takes the
@@ -4124,16 +4143,15 @@ def generate_budget_s() -> dict[str, float]:
 
     ``cpuAutoCeiling`` is the most the AUTOMATIC CPU budget can grant any text
     (#2609). The client cannot see the normalized text the backend budgets, so
-    on a CPU host running the default budget it waits for this ceiling instead
-    of guessing from the typed length. 0 when it does not apply (explicit
-    budget, or not a CPU host).
+    when the effective local route for this engine computes on the CPU and the
+    budget is the default one, it waits for this ceiling instead of guessing
+    from the typed length. 0 for GPU-routed jobs and explicit budgets, so the
+    GPU backstop does not grow.
     """
     ceiling = 0.0
     try:
-        from core.device_caps import detect_host_caps
-
         universal, cpu_explicit = _explicit_budget_flags()
-        if detect_host_caps().family == "cpu" and not cpu_explicit and not universal:
+        if not cpu_explicit and not universal and _local_route_is_cpu(engine_id):
             ceiling = automatic_cpu_ceiling_s(CPU_JOB_TIMEOUT_S)
     except Exception:  # noqa: BLE001 — a failed probe just omits the hint
         pass

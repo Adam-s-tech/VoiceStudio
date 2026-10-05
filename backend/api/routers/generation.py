@@ -1794,11 +1794,14 @@ def _apply_routing_headers(headers, engine_notice, decision):
 
 
 @router.get("/generate/budget")
-def generate_budget():
-    """Active generate budgets, so the UI's backstop follows operator overrides."""
+def generate_budget(engine: Optional[str] = None):
+    """Active generate budgets, so the UI's backstop follows operator overrides.
+
+    ``engine`` (default: the active engine) selects the local route the
+    CPU-ceiling hint is reported for."""
     from services.model_manager import generate_budget_s
 
-    return generate_budget_s()
+    return generate_budget_s(engine)
 
 
 @router.post("/generate")
