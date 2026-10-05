@@ -7,15 +7,19 @@ import { asciiSafePthFiles, asciiSafePthText, pythonLiteral } from './pth-ascii'
 
 const CJK_USER = '\u5f20\u4e09'; // a typical non-English Windows username
 
-function python(): string | null {
-  for (const candidate of ['python3', 'python']) {
-    const probe = spawnSync(candidate, ['-c', 'import sys; print(sys.version_info[0])'], {
-      encoding: 'utf8',
-    });
-    if (probe.status === 0 && probe.stdout.trim() === '3') return candidate;
+/** A Python 3 launcher; the Windows `py` launcher covers hosts with no `python3`. */
+const PYTHON = (() => {
+  for (const [command, ...prefix] of [['python3'], ['python'], ['py', '-3']]) {
+    const probe = spawnSync(
+      command!,
+      [...prefix, '-c', 'import sys; print(sys.version_info[0], sys.version_info[1])'],
+      { encoding: 'utf8' },
+    );
+    const [major, minor] = probe.stdout.trim().split(' ').map(Number);
+    if (probe.status === 0 && major === 3) return { command: command!, prefix, minor: minor! };
   }
   return null;
-}
+})();
 
 describe('asciiSafePthFiles (#1783)', () => {
   it('rewrites a non-ASCII editable path line and leaves ASCII files untouched', async () => {
@@ -53,7 +57,7 @@ describe('asciiSafePthFiles (#1783)', () => {
     );
   });
 
-  it.skipIf(!python())('lets site add the original directory under an ASCII locale', () => {
+  it.skipIf(!PYTHON)('lets site add the original directory under an ASCII locale', () => {
     const venv = mkdtempSync(join(tmpdir(), 'vs-pth-site-'));
     const sitePackages = join(venv, 'site-packages');
     const target = join(venv, CJK_USER, 'project');
@@ -67,15 +71,28 @@ describe('asciiSafePthFiles (#1783)', () => {
     // Python 3.11 decodes .pth files in the locale encoding even in UTF-8
     // mode; an ASCII locale reproduces the cp936 failure off Windows while
     // UTF-8 mode keeps the file-system encoding able to name the directory.
-    const env = { ...process.env, LC_ALL: 'C', LANG: 'C', PYTHONCOERCECLOCALE: '0', PYTHONUTF8: '1' };
+    const env = {
+      ...process.env,
+      LC_ALL: 'C',
+      LANG: 'C',
+      PYTHONCOERCECLOCALE: '0',
+      PYTHONUTF8: '1',
+    };
     const run = () =>
-      spawnSync(python()!, ['-c', script, sitePackages, target], { encoding: 'utf8', env });
+      spawnSync(PYTHON!.command, [...PYTHON!.prefix, '-c', script, sitePackages, target], {
+        encoding: 'utf8',
+        env,
+      });
 
     writeFileSync(pth, target, 'utf8');
     const before = run();
-    const minor = Number(before.stdout.split(' ')[0]);
-    // 3.13+ reads .pth files as UTF-8 first, so only older interpreters fail.
-    if (before.status !== 0 || minor < 13) expect(before.stdout.trim().endsWith('True')).toBe(false);
+    // Only 3.11 decodes .pth files in the locale encoding while ignoring
+    // UTF-8 mode (3.10 and 3.12 honour PYTHONUTF8; 3.13+ read UTF-8 first), so
+    // the failure this guards against reproduces on that interpreter alone.
+    // Which Python a host ships is not ours to choose, so the unfixed-file
+    // failure is asserted only where it can exist; the fixed file must work
+    // on every interpreter.
+    if (PYTHON!.minor === 11) expect(before.stdout.trim().endsWith('True')).toBe(false);
 
     writeFileSync(pth, asciiSafePthText(target), 'utf8');
     const after = run();
