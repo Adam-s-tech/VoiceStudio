@@ -1,8 +1,10 @@
 # Installer proposal: one approved plan and recoverable progress
 
-**Proposed design only, refreshed 2026-10-04.** Baseline:
+**Proposed design only.** Source-review baseline (2026-10-04):
 [`fb9a960c88744edc36daf2cf38d48df0971ee713`](https://github.com/debpalash/VoiceStudio/commit/fb9a960c88744edc36daf2cf38d48df0971ee713)
 (app 0.5.6). This documentation-only change implements none of the behavior below.
+The branch was integrated with main on 2026-10-05; see the [integration refresh](review.md#integration-refresh-2026-10-05)
+for landed changes and current overlap. Historical probes remain pinned to their original baseline.
 
 - [Remaining findings, merged fixes and open-PR overlap](review.md)
 - Current behavior: [runtime](../../electron-runtime.md), [model downloads](../../downloading-models.md),
@@ -23,14 +25,16 @@ The Electron install/uninstall guides and stable-only update policy were aligned
 [#2578](https://github.com/debpalash/VoiceStudio/pull/2578).
 Package-managed installs can disable the updater with `VOICESTUDIO_DISABLE_UPDATER=1`
 ([#2557](https://github.com/debpalash/VoiceStudio/pull/2557)). Preserve these changes.
-Do not restore the removed Preview update channel or duplicate the open fixes
-listed in the [review](review.md#open-pr-overlap).
-In particular, [#2605](https://github.com/debpalash/VoiceStudio/pull/2605) adds
-source CPU selection/no-sync restarts and startup fixes, while draft
+Do not restore the removed Preview update channel or duplicate the landed and open
+work listed in the [review](review.md#integration-refresh-2026-10-05).
+[#2602](https://github.com/debpalash/VoiceStudio/pull/2602)'s disk-headroom, Rosetta
+and runtime package-progress changes and [#2605](https://github.com/debpalash/VoiceStudio/pull/2605)'s
+source CPU selection/no-sync restarts and startup fixes have now merged. Draft
 [#2607](https://github.com/debpalash/VoiceStudio/pull/2607) builds Windows AMD/ROCm
 desktop integration on [#2600](https://github.com/debpalash/VoiceStudio/pull/2600)'s
-source recipe. Reconcile their selector, interpreter and test overlap before
-implementing runtime slices; neither draft establishes new shipped platform support.
+source recipe. Reconcile its selector, interpreter and test overlap with the landed
+source/runtime changes before implementing runtime slices; the draft does not
+establish shipped or qualified Windows AMD support.
 
 ## Proposed user flow
 
@@ -94,8 +98,9 @@ until a replacement policy is measured. Unknown capacity is distinct from zero.
 
 Runtime recipes should validate OS/architecture/accelerator combinations before
 network work and avoid downloading CUDA before replacing it with CPU/ROCm. The
-remaining recipe edges and #2605/#2607 integration requirements are identified in
-the [review](review.md#open-pr-overlap); reuse the existing CPU path.
+historical recipe edges and #2605/#2607 overlap are identified in the
+[review](review.md#open-pr-overlap); revalidate them against the integration refresh
+and reuse the landed CPU path.
 Keep host, process and Python architecture separate for Rosetta/Windows emulation.
 
 ## Platform boundaries
@@ -107,7 +112,7 @@ These are source-level distribution/runtime facts, not fresh hardware acceptance
 | Windows x64 | NSIS; managed Python; CPU baseline, CUDA depends on driver/engine |
 | Windows ARM64 | Experimental native shell with x64-emulated Python; auto selects CPU; explicit override edge remains in the baseline review; no GPU/NPU promise |
 | macOS ARM64 | DMG/ZIP; MPS/CPU and engine-specific MLX; no universal acceleration claim |
-| macOS x64 | Shell can connect remotely; local runtime blocked; reuse #2602's pending Rosetta guidance rather than duplicate it |
+| macOS x64 | Shell can connect remotely; local runtime blocked; preserve #2602's merged Rosetta guidance |
 | Linux x64 | AppImage and deb; CPU/CUDA with opt-in supported ROCm; package-manager update policy stays intact |
 | Linux ARM64 | No published native desktop build; a browser connected to a supported backend is a separate path |
 

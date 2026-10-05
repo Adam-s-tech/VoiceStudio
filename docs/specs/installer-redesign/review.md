@@ -1,11 +1,36 @@
 # Installer review: remaining findings and overlap
 
-**Baseline:** [`fb9a960c88744edc36daf2cf38d48df0971ee713`][baseline],
+**Source-review baseline:** [`fb9a960c88744edc36daf2cf38d48df0971ee713`][baseline],
 2026-10-04, app 0.5.6. [Proposal](readme.md); no finding is fixed by this docs-only
 patch. The active renderer is `electron/src/renderer/src`, not the legacy shared
-wizard. Tests below used a clean archive of that commit, not a modified checkout.
+wizard. Historical tests below used a clean archive of that commit, not the integrated branch.
 
-## Already addressed on main
+## Integration refresh: 2026-10-05
+
+The branch now includes main [`990f0627ba14dbb309b88c0051ebb953d3101800`](https://github.com/debpalash/VoiceStudio/commit/990f0627ba14dbb309b88c0051ebb953d3101800),
+including the CPU-budget change from #2611. This proposal adds no runtime behavior.
+This is a documentation integration refresh, not a rerun of the source probes or
+native acceptance. The findings, line-pinned evidence and local results below
+remain the 2026-10-04 snapshot and must be revalidated before implementation.
+
+- [#2602][pr2602] merged at `5258077d5967d860da3954bad11be447256e8a61`,
+  including disk-headroom wording, Rosetta guidance and runtime package-progress
+  identity. Preserve these fixes; they are no longer open-PR work
+- [#2605][pr2605] merged at `3fcd381e5c3282b084384dbc38be28ddaba0e6bf`,
+  including source CPU selection/no-sync restarts and native compatibility helpers
+- [#2585][pr2585] remains open at `e87cba0449485b226674961be796b9d3e20ed0a1`.
+  Main has absorbed overlapping fixes through #2602; compare the remaining diff
+  before using this branch as implementation evidence
+- [#2607][pr2607] remains a draft, now at
+  `51e4eb33cc7cbec39493cfeb9027e6a6b15710fb`. Its older reviewed head below is
+  historical. Reconcile the current Windows ROCm work with the landed #2605
+  selector/interpreter changes and retain its native qualification gates
+
+These status checks do not establish new platform support or merge readiness.
+Fresh hosted CI on the integrated PR head is the merge gate; none of the local
+test or hardware results below is claimed for that head.
+
+## Already addressed at the source-review baseline
 
 - [#2500][pr2500]: packaged non-NVIDIA x64 CPU wheels, CPU float32 and experimental
   Windows ARM packaging. Do not reintroduce the old broad CPU/CUDA bootstrap claim
@@ -20,7 +45,8 @@ These merged changes do not establish native acceptance for this review.
 
 ## Open-PR overlap
 
-Read-only PR metadata/diffs were checked on 2026-10-04:
+Historical snapshot: read-only PR metadata/diffs were checked on 2026-10-04.
+For current merged/open status, use the [integration refresh](#integration-refresh-2026-10-05):
 
 | PR / reviewed head | Relevant work already proposed | Treatment here |
 |---|---|---|
@@ -33,7 +59,7 @@ No open-PR tests or merge readiness are asserted here. Their scopes overlap each
 other too; this proposal does not pick a winner or absorb these branches. Refresh
 this snapshot before implementation, especially if any reviewed head changes.
 
-**#2605 / #2607 reconciliation:** seven paths overlap: `CHANGELOG.md`,
+**Historical #2605 / #2607 reconciliation:** seven paths overlapped at the heads above: `CHANGELOG.md`,
 `docs/install/windows.md`, `electron/src/main/runtime-project.ts`,
 `electron/src/main/runtime-project.test.ts`,
 `electron/src/main/runtime-torch-variant.test.ts`, `scripts/setup.py` and
@@ -129,7 +155,7 @@ its details URL points to `README#-faq`, absent from the [baseline README][readm
 There is no newly reproduced consent reversal, full-Max selection bug or performance
 benchmark. Source inspection is not a screen-reader/viewport audit.
 
-## Verification for this refresh
+## Historical verification: 2026-10-04
 
 | Check | Result / limits |
 |---|---|
