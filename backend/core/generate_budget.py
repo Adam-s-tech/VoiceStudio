@@ -40,10 +40,37 @@ def length_bonus_s(chars: int) -> float:
 def cpu_auto_budget_s(floor: float, chars: int) -> float:
     """Default CPU execution budget for ``chars`` characters of input.
 
-    Never below the legacy ``floor + length bonus`` (so it can only be more
-    generous than before), never above ``max(CPU_AUTO_CAP_S, floor)``.
+    Precedence: the automatic ceiling wins. Below it the result is never under
+    the legacy ``floor + length bonus`` (so it is only ever more generous than
+    before); the ceiling ``max(CPU_AUTO_CAP_S, floor)`` is applied to the FINAL
+    value, so even a 500k-character single-shot job is bounded and a wedged
+    engine is caught in finite time. Only automatic budgets are capped — an
+    explicit user setting never reaches this function.
     """
     n = max(0, int(chars))
     legacy = floor + length_bonus_s(n)
-    scaled = min(CPU_SECONDS_PER_CHAR * n, max(CPU_AUTO_CAP_S, floor))
-    return max(legacy, scaled)
+    scaled = CPU_SECONDS_PER_CHAR * n
+    return min(max(legacy, scaled), max(CPU_AUTO_CAP_S, floor))
+
+
+#: Clients (the MCP tools, the desktop UI backstop) size their wait from the
+#: text as the USER typed it, but the backend budgets the text after number
+#: normalization, pronunciation rules and inline overrides — which can be
+#: several times longer ("2024" becomes "two thousand twenty four"). A client
+#: that budgets from the raw length can give up before the backend does.
+TEXT_EXPANSION_FACTOR = 4
+
+
+def client_execution_budget_s(floor: float, chars: int) -> float:
+    """Upper bound of the execution budget the backend may grant ``chars`` raw
+    characters, for any caller that cannot see the backend's final text.
+
+    THE shared function for client-side waits (``mcp_server``; the TypeScript
+    ``generateAbortMs`` mirrors it and is held equal by tests). ``floor`` is the
+    largest execution base the backend could apply (accelerated, CPU, or a
+    sidecar receive timeout). Covers both the legacy and the CPU-speed rule, so
+    it is >= whatever ``model_manager.generate_timeout_s`` returns for any text
+    that normalizes to at most ``TEXT_EXPANSION_FACTOR`` times ``chars``.
+    """
+    n = max(0, int(chars)) * TEXT_EXPANSION_FACTOR
+    return max(floor + length_bonus_s(n), cpu_auto_budget_s(floor, n))

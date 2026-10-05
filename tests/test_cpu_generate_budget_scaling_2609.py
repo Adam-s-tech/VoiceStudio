@@ -15,7 +15,12 @@ import types
 
 import pytest
 
-from core import generate_budget as gb
+
+@pytest.fixture
+def gb():
+    """Resolved at test run time so a stale sys.modules entry can't leak in."""
+    import core.generate_budget as module
+    return module
 
 
 @pytest.fixture
@@ -38,7 +43,7 @@ def _host(monkeypatch, family):
     )
 
 
-def test_cpu_default_budget_covers_a_paragraph(mm, monkeypatch):
+def test_cpu_default_budget_covers_a_paragraph(mm, monkeypatch, gb):
     """Fail-before: a 400-char paragraph got 600 s (+0 length bonus) on CPU."""
     _host(monkeypatch, "cpu")
     assert mm.generate_timeout_s("x" * 400) >= 400 * gb.CPU_SECONDS_PER_CHAR
@@ -60,13 +65,22 @@ def test_cpu_default_budget_is_monotonic_and_never_below_legacy(mm, monkeypatch)
         prev = b
 
 
-def test_cpu_default_budget_has_a_hard_cap(mm, monkeypatch):
-    """A wedged engine must still be caught in finite time."""
+def test_cpu_default_budget_has_a_hard_cap(mm, monkeypatch, gb):
+    """A wedged engine must still be caught in finite time: the automatic
+    ceiling applies to the FINAL value, even where the legacy length bonus
+    alone (13,070 s at 500k chars) would exceed it."""
     _host(monkeypatch, "cpu")
-    assert mm.generate_timeout_s("x" * 500_000) == max(
-        gb.CPU_AUTO_CAP_S, 600.0 + (500_000 - 1200) / 40.0
-    )
-    assert mm.generate_timeout_s("x" * 5_000) <= gb.CPU_AUTO_CAP_S
+    for n in (5_000, 300_000, 500_000, 5_000_000):
+        assert mm.generate_timeout_s("x" * n) <= gb.CPU_AUTO_CAP_S
+    assert mm.generate_timeout_s("x" * 500_000) == gb.CPU_AUTO_CAP_S
+
+
+def test_explicit_cpu_setting_is_not_capped(mm, monkeypatch, gb):
+    """Only the AUTOMATIC budget is capped; an explicit value is authoritative."""
+    monkeypatch.setenv("OMNIVOICE_CPU_GENERATE_TIMEOUT_S", "21000")
+    mm = importlib.reload(mm)
+    _host(monkeypatch, "cpu")
+    assert mm.generate_timeout_s("x" * 500_000) == 21000.0 + (500_000 - 1200) / 40.0
 
 
 def test_gpu_budget_unchanged(mm, monkeypatch):
@@ -98,8 +112,48 @@ def test_runtime_changed_cpu_setting_is_explicit(mm, monkeypatch):
 
 # ── guard-level: moderately long text must not trip, a wedge still does ─────
 
-def _guarded(mm, fn, budget):
-    return asyncio.run(mm.run_on_gpu_pool_guarded(fn, what="TTS generate", timeout=budget))
+class _Render:
+    """A fake render that confirms worker entry and can be released/joined.
+
+    Pool threads outlive their job, so "joined" means the render body returned
+    (``finished``), not that the thread exited.
+    """
+
+    def __init__(self, duration=None):
+        self.entered = threading.Event()
+        self.finished = threading.Event()
+        self.release = threading.Event()
+        self.duration = duration
+
+    def __call__(self):
+        self.entered.set()
+        try:
+            self.release.wait(30 if self.duration is None else self.duration)
+            return "audio"
+        finally:
+            self.finished.set()
+
+    def drain(self):
+        self.release.set()
+        if self.entered.is_set():
+            assert self.finished.wait(5), "released worker did not finish"
+
+
+def _run_with_entry_sync(mm, render, budget):
+    """Run the guarded job; the budget clock only matters once a worker has
+    entered ``render`` (the guard starts it at pickup), and entry is asserted."""
+    async def go():
+        task = asyncio.ensure_future(
+            mm.run_on_gpu_pool_guarded(render, what="TTS generate", timeout=budget)
+        )
+        for _ in range(500):
+            if render.entered.is_set():
+                break
+            await asyncio.sleep(0.01)
+        assert render.entered.is_set(), "worker never entered the render"
+        return await task
+
+    return asyncio.run(go())
 
 
 def test_slow_cpu_render_with_default_budget_completes(mm, monkeypatch):
@@ -110,22 +164,27 @@ def test_slow_cpu_render_with_default_budget_completes(mm, monkeypatch):
     new = mm.generate_timeout_s("x" * 400) / 1000
     assert new > old
 
-    def render():
-        threading.Event().wait(old + 0.3)
-        return "audio"
+    ok = _Render(duration=old + 0.3)
+    try:
+        assert _run_with_entry_sync(mm, ok, new) == "audio"
+    finally:
+        ok.drain()
 
-    assert _guarded(mm, render, new) == "audio"
-    with pytest.raises(mm.GpuJobTimeoutError):
-        _guarded(mm, render, old)
+    slow = _Render(duration=old + 0.3)
+    try:
+        with pytest.raises(mm.GpuJobTimeoutError):
+            _run_with_entry_sync(mm, slow, old)
+    finally:
+        slow.drain()
 
 
 def test_wedged_job_is_still_caught(mm):
-    gate = threading.Event()
+    wedged = _Render()
     try:
         with pytest.raises(mm.GpuJobTimeoutError):
-            _guarded(mm, gate.wait, 0.3)
+            _run_with_entry_sync(mm, wedged, 0.3)
     finally:
-        gate.set()
+        wedged.drain()
 
 
 # ── the mirrors must agree with the real budget ──────────────────────────────
@@ -144,15 +203,20 @@ def test_worker_fallback_matches_model_manager(mm, monkeypatch, n):
     assert deadlines._base_execution_seconds("x" * n) == pytest.approx(real)
 
 
-def test_mcp_tool_waits_for_scaled_cpu_budget(mm, monkeypatch):
+@pytest.mark.parametrize("n", [0, 20, 400, 2_000, 5_000, 500_000])
+def test_every_client_waits_at_least_as_long_as_the_backend(mm, monkeypatch, gb, n):
+    """One rule, identical inputs: the MCP wait and the client bound are >= the
+    backend budget, including when normalization lengthens the text."""
     for v in ("OMNIVOICE_MCP_TIMEOUT_S", "OMNIVOICE_GENERATE_TIMEOUT_S",
               "OMNIVOICE_CPU_GENERATE_TIMEOUT_S", "OMNIVOICE_GPU_QUEUE_TIMEOUT_S"):
         monkeypatch.delenv(v, raising=False)
     import mcp_server
 
     _host(monkeypatch, "cpu")
-    backend_worst = mm.GPU_QUEUE_TIMEOUT_S + mm.generate_timeout_s("x" * 400, execution_device="cpu")
-    assert mcp_server._post_timeout_s("generate", "x" * 400) > backend_worst
+    raw = "x" * n
+    for grown in (n, n * gb.TEXT_EXPANSION_FACTOR):  # normalization may lengthen it
+        backend = mm.GPU_QUEUE_TIMEOUT_S + mm.generate_timeout_s("x" * grown, execution_device="cpu")
+        assert mcp_server._post_timeout_s("generate", raw) > backend
 
 
 # ── the message names the concrete fix for a CPU user ────────────────────────

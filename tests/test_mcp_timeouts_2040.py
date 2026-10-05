@@ -37,9 +37,9 @@ def test_generation_covers_the_queue_and_the_length_scaled_budget(post_timeout):
     assert post_timeout("generate", "short") == QUEUE + 600.0 + GRACE
     # Long input: the default CPU budget scales at CPU speed (#2609), which
     # the tool must follow so it never gives up before the backend does.
-    from core.generate_budget import cpu_auto_budget_s
+    from core.generate_budget import client_execution_budget_s
 
-    assert post_timeout("generate", "x" * 1600) == QUEUE + cpu_auto_budget_s(600.0, 1600) + GRACE
+    assert post_timeout("generate", "x" * 1600) == QUEUE + client_execution_budget_s(600.0, 1600) + GRACE
 
 
 def test_the_larger_cpu_generation_budget_wins(post_timeout, monkeypatch):

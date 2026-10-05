@@ -314,6 +314,29 @@ describe('generateClone', () => {
     await assertion;
   });
 
+  it('outlasts the default CPU budget, which scales with the text (#2609)', () => {
+    const budget = BACKEND_GENERATE_BUDGET_S;
+    for (const chars of [400, 2_000, 5_000, 500_000]) {
+      // Mirrors backend cpu_auto_budget_s: 4 s/char, capped, plus sidecar grace.
+      const backendExecutionS =
+        Math.min(
+          Math.max(
+            budget.executionBase + Math.max(0, chars - budget.freeChars) / budget.charsPerSecond,
+            budget.cpuSecondsPerChar * chars,
+          ),
+          budget.cpuAutoCap,
+        ) + budget.sidecarGrace;
+      const backendMaxS =
+        budget.modelLoad +
+        budget.queueWait +
+        backendExecutionS +
+        Math.max(budget.progressExtensionCap, budget.progressExtensionBudgets * backendExecutionS);
+      expect(generateAbortMs(chars)).toBeGreaterThan(backendMaxS * 1000);
+    }
+    // 2,000 characters is 7,200 s on the backend; the old formula gave up at ~6,680 s.
+    expect(generateAbortMs(2_000)).toBeGreaterThan((7_200 + 1_800 + 1_200) * 1000);
+  });
+
   it('outlasts the backend budget, which grows with the text', () => {
     const budget = BACKEND_GENERATE_BUDGET_S;
     const backendMaxS =

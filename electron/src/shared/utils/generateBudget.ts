@@ -18,6 +18,11 @@
  * - progressExtensionCap / progressExtensionBudgets: heartbeat extension,
  *   max(OMNIVOICE_PROGRESS_EXTENSION_CAP_S, budgets x execution budget)
  * - freeChars / charsPerSecond: the execution budget's length scaling
+ * - cpuSecondsPerChar / cpuAutoCap: the default CPU budget's scaling and its
+ *   ceiling (#2609), from backend/core/generate_budget.py
+ * - textExpansionFactor: the backend budgets the text AFTER number
+ *   normalization and pronunciation rules, which can be several times longer
+ *   than what was typed, so the client budgets from a larger length
  *
  * Operators can raise those budgets through the environment; the backend
  * reports its active values at GET /generate/budget, and the larger of each
@@ -32,6 +37,9 @@ export const BACKEND_GENERATE_BUDGET_S = {
   progressExtensionBudgets: 3,
   freeChars: 1200,
   charsPerSecond: 40,
+  cpuSecondsPerChar: 4,
+  cpuAutoCap: 7200,
+  textExpansionFactor: 4,
 } as const;
 
 const CLIENT_MARGIN_S = 60;
@@ -54,10 +62,15 @@ export function generateAbortMs(textLength = 0, reported: ReportedGenerateBudget
     executionBase: raise('executionBase'),
     progressExtensionCap: raise('progressExtensionCap'),
   };
-  const execution =
-    budget.executionBase +
-    budget.sidecarGrace +
-    Math.max(0, textLength - budget.freeChars) / budget.charsPerSecond;
+  // Mirrors client_execution_budget_s in backend/core/generate_budget.py: the
+  // larger of the legacy length bonus and the default CPU budget's scaling.
+  const chars = Math.max(0, textLength) * budget.textExpansionFactor;
+  const legacy = budget.executionBase + Math.max(0, chars - budget.freeChars) / budget.charsPerSecond;
+  const cpuAuto = Math.min(
+    Math.max(legacy, budget.cpuSecondsPerChar * chars),
+    Math.max(budget.cpuAutoCap, budget.executionBase),
+  );
+  const execution = Math.max(legacy, cpuAuto) + budget.sidecarGrace;
   const extension = Math.max(
     budget.progressExtensionCap,
     budget.progressExtensionBudgets * execution,
