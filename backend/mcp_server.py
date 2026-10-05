@@ -313,12 +313,15 @@ def _backend_budget_s(kind: str, text: str = "") -> float | None:
             _env_seconds("OMNIVOICE_CPU_GENERATE_TIMEOUT_S", 600.0),
         )
         # Shared with the backend's rule (core.generate_budget): covers the
-        # legacy length bonus AND the CPU-speed scaling, computed for text that
-        # may grow during normalization — the tool must never give up before
-        # the backend does (#2609).
+        # legacy length bonus AND the automatic CPU ceiling (the backend budgets
+        # the NORMALIZED text, whose length this tool cannot see) — the tool
+        # must never give up before the backend does (#2609).
         from core.generate_budget import client_execution_budget_s
 
-        execution = client_execution_budget_s(base, len(text or ""))
+        execution = client_execution_budget_s(
+            base, len(text or ""),
+            cpu_auto_possible=not os.environ.get("OMNIVOICE_CPU_GENERATE_TIMEOUT_S", "").strip(),
+        )
         # A generation first waits in the GPU pool's queue, on its own clock
         # (model_manager.GPU_QUEUE_TIMEOUT_S), before that budget starts.
         return _env_seconds("OMNIVOICE_GPU_QUEUE_TIMEOUT_S", 1800.0) + execution

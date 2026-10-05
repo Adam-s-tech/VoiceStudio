@@ -53,24 +53,41 @@ def cpu_auto_budget_s(floor: float, chars: int) -> float:
     return min(max(legacy, scaled), max(CPU_AUTO_CAP_S, floor))
 
 
-#: Clients (the MCP tools, the desktop UI backstop) size their wait from the
-#: text as the USER typed it, but the backend budgets the text after number
-#: normalization, pronunciation rules and inline overrides — which can be
-#: several times longer ("2024" becomes "two thousand twenty four"). A client
-#: that budgets from the raw length can give up before the backend does.
+def automatic_cpu_ceiling_s(floor: float) -> float:
+    """The most the AUTOMATIC CPU budget can ever grant, whatever the text."""
+    return max(CPU_AUTO_CAP_S, float(floor))
+
+
+#: Clients (the MCP tools, the desktop UI backstop) see the text as the USER
+#: typed it, but the backend budgets it after number normalization,
+#: pronunciation rules and inline overrides. Expansion is unbounded in
+#: principle (measured: a six-digit number grows ~11x, and pronunciation rows
+#: are arbitrary), so a client can NOT derive the automatic CPU budget from the
+#: raw length. It uses the ceiling instead (see ``client_execution_budget_s``);
+#: this factor only sizes the much smaller legacy length bonus.
 TEXT_EXPANSION_FACTOR = 4
 
 
-def client_execution_budget_s(floor: float, chars: int) -> float:
-    """Upper bound of the execution budget the backend may grant ``chars`` raw
-    characters, for any caller that cannot see the backend's final text.
+def client_execution_budget_s(
+    floor: float, chars: int, *, cpu_auto_possible: bool = True,
+) -> float:
+    """Execution budget a client must wait for ``chars`` raw characters — never
+    shorter than what ``model_manager.generate_timeout_s`` can grant.
 
-    THE shared function for client-side waits (``mcp_server``; the TypeScript
+    THE shared function for client waits (``mcp_server``; the TypeScript
     ``generateAbortMs`` mirrors it and is held equal by tests). ``floor`` is the
-    largest execution base the backend could apply (accelerated, CPU, or a
-    sidecar receive timeout). Covers both the legacy and the CPU-speed rule, so
-    it is >= whatever ``model_manager.generate_timeout_s`` returns for any text
-    that normalizes to at most ``TEXT_EXPANSION_FACTOR`` times ``chars``.
+    largest execution base the backend could apply.
+
+    When the default CPU budget can apply (``cpu_auto_possible``; False once the
+    user sets the CPU budget explicitly) the answer is the automatic CEILING
+    regardless of text length: the backend's grant depends on a length the
+    client cannot see, and a wait that is too short aborts a render that is
+    still inside its budget. Waiting longer than needed is harmless — the
+    backend answers as soon as it finishes. Otherwise only the legacy length
+    bonus applies, sized with ``TEXT_EXPANSION_FACTOR`` headroom.
     """
     n = max(0, int(chars)) * TEXT_EXPANSION_FACTOR
-    return max(floor + length_bonus_s(n), cpu_auto_budget_s(floor, n))
+    legacy = floor + length_bonus_s(n)
+    if cpu_auto_possible:
+        return max(legacy, automatic_cpu_ceiling_s(floor))
+    return legacy

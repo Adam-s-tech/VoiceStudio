@@ -203,20 +203,43 @@ def test_worker_fallback_matches_model_manager(mm, monkeypatch, n):
     assert deadlines._base_execution_seconds("x" * n) == pytest.approx(real)
 
 
-@pytest.mark.parametrize("n", [0, 20, 400, 2_000, 5_000, 500_000])
-def test_every_client_waits_at_least_as_long_as_the_backend(mm, monkeypatch, gb, n):
-    """One rule, identical inputs: the MCP wait and the client bound are >= the
-    backend budget, including when normalization lengthens the text."""
+@pytest.mark.parametrize("raw", [
+    "hi", "x" * 400, "x" * 5_000,
+    "123456 " * 40,          # digits-heavy: normalization expands ~10x
+    "999999 " * 700,
+])
+def test_every_client_waits_at_least_as_long_as_the_backend(mm, monkeypatch, raw):
+    """One rule, identical inputs: the MCP wait is >= the backend budget for the
+    text the backend ACTUALLY budgets (after real normalization), however much
+    that expands."""
     for v in ("OMNIVOICE_MCP_TIMEOUT_S", "OMNIVOICE_GENERATE_TIMEOUT_S",
               "OMNIVOICE_CPU_GENERATE_TIMEOUT_S", "OMNIVOICE_GPU_QUEUE_TIMEOUT_S"):
         monkeypatch.delenv(v, raising=False)
     import mcp_server
+    from services.text_normalization import normalize_for_tts
 
     _host(monkeypatch, "cpu")
-    raw = "x" * n
-    for grown in (n, n * gb.TEXT_EXPANSION_FACTOR):  # normalization may lengthen it
-        backend = mm.GPU_QUEUE_TIMEOUT_S + mm.generate_timeout_s("x" * grown, execution_device="cpu")
-        assert mcp_server._post_timeout_s("generate", raw) > backend
+    expanded = normalize_for_tts(raw, "en")
+    if "123456" in raw or "999999" in raw:
+        assert len(expanded) > 4 * len(raw)  # the pathological case is real
+    backend = mm.GPU_QUEUE_TIMEOUT_S + mm.generate_timeout_s(expanded, execution_device="cpu")
+    assert mcp_server._post_timeout_s("generate", raw) > backend
+
+
+def test_backend_reports_the_ceiling_only_where_it_applies(mm, monkeypatch, gb):
+    _host(monkeypatch, "cpu")
+    assert mm.generate_budget_s()["cpuAutoCeiling"] == gb.CPU_AUTO_CAP_S
+    _host(monkeypatch, "cuda")
+    assert mm.generate_budget_s()["cpuAutoCeiling"] == 0.0
+    monkeypatch.setattr(mm, "CPU_JOB_TIMEOUT_S", 999.0)  # explicit CPU budget
+    _host(monkeypatch, "cpu")
+    assert mm.generate_budget_s()["cpuAutoCeiling"] == 0.0
+
+
+def test_explicit_cpu_budget_drops_the_client_ceiling(gb):
+    legacy = gb.client_execution_budget_s(900.0, 20, cpu_auto_possible=False)
+    assert legacy == 900.0
+    assert gb.client_execution_budget_s(900.0, 20) == gb.CPU_AUTO_CAP_S
 
 
 # ── the message names the concrete fix for a CPU user ────────────────────────

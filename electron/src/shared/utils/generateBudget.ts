@@ -20,9 +20,12 @@
  * - freeChars / charsPerSecond: the execution budget's length scaling
  * - cpuSecondsPerChar / cpuAutoCap: the default CPU budget's scaling and its
  *   ceiling (#2609), from backend/core/generate_budget.py
- * - textExpansionFactor: the backend budgets the text AFTER number
- *   normalization and pronunciation rules, which can be several times longer
- *   than what was typed, so the client budgets from a larger length
+ * - textExpansionFactor: sizes the legacy length bonus for text the backend
+ *   will lengthen (normalization, pronunciation rules)
+ * - cpuAutoCeiling (reported only): the backend budgets the NORMALIZED text,
+ *   whose expansion is unbounded (a six-digit number grows ~11x), so a CPU
+ *   host running the default budget reports the automatic ceiling and the
+ *   client waits for it instead of guessing from the typed length
  *
  * Operators can raise those budgets through the environment; the backend
  * reports its active values at GET /generate/budget, and the larger of each
@@ -45,7 +48,10 @@ export const BACKEND_GENERATE_BUDGET_S = {
 const CLIENT_MARGIN_S = 60;
 
 export type ReportedGenerateBudget = Partial<
-  Record<'modelLoad' | 'queueWait' | 'executionBase' | 'progressExtensionCap', unknown>
+  Record<
+    'modelLoad' | 'queueWait' | 'executionBase' | 'progressExtensionCap' | 'cpuAutoCeiling',
+    unknown
+  >
 >;
 
 /** Milliseconds before the client gives up on a /generate for this text. */
@@ -70,7 +76,10 @@ export function generateAbortMs(textLength = 0, reported: ReportedGenerateBudget
     Math.max(legacy, budget.cpuSecondsPerChar * chars),
     Math.max(budget.cpuAutoCap, budget.executionBase),
   );
-  const execution = Math.max(legacy, cpuAuto) + budget.sidecarGrace;
+  const reportedCeiling = reported.cpuAutoCeiling;
+  const ceiling =
+    typeof reportedCeiling === 'number' && Number.isFinite(reportedCeiling) ? reportedCeiling : 0;
+  const execution = Math.max(legacy, cpuAuto, ceiling) + budget.sidecarGrace;
   const extension = Math.max(
     budget.progressExtensionCap,
     budget.progressExtensionBudgets * execution,

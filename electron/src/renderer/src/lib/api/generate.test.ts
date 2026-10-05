@@ -337,6 +337,22 @@ describe('generateClone', () => {
     expect(generateAbortMs(2_000)).toBeGreaterThan((7_200 + 1_800 + 1_200) * 1000);
   });
 
+  it('waits for the reported automatic CPU ceiling whatever the typed length (#2609)', () => {
+    // A six-digit number normalizes to ~11x its length, so the typed length
+    // says nothing about the backend's grant; a CPU host reports its ceiling.
+    const withCeiling = generateAbortMs(20, { cpuAutoCeiling: 7_200 });
+    const budget = BACKEND_GENERATE_BUDGET_S;
+    const backendMaxS =
+      budget.modelLoad +
+      budget.queueWait +
+      7_200 +
+      budget.sidecarGrace +
+      Math.max(budget.progressExtensionCap, budget.progressExtensionBudgets * (7_200 + budget.sidecarGrace));
+    expect(withCeiling).toBeGreaterThan(backendMaxS * 1000);
+    expect(withCeiling).toBeGreaterThan(generateAbortMs(20));
+    expect(generateAbortMs(20, { cpuAutoCeiling: Number.NaN })).toBe(generateAbortMs(20));
+  });
+
   it('outlasts the backend budget, which grows with the text', () => {
     const budget = BACKEND_GENERATE_BUDGET_S;
     const backendMaxS =

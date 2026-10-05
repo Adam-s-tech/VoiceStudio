@@ -93,7 +93,11 @@ def _lazy_omnivoice():
 
 
 from core.config import IDLE_TIMEOUT_SECONDS, CPU_POOL_WORKERS
-from core.generate_budget import cpu_auto_budget_s, length_bonus_s
+from core.generate_budget import (
+    automatic_cpu_ceiling_s,
+    cpu_auto_budget_s,
+    length_bonus_s,
+)
 
 logger = logging.getLogger("omnivoice.model")
 
@@ -548,6 +552,21 @@ class GpuPoolBusyError(TimeoutError):
         self.retry_after = max(1, int(round(retry_after)))
 
 
+def _explicit_budget_flags() -> "tuple[bool, bool]":
+    """(universal_explicit, cpu_explicit): is the accelerated / CPU budget set
+    by the user (env, or changed at runtime)? The single definition shared by
+    ``generate_timeout_s`` and ``generate_budget_s``."""
+    universal = (
+        _GENERATE_TIMEOUT_EXPLICIT
+        or GPU_JOB_TIMEOUT_S != _CONFIGURED_GPU_JOB_TIMEOUT_S
+    )
+    cpu_explicit = (
+        _CPU_GENERATE_TIMEOUT_EXPLICIT
+        or CPU_JOB_TIMEOUT_S != _CONFIGURED_CPU_JOB_TIMEOUT_S
+    )
+    return universal, cpu_explicit
+
+
 def generate_timeout_s(
     text: "str | None", *, engine: object = None, execution_device: "str | None" = None,
     min_vram_gb: float = 0.0, hardware_family: "str | None" = None,
@@ -614,17 +633,10 @@ def generate_timeout_s(
             min_vram_gb = profile["min_vram_gb"]
             hardware_family = profile.get("runtime_hardware_family")
             vram_gb = profile.get("runtime_vram_gb")
-        universal_override = (
-            _GENERATE_TIMEOUT_EXPLICIT
-            or GPU_JOB_TIMEOUT_S != _CONFIGURED_GPU_JOB_TIMEOUT_S
-        )
+        universal_override, cpu_explicit = _explicit_budget_flags()
         # An explicit (env-set, or runtime-changed the same way tests do)
         # CPU budget is more specific than the universal override and always
         # wins for CPU dispatches — see the #1787 comment above.
-        cpu_explicit = (
-            _CPU_GENERATE_TIMEOUT_EXPLICIT
-            or CPU_JOB_TIMEOUT_S != _CONFIGURED_CPU_JOB_TIMEOUT_S
-        )
         if family == "cpu" and (cpu_explicit or not universal_override):
             base = CPU_JOB_TIMEOUT_S
             explicit_budget = cpu_explicit
@@ -4109,10 +4121,26 @@ def generate_budget_s() -> dict[str, float]:
     The client backstop (electron/src/shared/utils/generateBudget.ts) takes the
     larger of these and its built-in defaults, so raising a timeout through the
     environment never makes the UI give up on a job that is still running.
+
+    ``cpuAutoCeiling`` is the most the AUTOMATIC CPU budget can grant any text
+    (#2609). The client cannot see the normalized text the backend budgets, so
+    on a CPU host running the default budget it waits for this ceiling instead
+    of guessing from the typed length. 0 when it does not apply (explicit
+    budget, or not a CPU host).
     """
+    ceiling = 0.0
+    try:
+        from core.device_caps import detect_host_caps
+
+        universal, cpu_explicit = _explicit_budget_flags()
+        if detect_host_caps().family == "cpu" and not cpu_explicit and not universal:
+            ceiling = automatic_cpu_ceiling_s(CPU_JOB_TIMEOUT_S)
+    except Exception:  # noqa: BLE001 — a failed probe just omits the hint
+        pass
     return {
         "modelLoad": _model_load_timeout(),
         "queueWait": GPU_QUEUE_TIMEOUT_S,
         "executionBase": max(GPU_JOB_TIMEOUT_S, CPU_JOB_TIMEOUT_S),
         "progressExtensionCap": progress_extension_cap_s(),
+        "cpuAutoCeiling": ceiling,
     }

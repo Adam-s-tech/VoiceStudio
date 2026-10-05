@@ -162,6 +162,11 @@ loading the model is not part of this clock. Setting the CPU budget explicitly
 turns this scaling off and uses your value as the floor (plus the standard
 +1 s per 40 characters) — an explicit setting is always authoritative.
 
+The desktop app and MCP tools never wait less than the backend does: because the
+backend budgets the text *after* number normalization (a six-digit number grows
+about 11x), a CPU host on the default budget reports its 2-hour ceiling and
+clients wait for that rather than guessing from the typed length.
+
 Both rows above can be overridden, and the two vars are independent:
 
 - An explicit `OMNIVOICE_CPU_GENERATE_TIMEOUT_S` always governs CPU-family
