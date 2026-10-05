@@ -63,9 +63,13 @@ def automatic_cpu_ceiling_s(floor: float) -> float:
 #: pronunciation rules and inline overrides. Expansion is unbounded in
 #: principle (measured: a six-digit number grows ~11x, and pronunciation rows
 #: are arbitrary), so a client can NOT derive the automatic CPU budget from the
-#: raw length. It uses the ceiling instead (see ``client_execution_budget_s``);
-#: this factor only sizes the much smaller legacy length bonus.
-TEXT_EXPANSION_FACTOR = 4
+#: raw length. It uses the ceiling instead (see ``client_execution_budget_s``).
+#: This factor sizes the legacy length bonus (explicit budgets, GPU hosts): it
+#: must stay above what ``normalize_for_tts`` can do to ordinary text — the
+#: worst case measured is a six-digit number at ~11.5x — and
+#: ``test_cpu_generate_budget_scaling_2609`` fails if the normalizer ever
+#: exceeds it. Pronunciation rules are user-defined and not bounded by it.
+TEXT_EXPANSION_FACTOR = 16
 
 
 def client_execution_budget_s(

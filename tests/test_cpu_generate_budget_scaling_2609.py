@@ -33,6 +33,10 @@ def mm(monkeypatch):
     import services.model_manager as m
     m = importlib.reload(m)
     yield m
+    # Tests may set the budget env vars; clear them BEFORE the reload so no
+    # explicit-budget state leaks into later suites.
+    for var in ("OMNIVOICE_GENERATE_TIMEOUT_S", "OMNIVOICE_CPU_GENERATE_TIMEOUT_S"):
+        monkeypatch.delenv(var, raising=False)
     importlib.reload(m)
 
 
@@ -255,3 +259,38 @@ def test_cpu_timeout_message_names_concrete_remedies():
     gpu = stream_failure("generation_timeout", device="cuda")
     assert gpu == stream_failure("generation_timeout")
     assert "CPU budget" not in gpu["detail"]
+
+
+# ── explicit budgets: the legacy length bonus must also cover prepared text ──
+
+_DIGIT_HEAVY = ["999999 " * 400, "123456 " * 700, "$999999 " * 300]
+
+
+def test_normalizer_never_outgrows_the_client_expansion_factor(gb):
+    """Guard: the factor clients size their wait with must stay above what the
+    normalizer can do to ordinary text (worst measured ~11.5x)."""
+    from services.text_normalization import normalize_for_tts
+
+    for raw in _DIGIT_HEAVY + ["999999", "1999 2024 $9 9% 3:45"]:
+        for lang in ("en", "fr", "es", "de"):
+            assert len(normalize_for_tts(raw, lang)) <= gb.TEXT_EXPANSION_FACTOR * len(raw)
+
+
+@pytest.mark.parametrize("raw", _DIGIT_HEAVY, ids=["999999x400", "123456x700", "usd999999x300"])
+@pytest.mark.parametrize("cpu_budget", ["900", "7000"])
+def test_mcp_wait_covers_prepared_text_with_an_explicit_budget(mm, monkeypatch, raw, cpu_budget):
+    """Fail-before: with an explicit CPU budget the MCP wait sized the length
+    bonus from 4x the typed length; real normalization expands digits ~11x."""
+    for v in ("OMNIVOICE_MCP_TIMEOUT_S", "OMNIVOICE_GENERATE_TIMEOUT_S",
+              "OMNIVOICE_GPU_QUEUE_TIMEOUT_S"):
+        monkeypatch.delenv(v, raising=False)
+    monkeypatch.setenv("OMNIVOICE_CPU_GENERATE_TIMEOUT_S", cpu_budget)
+    mm = importlib.reload(mm)
+    import mcp_server
+    from services.text_normalization import normalize_for_tts
+
+    _host(monkeypatch, "cpu")
+    expanded = normalize_for_tts(raw, "en")
+    assert len(expanded) > 4 * len(raw)
+    backend = mm.GPU_QUEUE_TIMEOUT_S + mm.generate_timeout_s(expanded, execution_device="cpu")
+    assert mcp_server._post_timeout_s("generate", raw) > backend

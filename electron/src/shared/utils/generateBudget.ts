@@ -42,7 +42,7 @@ export const BACKEND_GENERATE_BUDGET_S = {
   charsPerSecond: 40,
   cpuSecondsPerChar: 4,
   cpuAutoCap: 7200,
-  textExpansionFactor: 4,
+  textExpansionFactor: 16,
 } as const;
 
 const CLIENT_MARGIN_S = 60;
@@ -56,7 +56,9 @@ export type ReportedGenerateBudget = Partial<
 
 /** Milliseconds before the client gives up on a /generate for this text. */
 export function generateAbortMs(textLength = 0, reported: ReportedGenerateBudget = {}): number {
-  const raise = (key: keyof ReportedGenerateBudget): number => {
+  const raise = (
+    key: 'modelLoad' | 'queueWait' | 'executionBase' | 'progressExtensionCap',
+  ): number => {
     const value = reported[key];
     const base = BACKEND_GENERATE_BUDGET_S[key];
     return typeof value === 'number' && Number.isFinite(value) ? Math.max(base, value) : base;

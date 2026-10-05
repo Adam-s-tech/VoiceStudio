@@ -47,7 +47,7 @@ def test_the_larger_cpu_generation_budget_wins(post_timeout, monkeypatch):
     monkeypatch.setenv("OMNIVOICE_CPU_GENERATE_TIMEOUT_S", "900")
     assert post_timeout("generate", "short") == QUEUE + 900.0 + GRACE
     # An explicit CPU budget is authoritative and uncapped: no ceiling applies.
-    assert post_timeout("generate", "x" * 1600) == QUEUE + 1030.0 + GRACE
+    assert post_timeout("generate", "x" * 1600) == QUEUE + 900.0 + (1600 * 16 - 1200) / 40.0 + GRACE
 
 
 def test_a_raised_gpu_generation_budget_wins_when_larger(post_timeout, monkeypatch):
