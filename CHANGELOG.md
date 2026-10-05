@@ -104,6 +104,7 @@ metadata and the backend fallback mirror it.
 
 ### Fixed
 
+- CPU-only hosts get a compute-time budget that scales with input length (up to 2 h), so ordinary passages no longer time out mid-generation, and the timeout message names the CPU budget setting (#2611)
 - A busy attached backend shows as unresponsive instead of crashed, and background status polls no longer starve the backend worker pool (#2608)
 - Elevated Windows app removal stops before deleting data and points to a normal PowerShell window or Settings (#2578)
 - Contributor audits inspect committed files and exclude submodules, while still stopping on failed file attribution (#2556)
