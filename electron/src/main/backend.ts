@@ -11,6 +11,7 @@ import {
 } from './runtime-project';
 import { asciiSafePthFiles } from './pth-ascii';
 import { CrashJournal } from './crash-journal';
+import { nativeFaultSummary } from '../shared/utils/crashReport';
 import { availableBackendPort } from './backend-port';
 import { legacyStorageEnv } from './legacy-storage';
 import { spawn, spawnSync, type ChildProcess, type StdioOptions } from 'node:child_process';
@@ -27,7 +28,7 @@ import {
 } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { cpus, homedir, totalmem } from 'node:os';
-import { basename, delimiter, dirname, isAbsolute, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { app } from 'electron';
 import type {
   BackendConnection,
@@ -43,6 +44,7 @@ import {
   saveRemoteBackend,
   type RemoteSession,
 } from './remote-backend';
+import { toolSearchDirs } from './tool-path';
 import { SetupProgressTracker, cleanProcessLine } from './setup-progress';
 import { scrubText } from '../shared/utils/scrub';
 
@@ -223,6 +225,24 @@ export function isUnsupportedPlatform(platform = process.platform, arch = proces
   return platform === 'darwin' && arch === 'x64';
 }
 
+/**
+ * Why this host cannot install the local runtime, if it cannot (#2598).
+ *
+ * An x64 process on macOS is either a real Intel Mac or the Intel build
+ * running through Rosetta on Apple Silicon. Both resolve x86_64 wheels and
+ * fail, but only the second has a fix on the same machine: install the
+ * Apple Silicon build. Telling that user "this Intel Mac is unsupported"
+ * sends them to a remote backend they do not need.
+ */
+export function platformSetupIssue(
+  platform = process.platform,
+  arch = process.arch,
+  translated = app.runningUnderARM64Translation === true,
+): 'unsupported_platform' | 'wrong_architecture' | undefined {
+  if (!isUnsupportedPlatform(platform, arch)) return undefined;
+  return translated ? 'wrong_architecture' : 'unsupported_platform';
+}
+
 function usableFile(path: string): boolean {
   try {
     if (!existsSync(path)) return false;
@@ -241,15 +261,7 @@ function findUv(): string | null {
     if (usableFile(bundled)) return bundled;
   }
   const names = process.platform === 'win32' ? ['uv.exe', 'uv'] : ['uv'];
-  const home = homedir();
-  // A GUI launch (Finder, Explorer, a .desktop file) does not see the shell's
-  // PATH additions, so the standard uv install locations are checked too.
-  const dirs = [
-    ...(process.env.PATH ?? '').split(delimiter).filter(Boolean),
-    join(home, '.local', 'bin'),
-    join(home, '.cargo', 'bin'),
-    ...(process.platform === 'win32' ? [] : ['/opt/homebrew/bin', '/usr/local/bin']),
-  ];
+  const dirs = toolSearchDirs();
   for (const dir of dirs) {
     for (const name of names) {
       const candidate = join(dir, name);
@@ -348,6 +360,11 @@ function selectedRuntimeRoot(parent: string): string {
     : join(selected, 'VoiceStudio');
 }
 
+/** The web UI build packaged with this app version (served to LAN devices). */
+export function bundledWebUiPath(): string {
+  return join(backendRoot(), 'frontend', 'dist');
+}
+
 function samePath(left: string, right: string): boolean {
   const normalizedLeft = resolve(left);
   const normalizedRight = resolve(right);
@@ -376,13 +393,22 @@ export async function resolveSpawnPlan(
   // deadline and repeat that download after every restart (#2184).
   const portArg = ['--port', String(port)];
   const python = venvPython(root);
-  if (existsSync(python) && (await runtimeDependenciesReady(root))) {
+  const setup = 'Run `bun run setup:api` in the repository, wait for it to finish, then restart.';
+  if (!existsSync(python)) {
+    return {
+      error: `The Python environment in ${root} is missing (no ${relative(root, python)}). ${setup}`,
+    };
+  }
+  // Name the import that failed (#2555): "incomplete" alone cannot tell a
+  // setup that never ran from one that finished but cannot load a module.
+  let failure = '';
+  if (await runtimeDependenciesReady(root, (detail) => (failure = detail))) {
     return { argv: [python, '-m', ...UVICORN_ARGS, ...portArg], cwd: root };
   }
   return {
     error:
-      `The Python environment in ${root} is missing or incomplete. ` +
-      'Run `bun run setup:api` in the repository, wait for it to finish, then restart.',
+      `The Python environment in ${root} is incomplete${failure ? `: ${failure}` : ''}. ${setup} ` +
+      'If setup already finished without errors, include this message and the setup output in a bug report.',
   };
 }
 
@@ -436,6 +462,12 @@ function childEnv(
   if (!env.OMNIVOICE_BUNDLED_UV) {
     const uv = findUv();
     if (uv) env.OMNIVOICE_BUNDLED_UV = uv;
+  }
+  // #2599: LAN devices load the web UI from this backend. Serve the build
+  // shipped inside this app version's resources, never a copy beside the
+  // runtime project (absent on updated installs, stale after an update).
+  if (app.isPackaged && process.resourcesPath && !env.OMNIVOICE_FRONTEND_DIST?.trim()) {
+    env.OMNIVOICE_FRONTEND_DIST = bundledWebUiPath();
   }
   if (region === 'china') env.HF_ENDPOINT ??= 'https://hf-mirror.com';
   if (platform === 'win32') {
@@ -688,9 +720,10 @@ export class BackendSupervisor extends EventEmitter<{
         if (!ready) {
           if (gen === this.generation) {
             this.runtimeInterrupted = await runtimeInstallInterrupted(project);
-            // Intel Macs can never resolve the runtime (#889): say so now,
-            // before the setup screen offers an install that must fail.
-            this.setupIssue = isUnsupportedPlatform() ? 'unsupported_platform' : undefined;
+            // Intel Macs can never resolve the runtime (#889), and the Intel
+            // build under Rosetta resolves the same wheels (#2598): say so
+            // now, before the setup screen offers an install that must fail.
+            this.setupIssue = platformSetupIssue();
             this.setStage('setup_required');
           }
           return;
@@ -872,7 +905,7 @@ export class BackendSupervisor extends EventEmitter<{
         const code = (error as NodeJS.ErrnoException)?.code;
         this.setupIssue =
           code === 'INTEL_MAC_UNSUPPORTED'
-            ? 'unsupported_platform'
+            ? (platformSetupIssue() ?? 'unsupported_platform')
             : code === 'ENOSPC'
               ? 'space'
               : ['EACCES', 'EPERM', 'EROFS'].includes(code || '')
@@ -1248,7 +1281,7 @@ export class BackendSupervisor extends EventEmitter<{
     // End every readiness/supervisor loop for the dead ownership generation
     // before publishing the terminal result.
     this.generation++;
-    this.crashes.record(code, signal, Date.now() - this.startedAt, this.log);
+    const recorded = this.crashes.record(code, signal, Date.now() - this.startedAt, this.log);
     this.exitCode = code;
     this.exitSignal = signal;
     if (code === EXIT_PORT_IN_USE) {
@@ -1257,7 +1290,11 @@ export class BackendSupervisor extends EventEmitter<{
       });
       return;
     }
-    const lastLine = this.childLog.at(-1);
+    // A native fault's last line is whatever followed the dump: the stdlib
+    // frame that started the process, an extension-module list or an access
+    // log line. Name the fault and where it happened instead (#2382, #2187).
+    const lastLine =
+      nativeFaultSummary(recorded?.logTail.join('\n') ?? '') || this.childLog.at(-1);
     const why = signal ? `signal ${signal}` : `exit code ${code}`;
     this.setStage('crashed', {
       message: `Backend exited unexpectedly (${why}).${lastLine ? ` Last output: ${lastLine}` : ''}`,
