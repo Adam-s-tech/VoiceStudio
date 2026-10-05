@@ -59,6 +59,8 @@ type Health = {
   mode: 'down' | 'busy' | 'rejected' | 'up';
   /** The remote's authenticated /system/info answers 401 (expired session). */
   authRejected?: boolean;
+  /** The authenticated /system/info neither accepts nor rejects: it times out or 5xx. */
+  authInconclusive?: 'timeout' | 'server_error';
 };
 
 const calls: string[] = [];
@@ -74,8 +76,12 @@ function stubHealth(health: Health): void {
       if (health.mode === 'rejected') {
         return new Response('{}', { status: 503, headers: { 'x-omnivoice-backend': 'test' } });
       }
-      if (String(input).endsWith('/system/info') && health.authRejected) {
-        return new Response('{}', { status: 401 });
+      if (String(input).endsWith('/system/info')) {
+        if (health.authInconclusive === 'timeout') {
+          throw new DOMException('timed out', 'TimeoutError');
+        }
+        if (health.authInconclusive === 'server_error') return new Response('{}', { status: 503 });
+        if (health.authRejected) return new Response('{}', { status: 401 });
       }
       return new Response(JSON.stringify({ status: 'ok', version: 'test' }), {
         headers: { 'x-omnivoice-backend': 'test' },
@@ -428,6 +434,100 @@ it('re-validates an auth_required remote on a slow cadence so out-of-app fixes r
     await vi.advanceTimersByTimeAsync(40_000);
     expect(supervisor.status.stage).toBe('ready');
     expect(supervisor.status.diagnosis).toBeUndefined();
+  } finally {
+    await supervisor.shutdown();
+  }
+});
+
+it.each(['timeout', 'server_error'] as const)(
+  'reports uncertain connectivity, not ready, when the first credential check is inconclusive (%s)',
+  async (kind) => {
+    const health: Health = { mode: 'up', authInconclusive: kind };
+    const supervisor = await remoteSupervisor(health);
+    try {
+      await supervisor.start();
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(supervisor.status.stage).toBe('unresponsive');
+      expect(supervisor.status.diagnosis).toBe('remote_unreachable');
+
+      // The next tick retries; a valid answer promotes.
+      health.authInconclusive = undefined;
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(supervisor.status.stage).toBe('ready');
+      expect(supervisor.status.diagnosis).toBeUndefined();
+    } finally {
+      await supervisor.shutdown();
+    }
+  },
+);
+
+it('never promotes an auth_required remote on an inconclusive recheck', async () => {
+  const health: Health = { mode: 'up', authRejected: true };
+  const supervisor = await remoteSupervisor(health);
+  try {
+    await supervisor.start();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(supervisor.status.diagnosis).toBe('auth_required');
+
+    // Rechecks keep failing to complete: the session is still unverified.
+    health.authRejected = false;
+    health.authInconclusive = 'timeout';
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(supervisor.status.stage).toBe('failed');
+    expect(supervisor.status.diagnosis).toBe('auth_required');
+
+    // A valid answer finally promotes it.
+    health.authInconclusive = undefined;
+    await vi.advanceTimersByTimeAsync(40_000);
+    expect(supervisor.status.stage).toBe('ready');
+  } finally {
+    await supervisor.shutdown();
+  }
+});
+
+it('never promotes a failed remote that recovered on /health when its credentials are unverifiable', async () => {
+  const health: Health = { mode: 'up' };
+  const supervisor = await remoteSupervisor(health);
+  try {
+    await supervisor.start();
+    await vi.advanceTimersByTimeAsync(1_000);
+    health.mode = 'down';
+    await supervisor.restart();
+    expect(supervisor.status.stage).toBe('failed');
+
+    health.mode = 'up';
+    health.authInconclusive = 'server_error';
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(supervisor.status.stage).toBe('failed');
+
+    health.authInconclusive = undefined;
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(supervisor.status.stage).toBe('ready');
+  } finally {
+    await supervisor.shutdown();
+  }
+});
+
+it('demotes a recovering remote whose credentials are rejected, even after inconclusive checks', async () => {
+  const health: Health = { mode: 'up' };
+  const supervisor = await remoteSupervisor(health);
+  try {
+    await supervisor.start();
+    await vi.advanceTimersByTimeAsync(1_000);
+    health.mode = 'busy';
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(supervisor.status.stage).toBe('unresponsive');
+
+    health.mode = 'up';
+    health.authInconclusive = 'timeout';
+    await vi.advanceTimersByTimeAsync(6_000);
+    expect(supervisor.status.stage).toBe('unresponsive');
+
+    health.authInconclusive = undefined;
+    health.authRejected = true;
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(supervisor.status.stage).toBe('failed');
+    expect(supervisor.status.diagnosis).toBe('auth_required');
   } finally {
     await supervisor.shutdown();
   }

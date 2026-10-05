@@ -1316,42 +1316,53 @@ export class BackendSupervisor extends EventEmitter<{
   }
 
   /**
-   * Whether a remote refuses this client's credentials. /health needs no admin
+   * Whether a remote accepts this client's credentials. /health needs no admin
    * session, so it can answer while every authenticated call fails (the session
    * expired during an outage, or the key was rotated). Same check the remote
-   * probe applies when connecting: an authenticated /system/info. Only 401/403
-   * count; any other failure is left to the health supervision.
+   * probe applies when connecting: an authenticated /system/info. Three-way,
+   * because a timeout or a 5xx proves nothing about the session: only a 2xx is
+   * `valid` and only 401/403 is `rejected`.
    */
-  private async remoteRejectsCredentials(): Promise<boolean> {
-    if (!this.remoteUrl) return false;
+  private async remoteCredentials(): Promise<'valid' | 'rejected' | 'inconclusive'> {
+    if (!this.remoteUrl) return 'valid';
     try {
       const res = await fetch(`${this.baseUrl}/system/info`, {
         headers: this.requestHeaders(),
         signal: AbortSignal.timeout(REMOTE_AUTH_CHECK_TIMEOUT_MS),
         redirect: 'follow',
       });
-      return res.status === 401 || res.status === 403;
+      if (res.ok) return 'valid';
+      return res.status === 401 || res.status === 403 ? 'rejected' : 'inconclusive';
     } catch {
-      return false;
+      return 'inconclusive';
     }
   }
 
   /**
    * The one place a backend that just answered /health becomes `ready`. A local
-   * backend is trusted on /health alone; a remote must also accept this
-   * client's credentials, otherwise the workspace would resume while every
-   * authenticated API and WebSocket call fails. When it does not, the status
-   * stays `failed` with the auth diagnosis (supervision still starts, so the
-   * state keeps tracking the remote). Returns whether the stage is now `ready`.
+   * backend is trusted on /health alone; a remote must also prove its
+   * credentials are accepted, otherwise the workspace would resume while every
+   * authenticated API and WebSocket call fails.
+   *
+   *  - valid: `ready`.
+   *  - rejected: `failed` with the auth diagnosis.
+   *  - inconclusive: the CURRENT state is kept. A `failed`/`unresponsive` remote
+   *    is never promoted on an unverified session, and a first start reports
+   *    uncertain connectivity (`unresponsive`) instead of `ready`. The
+   *    supervisor re-checks on its next tick.
+   *
+   * Returns whether the stage is now `ready`.
    */
   private async markReady(
     gen: number,
     patch: { managed?: boolean; message?: string | undefined },
     superviseAfter: boolean,
   ): Promise<boolean> {
-    const rejected = await this.remoteRejectsCredentials();
+    const credentials = await this.remoteCredentials();
     if (gen !== this.generation) return false;
-    if (rejected) {
+    if (credentials === 'valid') {
+      this.setStage('ready', patch);
+    } else if (credentials === 'rejected') {
       if (this.diagnosis !== 'auth_required' || this.stage !== 'failed') {
         this.setStage('failed', {
           managed: false,
@@ -1359,11 +1370,15 @@ export class BackendSupervisor extends EventEmitter<{
           diagnosis: 'auth_required',
         });
       }
-    } else {
-      this.setStage('ready', patch);
+    } else if (this.stage !== 'failed' && this.stage !== 'unresponsive') {
+      this.setStage('unresponsive', {
+        managed: false,
+        message: `Cannot confirm that the remote backend at ${this.baseUrl} accepts this app's credentials: its authenticated check did not complete. Retrying automatically.`,
+        diagnosis: 'remote_unreachable',
+      });
     }
     if (superviseAfter) this.supervise(gen);
-    return !rejected;
+    return credentials === 'valid';
   }
 
   /** Poll /health until ready, retiring the launch when the budget expires. */
