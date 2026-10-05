@@ -8,62 +8,43 @@ metadata and the backend fallback mirror it.
 
 ## [Unreleased]
 
+## [0.5.7] — 2026-10-05
+
+**VoiceStudio now runs on PCs without a GPU and recovers instead of giving up.** Voice cloning uses the speech-to-text model you installed from Model Catalogue, GPU-less computers get the small CPU PyTorch build, and slow or busy backends are no longer reported as failed.
+
+This release also adds a GPU acceleration panel with honest Radeon reporting, the Ask VoiceStudio Agent, and a batch of fixes to dubbing, audiobooks, downloads and dictation.
+
+**Download**
+
+| Platform | Installer |
+| --- | --- |
+| Windows x64 | [Installer](https://github.com/debpalash/VoiceStudio/releases/download/v0.5.7/VoiceStudio-Electron-0.5.7-win-x64.exe) |
+| macOS Apple Silicon | [DMG](https://github.com/debpalash/VoiceStudio/releases/download/v0.5.7/VoiceStudio-Electron-0.5.7-mac-arm64.dmg) |
+| macOS Intel | [DMG](https://github.com/debpalash/VoiceStudio/releases/download/v0.5.7/VoiceStudio-Electron-0.5.7-mac-x64.dmg) |
+| Linux x64 | [AppImage](https://github.com/debpalash/VoiceStudio/releases/download/v0.5.7/VoiceStudio-Electron-0.5.7-linux-x64.AppImage) · [deb](https://github.com/debpalash/VoiceStudio/releases/download/v0.5.7/VoiceStudio-Electron-0.5.7-linux-x64.deb) |
+
+**Upgrading:** Install over your existing Electron app; voices, projects and settings are kept. If setup asks, choose **Install local runtime** to refresh its dependencies.
+
+**Moving from Tauri:** Close the app, back up its data directory, install Electron, and verify your voices and projects before removing Tauri. Follow the [migration guide](https://github.com/debpalash/VoiceStudio/blob/v0.5.7/docs/electron-migration.md). Tauri v0.5.3 remains the final Tauri release; its updater cannot install Electron.
+
+**Installer trust:** Electron installers are unsigned or ad-hoc signed and are not Apple-notarized. Windows/macOS may show trust warnings. macOS automatic updates are unverified; use manual installer updates. See the [installation guide](https://github.com/debpalash/VoiceStudio/blob/v0.5.7/docs/install/troubleshooting.md).
+
 **Highlights**
-- Voice cloning finds a speech-to-text model installed through Model Catalogue and explains clips that are too long (#2442) — thanks @drakeo338!
-- PCs without a dedicated GPU install the small CPU PyTorch build and run models in float32; Windows on ARM gets an experimental native installer (#2500)
-- Settings → Performance → GPU acceleration shows your GPUs, the PyTorch build and why each engine runs on GPU or CPU, including Radeon on Windows (#2468)
-- Slow and no-GPU computers are no longer declared failed at start-up; failures name what could not launch (#2445, #2465)
+
+- Voice cloning finds a speech-to-text model installed through Model Catalogue and explains clips that are too long (#2442, #2498) — thanks @drakeo338, @Bad-ptr!
+- PCs without a dedicated GPU install the small CPU PyTorch build and run, with generation budgets that scale on slower hosts; Windows on ARM gets an experimental native installer (#2500, #2611)
+- Settings → Performance → GPU acceleration shows your GPUs, the PyTorch build and why each engine runs on GPU or CPU, with honest Radeon reporting on Windows (#2468, #2501)
+- A slow or busy backend is no longer declared failed or crashed; start-up failures name what could not launch (#2445, #2499, #2608)
 - Ask VoiceStudio Agent adds chat, harness selection, feature presets, read-only planning and autopilot app actions without a source checkout (#2407)
-- Home credits contributors with over 10 commits in three responsive rows of round avatars stacked from right to left with an All contributors link, with GitHub and X links on Palash's hover card (#2407)
-- The VoiceStudio.sh Open Source title opens a website preview below the clicked item, within the right content area, with navigation and external-browser controls (#2407)
+
+### Changed
+
 - Home cards use feature-specific SVG icons with brief hover and keyboard-focus animations that respect reduced motion (#2407)
 - Renamed the Dub workspace to Dubbing across navigation, project labels, and keyboard shortcuts (#2407)
 - Home prioritizes creation tools with clearer descriptions and controls; the footer can collapse and reopen (#2407)
-- Top bar adds a GitHub Star shortcut beside Get Pro with an exact count refreshed every 20 minutes (#2407)
-- Footer adds one X button with follow cards for @idebpalash and @voicestudiosh plus a compact support-links menu beside Pro (#2407)
 - Enter Studio opens its optional permissions and shortcut settings expanded by default (#2407)
 - Model packs can be selected and installed before preset-compatible engines are active, with changes applied only when installing or using the chosen pack (#2407)
-- Electron is now the only desktop and web UI; the retired Tauri shell and legacy entry points are removed (#2343)
-- Docker and browser deployments now use the same maintained interface as the Electron desktop app (#2341)
-- Manage Projects with confirmed individual and bulk deletion, retry failed items, and keep exported files and render audio (#2333)
-- Twilio setup is a guided checklist with live status and exact commands (#2304)
-- Integration pages use the full window, with a side panel on wide screens (#2304)
-- A call agent that places or answers phone calls in your own voice to get a task done (#2306)
-- Footer shows Integrations, Become a Sponsor, and a VoiceStudio Pro shortcut (#2302)
-- Pro keeps core generation unlimited and presents ten production benefits with $99/user yearly, $299/user lifetime, and Enterprise contact options, including quantity totals, commercial work, remote devices, workers, and GPU sharing (#2302)
-- A reference longer than 20 s clones from its best 15 s window using the speech model already installed (#2301) — thanks @Cengokill!
-- Record or drop a voice sample from one view in Voice Clone (#2307)
-- Voice Clone keeps the original container of a one-shot MP3, M4A or WebM reference (#2311)
-- Videos without sound get a clear message instead of an ffmpeg error dump (#2308)
 - First-run setup stops Intel Macs before downloading dependencies and explains remote-backend access (#2387) — thanks @JoAdo07!
-- MCP speech files and URLs can deliver Ogg/Opus instead of WAV; Ogg saves preserve int16 audio levels (#2321) — thanks @tracyndoan!
-- Turn a finished dub into a Stories script in one click, speakers and voices included (#2300) — thanks @shivsin25!
-- Workflows can branch: a Condition step sends each item down one of two routes by what its text says (#2380) — thanks @shivsin25!
-
-### Added
-- Settings → Performance → GPU acceleration lists your GPUs, the installed PyTorch build and which engines use the GPU or run on CPU and why, in all 21 languages (#2468) — thanks @Pates2004!
-- iFLYTEK Astron MaaS as a named LLM provider (#2421) — thanks @FenjuFu!
-- Prosody Mirror directs each dub line from the source speaker's pitch, loudness, pace and voicing (#2417) — thanks @JoshuaWIls!
-- Windows on ARM: native ARM64 installer; the AI backend runs as x64 under emulation on the CPU (experimental) (#2500)
-- `OMNIVOICE_TORCH_VARIANT=auto|cuda|cpu` and `OMNIVOICE_CPU_DTYPE=bfloat16` override the automatic PyTorch build and CPU precision (#2500)
-- Bug reports include CPU architecture, free disk space and the active speech recognition engine (#2433) — thanks @HoneyTyagii, @Rey-de-la-Tierra!
-
-- `VOICESTUDIO_DISABLE_UPDATER=1` turns off the in-app updater for package-managed installs, and the Linux guide lists the community AUR package (#2557)
-- MCP agents can design a voice from a text description and reuse it by `profile_id` (`describe_voice`, `design_voice`) (#2368) — thanks @thelselutopia!
-- Dictation vocabulary hint in Settings → Dictation shortcut: names and jargon that Faster Whisper, MLX Whisper and OpenAI-compatible engines should expect (#2395) — thanks @m061i6!
-- Cheaper Inference is available as an optional LLM provider (#2325) — thanks @aiapienthusiast!
-- Choose 16/24/32-bit WAV precision, sampling effort and mastering in Clone and Design, with file sizes and optional audio checks (#2406)
-- Language selection adds searchable flags, native names and codes in a responsive virtual grid, with supported model languages first and accessible keyboard navigation (#2408)
-- Run local narration, transcription, translation and voice-conversion recipes with resumable steps and WAV/TXT exports (#2333)
-- Workflows Condition step routes each item by a text phrase, preserves output on direct-to-End branches, and uses one phrase editor (#2380) — thanks @shivsin25!
-
-- Call agent backend: place or answer phone calls that hold a task conversation in your verified or designed voice, with an editable AI disclosure, take-over and an after-call summary (#2306)
-- Calls workspace with a live transcript, take-over, hang-up and an after-call summary (#2305)
-- Create Story from a dub: its speakers become characters, its segments become lines, and each character keeps the voice the dub assigned — no retyping the script (#2300) — thanks @shivsin25!
-- Linux AppImages include standard update information and a published `.zsync` file so AppImageUpdate and desktop managers can download only changed bytes (#2327) — thanks @shuvashish76!
-- Pull requests ask their opener and every commit author and co-author to sign a one-time Contributor License Agreement by comment; the contributing guide explains how (#2556)
-
-### Changed
 - Machines without an NVIDIA GPU install the small CPU PyTorch build (about 5 GB instead of 9 GB free) and load voice models in float32 instead of float16 (#2500) — thanks @RobAsticles, @tiropictor!
 - Engines that could use a GPU report a CPU fallback, naming the card, when the installed PyTorch cannot use it (#2468, #2501) — thanks @Pates2004!
 - Setup names your Radeon card instead of blaming a missing NVIDIA driver, and ignores a ROCm override on Windows and macOS (#2468, #2501) — thanks @Pates2004!
@@ -74,7 +55,6 @@ metadata and the backend fallback mirror it.
 - Choose a voice adds photo cards, Newest/A–Z sorting, search, and click or drop photo uploads (#2419)
 - Sidebar adds Fast, Balanced, Quality and Max choices, a separate Auto toggle, quieter engine status, and compact Simple, Models and Details views (#2419)
 - Sidebar adds hardware-aware Auto with live resource usage and TTS-first model selection, and groups compact engine status with icon-based Simple, Models and Details views (#2396)
-
 - LLM setup verifies a model response before enabling features, replaces the misleading engine inventory with connection guidance, and supports authenticated local servers (#2397)
 - LLM skills can use installed coding CLIs through the repair-agent runner, native paid providers through LiteLLM (#2397)
 - Dubbing supports Google Cloud Translation and Amazon Translate with explicit provider setup (#2397)
@@ -100,7 +80,38 @@ metadata and the backend fallback mirror it.
 - `backend.speech_client` dictation control commands, which drove the retired Tauri app, now exit with an explanation (#2578)
 - Removed three hidden settings that nothing could set; the `OMNIVOICE_PRONUNCIATION` and `OMNIVOICE_TEXT_NORMALIZATION` switches remain (#2578)
 
+### Added
+
+- Settings → Performance → GPU acceleration lists your GPUs, the installed PyTorch build and which engines use the GPU or run on CPU and why, in all 21 languages (#2468) — thanks @Pates2004!
+- iFLYTEK Astron MaaS as a named LLM provider (#2421) — thanks @FenjuFu!
+- Prosody Mirror directs each dub line from the source speaker's pitch, loudness, pace and voicing (#2417) — thanks @JoshuaWIls!
+- Windows on ARM: native ARM64 installer; the AI backend runs as x64 under emulation on the CPU (experimental) (#2500)
+- `OMNIVOICE_TORCH_VARIANT=auto|cuda|cpu` and `OMNIVOICE_CPU_DTYPE=bfloat16` override the automatic PyTorch build and CPU precision (#2500)
+- Bug reports include CPU architecture, free disk space and the active speech recognition engine (#2433) — thanks @HoneyTyagii, @Rey-de-la-Tierra!
+- `VOICESTUDIO_DISABLE_UPDATER=1` turns off the in-app updater for package-managed installs, and the Linux guide lists the community AUR package (#2557)
+- MCP agents can design a voice from a text description and reuse it by `profile_id` (`describe_voice`, `design_voice`) (#2368) — thanks @thelselutopia!
+- Dictation vocabulary hint in Settings → Dictation shortcut: names and jargon that Faster Whisper, MLX Whisper and OpenAI-compatible engines should expect (#2395) — thanks @m061i6!
+- Cheaper Inference is available as an optional LLM provider (#2325) — thanks @aiapienthusiast!
+- Choose 16/24/32-bit WAV precision, sampling effort and mastering in Clone and Design, with file sizes and optional audio checks (#2406)
+- Language selection adds searchable flags, native names and codes in a responsive virtual grid, with supported model languages first and accessible keyboard navigation (#2408)
+- Run local narration, transcription, translation and voice-conversion recipes with resumable steps and WAV/TXT exports (#2333)
+- Workflows Condition step routes each item by a text phrase, preserves output on direct-to-End branches, and uses one phrase editor (#2380) — thanks @shivsin25!
+- Call agent backend: place or answer phone calls that hold a task conversation in your verified or designed voice, with an editable AI disclosure, take-over and an after-call summary (#2306)
+- Calls workspace with a live transcript, take-over, hang-up and an after-call summary (#2305)
+- Create Story from a dub: its speakers become characters, its segments become lines, and each character keeps the voice the dub assigned — no retyping the script (#2300) — thanks @shivsin25!
+- Linux AppImages include standard update information and a published `.zsync` file so AppImageUpdate and desktop managers can download only changed bytes (#2327) — thanks @shuvashish76!
+- Pull requests ask their opener and every commit author and co-author to sign a one-time Contributor License Agreement by comment; the contributing guide explains how (#2556)
+- Home credits contributors with over 10 commits in three responsive rows of round avatars stacked from right to left with an All contributors link, with GitHub and X links on Palash's hover card (#2407)
+- The VoiceStudio.sh Open Source title opens a website preview below the clicked item, within the right content area, with navigation and external-browser controls (#2407)
+- Top bar adds a GitHub Star shortcut beside Get Pro with an exact count refreshed every 20 minutes (#2407)
+- Footer adds one X button with follow cards for @idebpalash and @voicestudiosh plus a compact support-links menu beside Pro (#2407)
+- Manage Projects with confirmed individual and bulk deletion, retry failed items, and keep exported files and render audio (#2333)
+- Footer shows Integrations, Become a Sponsor, and a VoiceStudio Pro shortcut (#2302)
+- Pro keeps core generation unlimited and presents ten production benefits with $99/user yearly, $299/user lifetime, and Enterprise contact options, including quantity totals, commercial work, remote devices, workers, and GPU sharing (#2302)
+- MCP speech files and URLs can deliver Ogg/Opus instead of WAV; Ogg saves preserve int16 audio levels (#2321) — thanks @tracyndoan!
+
 ### Docs
+
 - Hermes Agent MCP setup (#2464), ChromeOS and iPad guidance (#2438, #2398) and keeping app data on an external drive (#2436) — thanks @MayoGit204, @luminosity-d3v, @CaptainAi777, @RobAsticles!
 - Japanese README (#2418) — thanks @eltociear!
 - Commercial License client verification and test guide (#2432) — thanks @velixio!
@@ -108,9 +119,7 @@ metadata and the backend fallback mirror it.
 - Maintainer guide for repository settings that can't live in code; the licence notice scope and the contributing guide's list of network calls match the current app (#2556)
 - Contact addresses are now hi@voicestudio.sh (general and licensing), partner@voicestudio.sh (partnerships) and security@voicestudio.sh (security reports) (#2556)
 - Chinese README now matches the Electron installation and migration guide (#2377) — thanks @lg114!
-
 - Record the supplied audio comparisons and installed-engine quality validation (#2406)
-
 - New call agent guide covering setup, disclosure, recording consent and safeguards (#2306)
 - The Twilio guide and integration directory describe the guided setup and in-app integration pages (#2304)
 - Install guides cover the Electron app: real download names, Linux AppImage and `.deb`, current source builds and uninstall folders (#2578)
@@ -119,6 +128,7 @@ metadata and the backend fallback mirror it.
 - License notice: commercial use is free under the AGPL; the paid licence is for closed-source use, with Pro plans linked (#2578)
 
 ### Fixed
+
 - Voice cloning finds a speech-to-text model installed through Model Catalogue instead of asking you to install one (#2442, #2498) — thanks @drakeo338, @Bad-ptr!
 - A reference over 20 s with no speech-to-text model says it is too long and to trim it to 3-10 s (#2442) — thanks @drakeo338, @Bad-ptr!
 - A generate can no longer crash the backend while the start-up model preload is still running (#2394) — thanks @manoooo202020!
@@ -208,7 +218,6 @@ metadata and the backend fallback mirror it.
 - Preserve busy sidecars during engine-level unload instead of terminating their active operation (#2507) — thanks @Anuj04432 and @rudycelekli!
 - Exclude downloaded caption comments while preserving spoken metadata words (#2510) — thanks @rudycelekli!
 - Stopping a live Dubbing preview releases its stream and synthesis slot so another render can start (#2511) — thanks @rudycelekli!
-
 - Count interrupted sidecar installs and report unreadable engine scans in Storage usage (#2479) — thanks @rudycelekli!
 - Dub assembly, cached segments and audio tools can read generated WAV files when TorchCodec is missing or cannot load (#2379) — thanks @tokutei58301-boop!
 - Remote API-key and share-PIN clients can record and read export history while native filesystem operations stay local (#2383, #2384) — thanks @sedatdagg!
@@ -220,17 +229,14 @@ metadata and the backend fallback mirror it.
 - MLX-Audio OuteTTS generates again with a reference clip or its default voice (#2419)
 - MLX Qwen3-TTS receives the selected language correctly; MeloTTS explains missing text resources without downloading during generation (#2419)
 - The language picker offers only the languages each MLX-Audio model supports (Kokoro, CSM, Qwen3-TTS, Dia, Chatterbox, MeloTTS, OuteTTS), per their model cards, instead of every language (#977) — thanks @scprdytj2s-beep!
-
 - The Enter that confirms Korean, Japanese or Chinese input no longer also submits project renames, language search, pronunciation, worker or MCP fields (#2338) — thanks @HEOJUNFO!
 - English text normalization speaks a dollar amount followed by a period or comma ("It costs $5.") instead of leaving the digits (#2390) — thanks @kevin9327!
 - Voice Design sends descriptions unchanged to free-text engines and restores the original design when reopening a take (#2401) — thanks @CauaMatheus and @dominikj-cf!
 - Voice Design keeps a detail you pick when you edit the description, unless the new text says otherwise, and reopening a take restores the description and picks it was made with (#2389) — thanks @dominikj-cf!
 - A snapshot interrupted mid-copy (crash, kill or power loss) is no longer listed as a database backup or counted toward the three kept; the leftover partial file is cleaned up on the next snapshot (#2402) — thanks @fadiroot!
 - Low-disk notifications open Storage settings directly (#2407)
-
 - Preserve float audio and requested seeds through OmniVoice/VoxCPM2 sidecars, and keep playback and saved WAV precision consistent (#2406)
 - Development launches rebuild main and preload changes so embedded website previews do not keep stale browser IPC after UI updates (#2407)
-
 - Dubbing reports damaged source files clearly and removes partial or failed copies when storage runs out (#2411)
 - Streaming previews keep audio edges intact, preserve crossfades for late chunks, and use the PCM rate when supported (#2409) — thanks @dajiaohuang and @Marcin-CCC!
 - Installed performance packs can be activated when all required models are present, even below the download-space reserve (#2410) — thanks @dajiaohuang!
@@ -245,7 +251,6 @@ metadata and the backend fallback mirror it.
 - Engine health checks recognize one-click TTS engines such as VoxCPM2 and MOSS-TTS-Nano in their isolated environments (#2339)
 - Privacy controls stay expanded during first-run installation instead of hiding behind Advanced (#2337)
 - Preserve large workflow libraries and keyboard moves, secure library deletion and license storage, and keep analytics opt-out authoritative during startup (#2333)
-
 - Signed macOS releases now notarize and staple Electron installers when the owner supplies Apple Developer credentials (#1779)
 - Numbers grouped with a period in German, Spanish, French and the other comma-decimal languages, such as "10.000", keep their digits instead of being spoken as ten (#2334) — thanks @kevin9327!
 - Integration pages show each integration's own category and summary instead of borrowed labels such as "Dubbing" for Twilio (#2304)
@@ -260,9 +265,7 @@ metadata and the backend fallback mirror it.
 - Cache flushes after a dubbing offload or a failed generation reach every accelerator an engine can run on — Ascend NPU and Intel XPU included, not just CUDA and MPS (#2317) — thanks @li-lizhe!
 - Hardsub exports on Windows pass the caption path in ffmpeg's filter form so burned-in line and karaoke captions render (#2312) — thanks @kevin9327!
 - Dub QC scores Chinese, Japanese and Thai lines per character, so a single wrong character no longer counts as total drift and flags the line (#2335) — thanks @kevin9327!
-
 - `/generate` writes an uploaded clone reference with its real extension instead of always `.wav`, so a non-WAV one-shot clip still decodes (#2311) — thanks @kevin9327!
-
 - A reference longer than 20 s is transcribed with the speech-to-text model already installed, instead of failing when OmniVoice's own Whisper snapshot is not cached (#2301) — thanks @Cengokill!
 - Pronunciation dictionary entries in Japanese, Chinese and Thai apply inside a sentence, not only to a line that is the key alone (#2392) — thanks @kevin9327!
 - Speed/quality tiers apply to the crash-isolated OmniVoice engine too (#2578)
@@ -277,6 +280,7 @@ metadata and the backend fallback mirror it.
 - New bug and install reports land in the `needs-triage` queue (#2578)
 
 ### CI
+
 - Pull requests fail when a commit uses a leaked personal email, a placeholder identity, or an AI agent identity, or when a commit or the description credits an AI agent (#2556)
 - GitHub Actions are pinned to exact commits and kept current by Dependabot (#2556)
 - Release Docker images publish when the GitHub Release is published; `:latest` only ever comes from `main` (#2578)
