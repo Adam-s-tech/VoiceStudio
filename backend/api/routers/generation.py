@@ -2604,7 +2604,10 @@ async def generate_speech(
                 # is compute time, not queue pressure (#1588).
                 logger.error("Streaming generation exceeded its compute budget")
                 from core.public_errors import stream_failure
-                failure = stream_failure("generation_timeout")
+                failure = stream_failure(
+                    "generation_timeout",
+                    device=_routing.get("effective_device"),
+                )
                 failure["retry_after"] = 30
                 yield _line({"type": "error", **failure})
             except ValueError as e:

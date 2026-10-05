@@ -93,6 +93,7 @@ def _lazy_omnivoice():
 
 
 from core.config import IDLE_TIMEOUT_SECONDS, CPU_POOL_WORKERS
+from core.generate_budget import cpu_auto_budget_s, length_bonus_s
 
 logger = logging.getLogger("omnivoice.model")
 
@@ -567,9 +568,17 @@ def generate_timeout_s(
     hosts) or OMNIVOICE_CPU_GENERATE_TIMEOUT_S (CPU hosts — the latter wins
     for CPU whenever it is itself explicit, even if the former also is; see
     the #1787 comment on the module-level constants), plus 1s per 40
-    characters past a 1200-character free allowance — generous enough for
-    CPU-class hardware, still bounded (a wedged job is caught in minutes, not
-    hours).
+    characters past a 1200-character free allowance — a wedged job is caught
+    in minutes, not hours.
+
+    #2609: that length term is nothing next to CPU speed (a render is often
+    10-50x slower than on a GPU), so a CPU dispatch on the DEFAULT CPU budget
+    instead scales at ``core.generate_budget.CPU_SECONDS_PER_CHAR`` per
+    character, capped at ``CPU_AUTO_CAP_S`` (still finite, so a wedged engine
+    is caught). Any explicit budget keeps the formula above untouched. The
+    model cold-load is NOT part of this clock (it has its own budget, see the
+    prewarm in the generate router), and each streamed chunk is budgeted from
+    its own text.
 
     #1804: "accelerated" is not one performance class. A card with less VRAM
     than the engine declares it needs pages to system RAM over PCIe and renders
@@ -588,6 +597,10 @@ def generate_timeout_s(
     """
     base = GPU_JOB_TIMEOUT_S
     explicit_budget = _GENERATE_TIMEOUT_EXPLICIT or GPU_JOB_TIMEOUT_S != _CONFIGURED_GPU_JOB_TIMEOUT_S
+    # True only for a CPU dispatch running on the DEFAULT CPU budget: that case
+    # scales with input length at CPU speed (#2609). Any explicit budget —
+    # either row — stays authoritative and keeps the legacy formula.
+    cpu_auto_scaled = False
     try:
         from core.device_caps import detect_host_caps
         caps = detect_host_caps()
@@ -615,6 +628,7 @@ def generate_timeout_s(
         if family == "cpu" and (cpu_explicit or not universal_override):
             base = CPU_JOB_TIMEOUT_S
             explicit_budget = cpu_explicit
+            cpu_auto_scaled = not cpu_explicit
         elif not universal_override and family in (
             "cuda", "rocm", "vulkan", "xpu",
         ):
@@ -653,7 +667,10 @@ def generate_timeout_s(
         except (TypeError, ValueError):
             pass  # Invalid optional engine metadata cannot disable the outer guard.
 
-    return base + (max(0, len(text or "") - 1200) / 40.0) + sidecar_grace
+    chars = len(text or "")
+    if cpu_auto_scaled:
+        return cpu_auto_budget_s(base, chars) + sidecar_grace
+    return base + length_bonus_s(chars) + sidecar_grace
 
 
 def _retry_after_estimate(stats: dict) -> float:
@@ -1204,8 +1221,9 @@ def _timeout_guidance(
             "this machine renders on CPU, where long generations are "
             "compute-bound. For a durable fix try shorter text or a lighter "
             "engine (OmniVoice GGUF and Supertonic-3 are CPU-tuned). If you "
-            "expect very long single generations, raise "
-            "the compute-time budget in Settings → Performance & Device."
+            "expect very long single generations, raise \"CPU budget\" "
+            "(the compute-time budget) in Settings → Performance & Device "
+            "and restart the backend."
         )
     # #1226/#1222: two users on 4 GB cards were told, generically, that the GPU
     # "is VRAM-starved" — true, but it read as a transient contention problem

@@ -1,0 +1,170 @@
+"""#2609: on a CPU-only host (6-core Ryzen, OmniVoice) a healthy render hit the
+flat 600 s compute budget with the worker still computing. The default CPU
+budget now scales with input length at CPU speed, stays bounded so a wedged
+engine is still caught, leaves GPU behaviour alone, and an explicit setting
+stays authoritative. The same arithmetic backs the torch-free worker fallback
+and the MCP client timeout, so a remote worker / tool never gives up first.
+"""
+from __future__ import annotations
+
+import asyncio
+import importlib
+import sys
+import threading
+import types
+
+import pytest
+
+from core import generate_budget as gb
+
+
+@pytest.fixture
+def mm(monkeypatch):
+    for name in ("core.config", "services.model_manager"):
+        if getattr(sys.modules.get(name), "__file__", None) is None:
+            sys.modules.pop(name, None)
+    for var in ("OMNIVOICE_GENERATE_TIMEOUT_S", "OMNIVOICE_CPU_GENERATE_TIMEOUT_S"):
+        monkeypatch.delenv(var, raising=False)
+    import services.model_manager as m
+    m = importlib.reload(m)
+    yield m
+    importlib.reload(m)
+
+
+def _host(monkeypatch, family):
+    import core.device_caps as caps
+    monkeypatch.setattr(
+        caps, "detect_host_caps", lambda: types.SimpleNamespace(family=family)
+    )
+
+
+def test_cpu_default_budget_covers_a_paragraph(mm, monkeypatch):
+    """Fail-before: a 400-char paragraph got 600 s (+0 length bonus) on CPU."""
+    _host(monkeypatch, "cpu")
+    assert mm.generate_timeout_s("x" * 400) >= 400 * gb.CPU_SECONDS_PER_CHAR
+    assert mm.generate_timeout_s("x" * 400) > 600.0 * 2
+
+
+def test_cpu_short_text_keeps_the_floor(mm, monkeypatch):
+    _host(monkeypatch, "cpu")
+    assert mm.generate_timeout_s("hi") == 600.0
+
+
+def test_cpu_default_budget_is_monotonic_and_never_below_legacy(mm, monkeypatch):
+    _host(monkeypatch, "cpu")
+    prev = 0.0
+    for n in (0, 10, 150, 400, 1200, 3000, 5000, 50_000):
+        b = mm.generate_timeout_s("x" * n)
+        assert b >= prev
+        assert b >= 600.0 + max(0, n - 1200) / 40.0
+        prev = b
+
+
+def test_cpu_default_budget_has_a_hard_cap(mm, monkeypatch):
+    """A wedged engine must still be caught in finite time."""
+    _host(monkeypatch, "cpu")
+    assert mm.generate_timeout_s("x" * 500_000) == max(
+        gb.CPU_AUTO_CAP_S, 600.0 + (500_000 - 1200) / 40.0
+    )
+    assert mm.generate_timeout_s("x" * 5_000) <= gb.CPU_AUTO_CAP_S
+
+
+def test_gpu_budget_unchanged(mm, monkeypatch):
+    _host(monkeypatch, "cuda")
+    assert mm.generate_timeout_s("x" * 400) == 300.0
+    assert mm.generate_timeout_s("x" * 2400) == 300.0 + 30.0
+
+
+def test_explicit_cpu_setting_stays_authoritative(mm, monkeypatch):
+    monkeypatch.setenv("OMNIVOICE_CPU_GENERATE_TIMEOUT_S", "700")
+    mm = importlib.reload(mm)
+    _host(monkeypatch, "cpu")
+    assert mm.generate_timeout_s("x" * 400) == 700.0
+    assert mm.generate_timeout_s("x" * 2400) == 700.0 + 30.0
+
+
+def test_explicit_universal_setting_stays_authoritative_on_cpu(mm, monkeypatch):
+    monkeypatch.setenv("OMNIVOICE_GENERATE_TIMEOUT_S", "123")
+    mm = importlib.reload(mm)
+    _host(monkeypatch, "cpu")
+    assert mm.generate_timeout_s("x" * 400) == 123.0
+
+
+def test_runtime_changed_cpu_setting_is_explicit(mm, monkeypatch):
+    monkeypatch.setattr(mm, "CPU_JOB_TIMEOUT_S", 999.0)
+    _host(monkeypatch, "cpu")
+    assert mm.generate_timeout_s("x" * 400) == 999.0
+
+
+# ── guard-level: moderately long text must not trip, a wedge still does ─────
+
+def _guarded(mm, fn, budget):
+    return asyncio.run(mm.run_on_gpu_pool_guarded(fn, what="TTS generate", timeout=budget))
+
+
+def test_slow_cpu_render_with_default_budget_completes(mm, monkeypatch):
+    """A render slower than the OLD budget but inside the new one succeeds."""
+    _host(monkeypatch, "cpu")
+    # Scale time down 1000x: old budget 0.6 s, a 400-char text now gets > 1.6 s.
+    old = 600.0 / 1000
+    new = mm.generate_timeout_s("x" * 400) / 1000
+    assert new > old
+
+    def render():
+        threading.Event().wait(old + 0.3)
+        return "audio"
+
+    assert _guarded(mm, render, new) == "audio"
+    with pytest.raises(mm.GpuJobTimeoutError):
+        _guarded(mm, render, old)
+
+
+def test_wedged_job_is_still_caught(mm):
+    gate = threading.Event()
+    try:
+        with pytest.raises(mm.GpuJobTimeoutError):
+            _guarded(mm, gate.wait, 0.3)
+    finally:
+        gate.set()
+
+
+# ── the mirrors must agree with the real budget ──────────────────────────────
+
+@pytest.mark.parametrize("n", [0, 50, 400, 1200, 5000, 100_000])
+def test_worker_fallback_matches_model_manager(mm, monkeypatch, n):
+    from worker import deadlines
+
+    _host(monkeypatch, "cpu")
+    real = mm.generate_timeout_s("x" * n, execution_device="cpu")
+    monkeypatch.setattr(
+        mm, "generate_timeout_s",
+        lambda *a, **k: (_ for _ in ()).throw(ImportError("no torch")),
+    )
+    monkeypatch.setattr(deadlines, "_CPU_GENERATE_TIMEOUT_S", 600.0)
+    assert deadlines._base_execution_seconds("x" * n) == pytest.approx(real)
+
+
+def test_mcp_tool_waits_for_scaled_cpu_budget(mm, monkeypatch):
+    for v in ("OMNIVOICE_MCP_TIMEOUT_S", "OMNIVOICE_GENERATE_TIMEOUT_S",
+              "OMNIVOICE_CPU_GENERATE_TIMEOUT_S", "OMNIVOICE_GPU_QUEUE_TIMEOUT_S"):
+        monkeypatch.delenv(v, raising=False)
+    import mcp_server
+
+    _host(monkeypatch, "cpu")
+    backend_worst = mm.GPU_QUEUE_TIMEOUT_S + mm.generate_timeout_s("x" * 400, execution_device="cpu")
+    assert mcp_server._post_timeout_s("generate", "x" * 400) > backend_worst
+
+
+# ── the message names the concrete fix for a CPU user ────────────────────────
+
+def test_cpu_timeout_message_names_concrete_remedies():
+    from core.public_errors import stream_failure
+
+    cpu = stream_failure("generation_timeout", device="cpu")
+    assert cpu["code"] == "generation_timeout" and cpu["retryable"] is True
+    for needle in ("CPU budget", "Settings → Performance & Device",
+                   "Supertonic-3", "shorter", "restart"):
+        assert needle in cpu["detail"]
+    gpu = stream_failure("generation_timeout", device="cuda")
+    assert gpu == stream_failure("generation_timeout")
+    assert "CPU budget" not in gpu["detail"]
