@@ -7,19 +7,37 @@ import { asciiSafePthFiles, asciiSafePthText, pythonLiteral } from './pth-ascii'
 
 const CJK_USER = '\u5f20\u4e09'; // a typical non-English Windows username
 
-/** A Python 3 launcher; the Windows `py` launcher covers hosts with no `python3`. */
-const PYTHON = (() => {
-  for (const [command, ...prefix] of [['python3'], ['python'], ['py', '-3']]) {
+/**
+ * The first working Python 3 launcher; the Windows `py` launcher covers hosts
+ * with no `python3`. A missing launcher yields no stdout (spawn error) or a
+ * non-zero status, so check both before parsing and move on to the next one.
+ */
+function findPython(
+  launchers: string[][] = [['python3'], ['python'], ['py', '-3']],
+): { command: string; prefix: string[]; minor: number } | null {
+  for (const [command, ...prefix] of launchers) {
     const probe = spawnSync(
       command!,
       [...prefix, '-c', 'import sys; print(sys.version_info[0], sys.version_info[1])'],
       { encoding: 'utf8' },
     );
+    if (probe.error || probe.status !== 0 || typeof probe.stdout !== 'string') continue;
     const [major, minor] = probe.stdout.trim().split(' ').map(Number);
-    if (probe.status === 0 && major === 3) return { command: command!, prefix, minor: minor! };
+    if (major === 3 && Number.isInteger(minor)) return { command: command!, prefix, minor: minor! };
   }
   return null;
-})();
+}
+const PYTHON = findPython();
+
+describe('findPython', () => {
+  it('skips an unavailable launcher instead of throwing, and finds a later one', () => {
+    const missing = ['vs-no-such-python-launcher'];
+    expect(findPython([missing])).toBeNull();
+    const real = findPython();
+    if (real)
+      expect(findPython([missing, [real.command, ...real.prefix]])?.command).toBe(real.command);
+  });
+});
 
 describe('asciiSafePthFiles (#1783)', () => {
   it('rewrites a non-ASCII editable path line and leaves ASCII files untouched', async () => {
