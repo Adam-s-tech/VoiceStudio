@@ -282,6 +282,12 @@ async def _write_output(audio_id: str, raw: bytes, format: str = "wav") -> str:
 # client-side timeout (#2040).
 _BACKEND_GRACE_S = 30.0
 
+# Torch-free mirrors of the desktop backstop and model_manager's guard.
+# tests/test_generate_abort_budget.py keeps these in sync with their sources.
+_GENERATE_SIDECAR_FLOOR_S = 900.0
+_GENERATE_SIDECAR_GRACE_S = 5.0
+_GENERATE_PROGRESS_BUDGETS = 3.0
+
 
 def _env_seconds(name: str, default: float) -> float:
     raw = os.environ.get(name, "").strip()
@@ -311,6 +317,7 @@ def _backend_budget_s(kind: str, text: str = "") -> float | None:
         base = max(
             _env_seconds("OMNIVOICE_GENERATE_TIMEOUT_S", 300.0),
             _env_seconds("OMNIVOICE_CPU_GENERATE_TIMEOUT_S", 600.0),
+            _GENERATE_SIDECAR_FLOOR_S,
         )
         # Shared with the backend's rule (core.generate_budget): covers the
         # legacy length bonus AND the automatic CPU ceiling (the backend budgets
@@ -321,10 +328,23 @@ def _backend_budget_s(kind: str, text: str = "") -> float | None:
         execution = client_execution_budget_s(
             base, len(text or ""),
             cpu_auto_possible=not os.environ.get("OMNIVOICE_CPU_GENERATE_TIMEOUT_S", "").strip(),
+        ) + _GENERATE_SIDECAR_GRACE_S
+        # Classic /generate sends no response until the whole render finishes.
+        # Cold loading and queueing have separate clocks; fresh chunk-progress
+        # heartbeats can then extend execution by up to three more budgets.
+        # Waiting only for queue + execution cuts off healthy CPU renders.
+        model_load = max(30.0, _env_seconds("OMNIVOICE_MODEL_LOAD_TIMEOUT", 1200.0))
+        extension_cap = _env_seconds(
+            "OMNIVOICE_PROGRESS_EXTENSION_CAP_S",
+            _env_seconds("OMNIVOICE_MODEL_LOAD_TIMEOUT_S", 1800.0),
         )
-        # A generation first waits in the GPU pool's queue, on its own clock
-        # (model_manager.GPU_QUEUE_TIMEOUT_S), before that budget starts.
-        return _env_seconds("OMNIVOICE_GPU_QUEUE_TIMEOUT_S", 1800.0) + execution
+        extension = max(extension_cap, _GENERATE_PROGRESS_BUDGETS * execution)
+        return (
+            model_load
+            + _env_seconds("OMNIVOICE_GPU_QUEUE_TIMEOUT_S", 1800.0)
+            + execution
+            + extension
+        )
     return None
 
 
@@ -963,3 +983,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
